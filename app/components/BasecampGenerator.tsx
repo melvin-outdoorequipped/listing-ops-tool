@@ -57,6 +57,7 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const [generatedStats, setGeneratedStats] = useState<GenerationStats | null>(null);
+  const [enableExcluded, setEnableExcluded] = useState(false);
 
   const isDark = theme === 'dark';
   const typeConfig = TYPE_CONFIG[analysisType];
@@ -168,7 +169,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
           const qty = parseInt(row[qtyIdx]?.toString(), 10) || 0;
           totalQty += qty;
           
-          // Only process remarks if the column exists and has content
           if (hasRemarksColumn && remIdx !== -1 && row[remIdx]) {
             const rem = row[remIdx].toString().trim();
             if (rem && rem !== '#N/A' && !rem.startsWith('=') && rem !== 'Good to Order' && rem !== 'Good') {
@@ -198,154 +198,154 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
   };
 
   const generateMessage = async () => {
-  setIsGenerating(true);
-  setError('');
+    setIsGenerating(true);
+    setError('');
 
-  try {
-    console.log('Starting message generation...');
-    
-    let message = '';
-    const poPrefix = poNumber.trim() ? poNumber.trim() : '[PO Number]';
-    let stats: GenerationStats = { totalSkus: 0, totalQty: 0, issueCount: 0 };
-
-    // Add validation for required files
-    if (analysisType === 'pre-approval' && !uploadedFiles.preApproval) {
-      throw new Error('Pre-approval file is required');
-    }
-    if ((analysisType === 'initial' || analysisType === 'final' || analysisType === 'for-fixing') && !uploadedFiles.listingData) {
-      throw new Error('Listing data file is required');
-    }
-
-    console.log('Files validated, processing...');
-
-    if (analysisType === 'initial') {
-      const { totalSkus, totalQty, issuesMap } = parseForInitial(uploadedFiles.listingData);
-      const hasIssues = Object.keys(issuesMap).length > 0;
+    try {
+      console.log('Starting message generation...');
       
-      stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
-      
-      message = `Hi Ms, kindly see the initial analysis for this PO#: ${poPrefix}. Thank you!\n`;
-      message += `Total No. of SKUs in Order: ${totalSkus} | QTY: ${totalQty} (Good to Order)\n`;
-      
-      if (hasIssues) {
-        message += `\n`;
-        Object.entries(issuesMap).forEach(([note, data]) => {
-          message += ` | ${note}: ${data.skus} | QTY: ${data.qty}\n`;
-        });
+      let message = '';
+      const poPrefix = poNumber.trim() ? poNumber.trim() : '[PO Number]';
+      let stats: GenerationStats = { totalSkus: 0, totalQty: 0, issueCount: 0 };
+
+      if (analysisType === 'pre-approval' && !uploadedFiles.preApproval) {
+        throw new Error('Pre-approval file is required');
       }
-      
-      if (doneTracker) message += `\n✅Done updating the tracker\n`;
-      
-    } else if (analysisType === 'final') {
-      const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.listingData);
-      const hasIssues = Object.keys(issuesMap).length > 0;
-      
-      stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
-      
-      message = `Hi Ms, kindly see the Listing Data and Excluded file for this PO#: ${poPrefix}. Thank you!\n`;
-      message += `Total No. of SKUs in Order: ${totalSkus} | QTY: ${totalQty} (Good to Order)\n`;
-      
-      if (uploadedFiles.excluded) {
-        const { totalSkus: exSkus, totalQty: exQty } = parseWithRemarks(uploadedFiles.excluded);
-        if (exSkus > 0) {
-          message += `Total No. of Excluded SKUs: ${exSkus} | QTY: ${exQty}\n`;
+      if ((analysisType === 'initial' || analysisType === 'final' || analysisType === 'for-fixing') && !uploadedFiles.listingData) {
+        throw new Error('Listing data file is required');
+      }
+
+      console.log('Files validated, processing...');
+
+      if (analysisType === 'initial') {
+        const { totalSkus, totalQty, issuesMap } = parseForInitial(uploadedFiles.listingData);
+        const hasIssues = Object.keys(issuesMap).length > 0;
+        
+        stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
+        
+        message = `Hi Ms, kindly see the initial analysis for this PO#: ${poPrefix}. Thank you!\n`;
+        message += `Total No. of SKUs in Order: ${totalSkus} | QTY: ${totalQty} (Good to Order)\n`;
+        
+        if (hasIssues) {
+          message += `\n`;
+          Object.entries(issuesMap).forEach(([note, data]) => {
+            message += ` | ${note}: ${data.skus} | QTY: ${data.qty}\n`;
+          });
         }
+        
+        if (doneTracker) message += `\n✅Done updating the tracker\n`;
+        
+      } else if (analysisType === 'final') {
+        const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.listingData);
+        const hasIssues = Object.keys(issuesMap).length > 0;
+        
+        stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
+        
+        if (enableExcluded && uploadedFiles.excluded) {
+          message = `Hi Ms, kindly see the Listing Data and Excluded file for this PO#: ${poPrefix}. Thank you!\n`;
+        } else {
+          message = `Hi Ms, kindly see the Listing Data for this PO#: ${poPrefix}. Thank you!\n`;
+        }
+        
+        message += `Total No. of SKUs in Order: ${totalSkus} | QTY: ${totalQty} (Good to Order)\n`;
+        
+        if (enableExcluded && uploadedFiles.excluded) {
+          const { totalSkus: exSkus, totalQty: exQty } = parseWithRemarks(uploadedFiles.excluded);
+          if (exSkus > 0) {
+            message += `Total No. of Excluded SKUs: ${exSkus} | QTY: ${exQty}\n`;
+          }
+        }
+        
+        if (hasIssues) {
+          message += `\n`;
+          Object.entries(issuesMap).forEach(([remark, data]) => {
+            message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`;
+          });
+        }
+        
+        message += shippingPlanError === 'yes' ? `\nShipping Plan Error\n` : `\nNo error in shipping plan creation\n`;
+        if (doneTracker) message += `✅Done updating the tracker\n`;
+        if (doneFbaErrorTracker) message += `✅Done adding to FBA ASIN Errors Encountered tracker\n`;
+        if (doneTrackerSubmission) message += `✅Added to Thorogood - Amazon Deliverables Tracker & Form Submission:\n`;
+        if (suggest3PL === 'yes') message += `Note: Please see the remarks column for items suggested for 3PL.\n`;
+        
+      } else if (analysisType === 'pre-approval') {
+        const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.preApproval);
+        const hasIssues = Object.keys(issuesMap).length > 0;
+        
+        stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
+        
+        message = `Hi, please see the attached Pre-Approval file for these items to see if it is good to order or exclude. Thank you!\n`;
+        message += `Total No. of SKUs for Pre-Approval: ${totalSkus} | QTY: ${totalQty}\n`;
+        
+        if (hasIssues) {
+          message += `\n`;
+          Object.entries(issuesMap).forEach(([remark, data]) => {
+            message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`;
+          });
+        }
+        
+      } else {
+        const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.listingData || uploadedFiles.preApproval);
+        const hasIssues = Object.keys(issuesMap).length > 0;
+        
+        stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
+        
+        message = `Hi Ms, forwarding this file for fixing. Thank you!\n`;
+        message += `Total No. of SKUs For Fixing in Order: ${totalSkus} | QTY: ${totalQty}\n`;
+        
+        if (hasIssues) {
+          message += `\n`;
+          Object.entries(issuesMap).forEach(([remark, data]) => {
+            message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`;
+          });
+        }
+        
+        if (doneTracker) message += `\n✅Done updating the tracker\n`;
       }
-      
-      if (hasIssues) {
-        message += `\n`;
-        Object.entries(issuesMap).forEach(([remark, data]) => {
-          message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`;
-        });
-      }
-      
-      message += shippingPlanError === 'yes' ? `\nShipping Plan Error\n` : `\nNo error in shipping plan creation\n`;
-      if (doneTracker) message += `✅Done updating the tracker\n`;
-      if (doneFbaErrorTracker) message += `✅Done adding to FBA ASIN Errors Encountered tracker\n`;
-      if (doneTrackerSubmission) message += `✅Added to Thorogood - Amazon Deliverables Tracker & Form Submission:\n`;
-      if (suggest3PL === 'yes') message += `Note: Please see the remarks column for items suggested for 3PL.\n`;
-      
-    } else if (analysisType === 'pre-approval') {
-      const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.preApproval);
-      const hasIssues = Object.keys(issuesMap).length > 0;
-      
-      stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
-      
-      message = `Hi, please see the attached Pre-Approval file for these items to see if it is good to order or exclude. Thank you!\n`;
-      message += `Total No. of SKUs for Pre-Approval: ${totalSkus} | QTY: ${totalQty}\n`;
-      
-      if (hasIssues) {
-        message += `\n`;
-        Object.entries(issuesMap).forEach(([remark, data]) => {
-          message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`;
-        });
-      }
-      
-    } else {
-      // for-fixing
-      const { totalSkus, totalQty, issuesMap } = parseWithRemarks(uploadedFiles.listingData || uploadedFiles.preApproval);
-      const hasIssues = Object.keys(issuesMap).length > 0;
-      
-      stats = { totalSkus, totalQty, issueCount: Object.keys(issuesMap).length };
-      
-      message = `Hi Ms, forwarding this file for fixing. Thank you!\n`;
-      message += `Total No. of SKUs For Fixing in Order: ${totalSkus} | QTY: ${totalQty}\n`;
-      
-      if (hasIssues) {
-        message += `\n`;
-        Object.entries(issuesMap).forEach(([remark, data]) => {
-          message += ` | ${remark}: ${data.skus} | QTY: ${data.qty}\n`;
-        });
-      }
-      
-      if (doneTracker) message += `\n✅Done updating the tracker\n`;
-    }
 
-    console.log('Message generated, saving to database...');
+      console.log('Message generated, saving to database...');
 
-    setGeneratedMessage(message);
-    setGeneratedStats(stats);
-    
-    // Try to save to database, but don't fail if it doesn't work
-    try {
-      await saveBasecampGeneration({ message, stats, status: 'completed' });
-      console.log('Saved to database successfully');
-    } catch (dbError) {
-      console.error('Database save failed:', dbError);
-      // Continue - don't show error to user since message was generated
-    }
-    
-    try {
-      await logToolRun({
-        toolType: 'basecamp', status: 'completed', title: 'Basecamp message generated',
-        description: `${analysisType.replace('-', ' ')} message generated${poNumber.trim() ? ` for PO ${poNumber.trim()}` : ''}.`,
-        totalCount: stats.totalSkus, successCount: stats.totalQty, issueCount: stats.issueCount,
-        metadata: { poNumber: poNumber.trim() || null, analysisType, ...stats, preApprovalFilename: uploadedFiles.preApproval?.filename ?? null, listingDataFilename: uploadedFiles.listingData?.filename ?? null, excludedFilename: uploadedFiles.excluded?.filename ?? null },
+      setGeneratedMessage(message);
+      setGeneratedStats(stats);
+      
+      try {
+        await saveBasecampGeneration({ message, stats, status: 'completed' });
+        console.log('Saved to database successfully');
+      } catch (dbError) {
+        console.error('Database save failed:', dbError);
+      }
+      
+      try {
+        await logToolRun({
+          toolType: 'basecamp', status: 'completed', title: 'Basecamp message generated',
+          description: `${analysisType.replace('-', ' ')} message generated${poNumber.trim() ? ` for PO ${poNumber.trim()}` : ''}.`,
+          totalCount: stats.totalSkus, successCount: stats.totalQty, issueCount: stats.issueCount,
+          metadata: { poNumber: poNumber.trim() || null, analysisType, ...stats, preApprovalFilename: uploadedFiles.preApproval?.filename ?? null, listingDataFilename: uploadedFiles.listingData?.filename ?? null, excludedFilename: uploadedFiles.excluded?.filename ?? null },
+        });
+        console.log('Logged to tool runs successfully');
+      } catch (logError) {
+        console.error('Logging failed:', logError);
+      }
+      
+    } catch (err) {
+      console.error('Generation error:', err);
+      const msg = err instanceof Error ? err.message : 'Failed to generate Basecamp message.';
+      setError(msg);
+      
+      try {
+        await saveBasecampGeneration({ message: null, stats: { totalSkus: 0, totalQty: 0, issueCount: 1 }, status: 'failed', errorMessage: msg });
+      } catch {}
+      
+      await logToolRun({ 
+        toolType: 'basecamp', status: 'failed', title: 'Basecamp message generation failed', 
+        description: msg, totalCount: 0, successCount: 0, issueCount: 1, 
+        metadata: { poNumber: poNumber.trim() || null, analysisType } 
       });
-      console.log('Logged to tool runs successfully');
-    } catch (logError) {
-      console.error('Logging failed:', logError);
+    } finally {
+      setIsGenerating(false);
     }
-    
-  } catch (err) {
-    console.error('Generation error:', err);
-    const msg = err instanceof Error ? err.message : 'Failed to generate Basecamp message.';
-    setError(msg);
-    
-    // Try to save error to database
-    try {
-      await saveBasecampGeneration({ message: null, stats: { totalSkus: 0, totalQty: 0, issueCount: 1 }, status: 'failed', errorMessage: msg });
-    } catch {}
-    
-    await logToolRun({ 
-      toolType: 'basecamp', status: 'failed', title: 'Basecamp message generation failed', 
-      description: msg, totalCount: 0, successCount: 0, issueCount: 1, 
-      metadata: { poNumber: poNumber.trim() || null, analysisType } 
-    });
-  } finally {
-    setIsGenerating(false);
-  }
-};
+  };
 
   const copyToClipboard = async () => {
     await navigator.clipboard.writeText(generatedMessage);
@@ -354,13 +354,26 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
   };
 
   const clearAll = () => {
-    setUploadedFiles({}); setPoNumber(''); setGeneratedMessage(''); setError('');
-    setShippingPlanError('no'); setSuggest3PL('no');
-    setDoneTracker(false); setDoneFbaErrorTracker(false); setDoneTrackerSubmission(false);
+    setUploadedFiles({}); 
+    setPoNumber(''); 
+    setGeneratedMessage(''); 
+    setError('');
+    setShippingPlanError('no'); 
+    setSuggest3PL('no');
+    setDoneTracker(false); 
+    setDoneFbaErrorTracker(false); 
+    setDoneTrackerSubmission(false);
     setGeneratedStats(null);
+    setEnableExcluded(false);
   };
 
-  const hasRequiredFiles = () => analysisType === 'pre-approval' ? !!uploadedFiles.preApproval : !!uploadedFiles.listingData;
+  const hasRequiredFiles = () => {
+    if (analysisType === 'pre-approval') return !!uploadedFiles.preApproval;
+    if (analysisType === 'final') {
+      return !!uploadedFiles.listingData;
+    }
+    return !!uploadedFiles.listingData;
+  };
 
   const messageLineCount = generatedMessage ? generatedMessage.split('\n').filter(Boolean).length : 0;
 
@@ -368,7 +381,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
     <div className="w-full max-w-full space-y-6 overflow-hidden">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
 
-        {/* ── Left Panel ── */}
         <div className={`min-w-0 rounded-2xl border p-4 shadow-lg sm:p-6 ${isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'}`}>
           <div className="mb-5 flex items-center justify-between">
             <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Configuration</h2>
@@ -379,7 +391,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
             </span>
           </div>
 
-          {/* Type selector */}
           <div className="mb-5">
             <label className={`mb-2 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>Message Type</label>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
@@ -390,7 +401,10 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
                   <button
                     key={type}
                     type="button"
-                    onClick={() => setAnalysisType(type)}
+                    onClick={() => {
+                      setAnalysisType(type);
+                      if (type !== 'final') setEnableExcluded(false);
+                    }}
                     className={`min-h-[42px] rounded-lg px-2 py-2 text-xs font-semibold capitalize transition-all sm:text-sm ${
                       active
                         ? cfg.color === 'emerald' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
@@ -406,7 +420,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
             </div>
           </div>
 
-          {/* PO number */}
           <div className="mb-4">
             <label className={`mb-2 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>PO Number</label>
             <input
@@ -420,7 +433,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
             />
           </div>
 
-          {/* Options */}
           <div className={`mb-5 space-y-4 rounded-xl border p-4 ${isDark ? 'border-slate-700/40 bg-slate-800/30' : 'border-gray-100 bg-gray-50'}`}>
             {(analysisType === 'initial' || analysisType === 'final') && (
               <div>
@@ -448,6 +460,7 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
                 </select>
               </div>
             )}
+            
             <div>
               <label className={`mb-2 block text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Checklist</label>
               <div className={`space-y-2 text-sm ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
@@ -465,19 +478,50 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
             </div>
           </div>
 
-          {/* File uploads */}
+          {/* File uploads section */}
           <div className="space-y-4">
             {analysisType === 'pre-approval' && (
               <FileUploadArea theme={theme} label="Pre-Approval PO File" description="Upload the pre-approval PO file for review" accept=".csv,.xlsx,.xls"
                 onUpload={f => handleFileUpload('preApproval', f)} filename={uploadedFiles.preApproval?.filename} rowCount={uploadedFiles.preApproval?.rows?.length} />
             )}
+            
             {(analysisType === 'initial' || analysisType === 'final' || analysisType === 'for-fixing') && (
               <>
                 <FileUploadArea theme={theme} label="Listing Data PO File" description="Upload the main listing data PO file" accept=".csv,.xlsx,.xls" required
                   onUpload={f => handleFileUpload('listingData', f)} filename={uploadedFiles.listingData?.filename} rowCount={uploadedFiles.listingData?.rows?.length} />
+                
+                {/* Enable Excluded File Toggle - Positioned right after Listing Data upload */}
                 {analysisType === 'final' && (
-                  <FileUploadArea theme={theme} label="Excluded Items File" description="Upload the excluded items file if available" accept=".csv,.xlsx,.xls"
-                    onUpload={f => handleFileUpload('excluded', f)} filename={uploadedFiles.excluded?.filename} rowCount={uploadedFiles.excluded?.rows?.length} />
+                  <div className={`mt-3 rounded-lg border p-3 ${isDark ? 'border-slate-700 bg-slate-800/30' : 'border-gray-200 bg-gray-50'}`}>
+                    <CheckboxRow 
+                      label="Enable Excluded File" 
+                      checked={enableExcluded} 
+                      onChange={() => {
+                        setEnableExcluded(!enableExcluded);
+                        if (enableExcluded) {
+                          setUploadedFiles(prev => {
+                            const newFiles = { ...prev };
+                            delete newFiles.excluded;
+                            return newFiles;
+                          });
+                        }
+                      }} 
+                      isDark={isDark} 
+                    />
+                    <p className={`text-xs mt-1 ml-6 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                      {enableExcluded 
+                        ? "✓ Excluded file upload is enabled. Drop your file below." 
+                        : "Enable this to upload and include excluded items in the message"}
+                    </p>
+                  </div>
+                )}
+                
+                {/* Excluded file upload - Only shows when enabled */}
+                {analysisType === 'final' && enableExcluded && (
+                  <div className="mt-2">
+                    <FileUploadArea theme={theme} label="Excluded Items File" description="Upload the excluded items file" accept=".csv,.xlsx,.xls"
+                      onUpload={f => handleFileUpload('excluded', f)} filename={uploadedFiles.excluded?.filename} rowCount={uploadedFiles.excluded?.rows?.length} />
+                  </div>
                 )}
               </>
             )}
@@ -516,7 +560,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
           </div>
         </div>
 
-        {/* ── Right Panel ── */}
         <div className={`min-w-0 rounded-2xl border p-4 shadow-lg sm:p-6 ${isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'}`}>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
