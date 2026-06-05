@@ -17,12 +17,14 @@ import {
   User,
   X,
   GitBranch,
-  LogOut
+  LogOut,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 import SkuProcessor from './components/SkuProcessor';
 import AsinConflictChecker from './components/AsinConflictChecker';
 import BasecampGenerator from './components/BasecampGenerator';
+import FileGenerator from './components/BulkAnalyzerFileGenerator'; // Import renamed component
 import Dashboard from './components/dashboard';
 import Documentation from './components/documentation';
 import Terms from './components/terms';
@@ -30,7 +32,7 @@ import DownloadPage from './components/download';
 import { supabase } from '@/lib/supabase/client';
 
 type Theme = 'light' | 'dark';
-type ToolId = 'sku' | 'asin' | 'basecamp';
+type ToolId = 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer';
 type MainMenuId = 'Dashboard' | 'Tools' | 'Downloads' | 'Documentation' | 'Terms';
 
 interface MenuItem {
@@ -45,7 +47,7 @@ interface ToolItem {
   name: string;
   description: string;
   icon: ReactNode;
-  accent: 'emerald' | 'cyan' | 'violet';
+  accent: 'emerald' | 'cyan' | 'violet' | 'orange';
   comingSoon?: boolean;
 }
 
@@ -86,6 +88,13 @@ const toolsSubItems: ToolItem[] = [
     icon: <MessageSquare className="h-4 w-4" />,
     accent: 'violet',
   },
+  {
+    id: 'bulk-analyzer',
+    name: 'File Generator',
+    description: 'Generate Listing Data, Pre-approval, Excluded, and For Fixing files.',
+    icon: <FileSpreadsheet className="h-4 w-4" />,
+    accent: 'orange',
+  },
 ];
 
 const ALL_COMMANDS = [
@@ -96,6 +105,7 @@ const ALL_COMMANDS = [
   { label: 'Open Shopkeep Tool', menuId: 'Tools' as MainMenuId, toolId: 'sku' as ToolId },
   { label: 'Open ASIN Checker', menuId: 'Tools' as MainMenuId, toolId: 'asin' as ToolId },
   { label: 'Open Basecamp Generator', menuId: 'Tools' as MainMenuId, toolId: 'basecamp' as ToolId },
+  { label: 'Open File Generator', menuId: 'Tools' as MainMenuId, toolId: 'bulk-analyzer' as ToolId },
 ];
 
 const DEMO_NOTIFICATIONS: Notification[] = [
@@ -116,8 +126,7 @@ function applyTheme(theme: Theme) {
   }
 }
 
-// Auth Component
-// Auth Component with Background Image - FIXED VERSION
+// Auth Component with Background Image
 function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -155,18 +164,10 @@ function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }
     }
   };
 
-  // Option 1: Use a reliable image URL (replace with your actual image)
-  // Examples of working image URLs:
-  // - "/images/login-bg.jpg" (local file in public folder)
-  // - "https://images.unsplash.com/photo-1557682250-33bd709cbe85" (Unsplash)
-  // - "https://picsum.photos/id/104/1920/1080" (Lorem Picsum)
-  
   const backgroundImageUrl = "/login.png";
-  // Or use a local image: "/login-background.jpg"
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Background Image with Overlay */}
       {!imageError && (
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -174,14 +175,12 @@ function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }
             backgroundImage: `url(${backgroundImageUrl})`,
           }}
         >
-          {/* Dark/Light Overlay based on theme */}
           <div className={`absolute inset-0 ${
             isDark ? 'bg-black/70' : 'bg-white/30'
           }`} />
         </div>
       )}
       
-      {/* Fallback gradient background if image fails to load */}
       {imageError && (
         <div className={`absolute inset-0 ${
           isDark 
@@ -190,7 +189,6 @@ function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }
         }`} />
       )}
       
-      {/* Auth Modal */}
       <div className={`relative w-full max-w-md rounded-2xl border p-8 shadow-2xl backdrop-blur-md ${
         isDark ? 'border-slate-700 bg-slate-900/95' : 'border-gray-200 bg-white/95'
       }`}>
@@ -256,9 +254,18 @@ function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }
             {loading ? 'Loading...' : mode === 'signin' ? 'Sign In' : 'Sign Up'}
           </button>
         </form>
+
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+            className={`text-sm ${isDark ? 'text-slate-400 hover:text-slate-300' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            {mode === 'signin' ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+          </button>
+        </div>
       </div>
       
-      {/* Hidden img to detect load error */}
       <img 
         src={backgroundImageUrl}
         alt=""
@@ -358,7 +365,7 @@ export default function HomePage() {
     const handler = (event: Event) => {
       const e = event as CustomEvent<{ toolId: ToolId }>;
       const toolId = e.detail?.toolId;
-      if (!['sku', 'asin', 'basecamp'].includes(toolId)) return;
+      if (!['sku', 'asin', 'basecamp', 'bulk-analyzer'].includes(toolId)) return;
       const found = toolsSubItems.find(t => t.id === toolId);
       if (found?.comingSoon) return;
       navigateTo('Tools', toolId);
@@ -476,6 +483,7 @@ export default function HomePage() {
       if (activeTool === 'sku') return <SkuProcessor theme={theme} />;
       if (activeTool === 'asin') return <AsinConflictChecker theme={theme} />;
       if (activeTool === 'basecamp') return <BasecampGenerator theme={theme} />;
+      if (activeTool === 'bulk-analyzer') return <FileGenerator theme={theme} />;
     }
     return null;
   };
@@ -781,7 +789,9 @@ export default function HomePage() {
                     ? 'border-violet-500/30 bg-violet-500/10 text-violet-300'
                     : selectedTool.accent === 'cyan'
                       ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
-                      : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                      : selectedTool.accent === 'orange'
+                        ? 'border-orange-500/30 bg-orange-500/10 text-orange-300'
+                        : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
                 }`}>
                   {selectedTool.name}
                 </span>
@@ -992,17 +1002,21 @@ function ToolSidebarButton({
 
   const activeClass = tool.accent === 'violet' ? 'border-violet-500/40 bg-violet-500/10'
     : tool.accent === 'cyan' ? 'border-cyan-500/40 bg-cyan-500/10'
+    : tool.accent === 'orange' ? 'border-orange-500/40 bg-orange-500/10'
     : 'border-emerald-500/40 bg-emerald-500/10';
 
   const activeTextClass = tool.accent === 'violet' ? 'text-violet-300'
     : tool.accent === 'cyan' ? 'text-cyan-300'
+    : tool.accent === 'orange' ? 'text-orange-300'
     : 'text-emerald-300';
 
   const iconBgClass = tool.accent === 'violet'
     ? isDark ? 'bg-violet-500/15 text-violet-400' : 'bg-violet-50 text-violet-600'
     : tool.accent === 'cyan'
       ? isDark ? 'bg-cyan-500/15 text-cyan-400' : 'bg-cyan-50 text-cyan-600'
-      : isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-600';
+      : tool.accent === 'orange'
+        ? isDark ? 'bg-orange-500/15 text-orange-400' : 'bg-orange-50 text-orange-600'
+        : isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-600';
 
   return (
     <button
@@ -1034,7 +1048,10 @@ function ToolSidebarButton({
         </div>
         {active && (
           <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${
-            tool.accent === 'violet' ? 'bg-violet-400' : tool.accent === 'cyan' ? 'bg-cyan-400' : 'bg-emerald-400'
+            tool.accent === 'violet' ? 'bg-violet-400' 
+            : tool.accent === 'cyan' ? 'bg-cyan-400'
+            : tool.accent === 'orange' ? 'bg-orange-400'
+            : 'bg-emerald-400'
           }`} />
         )}
         {tool.comingSoon && (
@@ -1051,6 +1068,7 @@ function CollapsedToolButton({
   const isDark = theme === 'dark';
   const activeColor = tool.accent === 'violet' ? 'border-violet-500/50 bg-violet-500/10 text-violet-300'
     : tool.accent === 'cyan' ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-300'
+    : tool.accent === 'orange' ? 'border-orange-500/50 bg-orange-500/10 text-orange-300'
     : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300';
 
   return (

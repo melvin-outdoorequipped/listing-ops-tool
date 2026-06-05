@@ -24,6 +24,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Users,
+  FileSpreadsheet,
+  FileJson,
+  FileText,
+  Download,
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -35,7 +39,7 @@ interface DashboardProps {
 
 interface ToolRun {
   id: string;
-  tool_type: 'sku' | 'asin' | 'basecamp';
+  tool_type: 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer';
   status: 'completed' | 'failed' | 'warning';
   title: string;
   description: string | null;
@@ -55,13 +59,13 @@ interface UserStats {
 }
 
 interface ToolCardItem {
-  id: 'sku' | 'asin' | 'basecamp';
+  id: 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer';
   category: string;
   title: string;
   description: string;
   status: string;
   usage: string;
-  accent: 'blue' | 'green' | 'purple';
+  accent: 'blue' | 'green' | 'purple' | 'orange';
   icon: React.ReactNode;
   comingSoon?: boolean;
 }
@@ -205,6 +209,18 @@ const operationTools: ToolCardItem[] = [
     usage: 'Unlimited',
     accent: 'purple',
     icon: <MessageSquare className="h-4 w-4" />,
+    comingSoon: false,
+  },
+  {
+    id: 'bulk-analyzer',
+    category: 'ANALYTICS',
+    title: 'File Generator',
+    description:
+      'Generate Listing Data, Pre-approval Files, Excluded Files, and For Fixing Files based on Remarks column filtering.',
+    status: 'Active',
+    usage: 'Unlimited',
+    accent: 'orange',
+    icon: <FileSpreadsheet className="h-4 w-4" />,
     comingSoon: false,
   },
 ];
@@ -394,6 +410,7 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
     const skuRuns = runs.filter(r => r.tool_type === 'sku').length;
     const asinRuns = runs.filter(r => r.tool_type === 'asin').length;
     const basecampRuns = runs.filter(r => r.tool_type === 'basecamp').length;
+    const bulkAnalyzerRuns = runs.filter(r => r.tool_type === 'bulk-analyzer').length;
     const totalProcessed = runs.reduce((s, r) => s + Number(r.total_count ?? 0), 0);
     const totalSuccess = runs.reduce((s, r) => s + Number(r.success_count ?? 0), 0);
     const totalIssues = runs.reduce((s, r) => s + Number(r.issue_count ?? 0), 0);
@@ -403,7 +420,7 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
 
     return {
       totalRuns, completedRuns, warningRuns, failedRuns,
-      skuRuns, asinRuns, basecampRuns,
+      skuRuns, asinRuns, basecampRuns, bulkAnalyzerRuns,
       totalProcessed, totalSuccess, totalIssues,
       completionRate, successRate, issuesPerRun,
       activeTools: operationTools.filter(t => !t.comingSoon).length,
@@ -427,21 +444,28 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
       sku: getSparkline('sku'),
       asin: getSparkline('asin'),
       basecamp: getSparkline('basecamp'),
+      bulkAnalyzer: getSparkline('bulk-analyzer'),
     };
   }, [runs]);
 
   const recentRuns = useMemo(() => runs.slice(0, 12), [runs]);
 
-  const navigateToTool = (toolId: 'sku' | 'asin' | 'basecamp') => {
+  const navigateToTool = (toolId: 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer') => {
     window.dispatchEvent(new CustomEvent('navigateToTool', { detail: { toolId } }));
   };
 
-  const getRunCount = (id: 'sku' | 'asin' | 'basecamp') =>
-    id === 'sku' ? metrics.skuRuns : id === 'asin' ? metrics.asinRuns : metrics.basecampRuns;
+  const getRunCount = (id: 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer') =>
+    id === 'sku' ? metrics.skuRuns : 
+    id === 'asin' ? metrics.asinRuns : 
+    id === 'basecamp' ? metrics.basecampRuns : 
+    metrics.bulkAnalyzerRuns;
 
-  const getSparkline = (id: 'sku' | 'asin' | 'basecamp') => sparklineData[id];
+  const getSparkline = (id: 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer') => {
+    if (id === 'bulk-analyzer') return sparklineData.bulkAnalyzer;
+    return sparklineData[id];
+  };
 
-  const maxToolRuns = Math.max(metrics.skuRuns, metrics.asinRuns, metrics.basecampRuns, 1);
+  const maxToolRuns = Math.max(metrics.skuRuns, metrics.asinRuns, metrics.basecampRuns, metrics.bulkAnalyzerRuns, 1);
 
   const panelClass = isDark
     ? 'border-slate-700/50 bg-slate-900/70'
@@ -454,6 +478,7 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
     sku: 'Shopkeep',
     asin: 'ASIN Checker',
     basecamp: 'Basecamp',
+    'bulk-analyzer': 'File Generator',
   };
 
   return (
@@ -540,7 +565,7 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
       </div>
 
       {/* ── Tool Cards ── */}
-      <section className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-3">
+      <section className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-4">
         {operationTools.map(tool => (
           <ToolCard
             key={tool.id}
@@ -943,7 +968,7 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
   );
 }
 
-// Rest of the helper components remain the same...
+// Helper components remain the same...
 function StatCard({ theme, label, value, suffix = '', icon, color }: any) {
   const isDark = theme === 'dark';
   const animValue = useAnimatedCounter(value);
@@ -974,7 +999,6 @@ function StatCard({ theme, label, value, suffix = '', icon, color }: any) {
   );
 }
 
-/* ── Metric Card Component ── */
 function MetricCard({ theme, label, value, icon, color }: any) {
   const isDark = theme === 'dark';
   const animValue = useAnimatedCounter(value);
@@ -1009,7 +1033,6 @@ function ToolCard({ tool, theme, runCount, sparkline, onOpen }: any) {
   const isDark = theme === 'dark';
   const animCount = useAnimatedCounter(runCount);
 
-  // Get the accent configuration based on tool.accent with proper typing
   const getAccentConfig = () => {
     const accent = tool.accent;
     
@@ -1027,8 +1050,14 @@ function ToolCard({ tool, theme, runCount, sparkline, onOpen }: any) {
         spark: '#10b981',
         count: 'text-emerald-400',
       };
+    } else if (accent === 'orange') {
+      return {
+        card: isDark ? 'border-orange-500/25 bg-orange-950/40 hover:bg-orange-900/40 hover:border-orange-500/40' : 'border-orange-200 bg-orange-50 hover:bg-orange-100',
+        badge: isDark ? 'bg-orange-500/20 text-orange-300' : 'bg-orange-100 text-orange-700',
+        spark: '#f97316',
+        count: 'text-orange-400',
+      };
     } else {
-      // blue (default)
       return {
         card: isDark ? 'border-cyan-500/25 bg-cyan-950/40 hover:bg-cyan-900/40 hover:border-cyan-500/40' : 'border-cyan-200 bg-cyan-50 hover:bg-cyan-100',
         badge: isDark ? 'bg-cyan-500/20 text-cyan-300' : 'bg-cyan-100 text-cyan-700',
