@@ -389,7 +389,7 @@ export default function FileGenerator({ theme = 'dark' }: FileGeneratorProps) {
           <div>
             <h1 className={`text-2xl font-bold ${textPrimary}`}>File Generator</h1>
             <p className={`text-sm ${textMuted}`}>
-              Upload spreadsheet to generate categorized Excel files based on Remarks column
+              Upload spreadsheet to generate Listing Data, Pre-approval, Excluded File, and For Fixing
             </p>
           </div>
         </div>

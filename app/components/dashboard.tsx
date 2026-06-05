@@ -217,7 +217,7 @@ const operationTools: ToolCardItem[] = [
     title: 'File Generator',
     description:
       'Generate Listing Data, Pre-approval Files, Excluded Files, and For Fixing Files based on Remarks column filtering.',
-    status: 'Active',
+    status: 'Beta',
     usage: 'Unlimited',
     accent: 'orange',
     icon: <FileSpreadsheet className="h-4 w-4" />,
