@@ -19,12 +19,14 @@ import {
   GitBranch,
   LogOut,
   FileSpreadsheet,
+  Building2,
 } from 'lucide-react';
 
 import SkuProcessor from './components/SkuProcessor';
 import AsinConflictChecker from './components/AsinConflictChecker';
 import BasecampGenerator from './components/BasecampGenerator';
-import FileGenerator from './components/BulkAnalyzerFileGenerator'; // Import renamed component
+import FileGenerator from './components/BulkAnalyzerFileGenerator';
+import GetBrand from './components/GetBrand';
 import Dashboard from './components/dashboard';
 import Documentation from './components/documentation';
 import Terms from './components/terms';
@@ -32,7 +34,7 @@ import DownloadPage from './components/download';
 import { supabase } from '@/lib/supabase/client';
 
 type Theme = 'light' | 'dark';
-type ToolId = 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer';
+type ToolId = 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer' | 'get-brand';
 type MainMenuId = 'Dashboard' | 'Tools' | 'Downloads' | 'Documentation' | 'Terms';
 
 interface MenuItem {
@@ -47,7 +49,7 @@ interface ToolItem {
   name: string;
   description: string;
   icon: ReactNode;
-  accent: 'emerald' | 'cyan' | 'violet' | 'orange';
+  accent: 'emerald' | 'cyan' | 'violet' | 'orange' | 'blue';
   comingSoon?: boolean;
 }
 
@@ -95,6 +97,13 @@ const toolsSubItems: ToolItem[] = [
     icon: <FileSpreadsheet className="h-4 w-4" />,
     accent: 'orange',
   },
+  {
+    id: 'get-brand',
+    name: 'Get Brand',
+    description: 'Look up brand name.',
+    icon: <Building2 className="h-4 w-4" />,
+    accent: 'blue',
+  },
 ];
 
 const ALL_COMMANDS = [
@@ -106,6 +115,7 @@ const ALL_COMMANDS = [
   { label: 'Open ASIN Checker', menuId: 'Tools' as MainMenuId, toolId: 'asin' as ToolId },
   { label: 'Open Basecamp Generator', menuId: 'Tools' as MainMenuId, toolId: 'basecamp' as ToolId },
   { label: 'Open File Generator', menuId: 'Tools' as MainMenuId, toolId: 'bulk-analyzer' as ToolId },
+  { label: 'Open Get Brand Tool', menuId: 'Tools' as MainMenuId, toolId: 'get-brand' as ToolId },
 ];
 
 const DEMO_NOTIFICATIONS: Notification[] = [
@@ -365,7 +375,7 @@ export default function HomePage() {
     const handler = (event: Event) => {
       const e = event as CustomEvent<{ toolId: ToolId }>;
       const toolId = e.detail?.toolId;
-      if (!['sku', 'asin', 'basecamp', 'bulk-analyzer'].includes(toolId)) return;
+      if (!['sku', 'asin', 'basecamp', 'bulk-analyzer', 'get-brand'].includes(toolId)) return;
       const found = toolsSubItems.find(t => t.id === toolId);
       if (found?.comingSoon) return;
       navigateTo('Tools', toolId);
@@ -484,6 +494,7 @@ export default function HomePage() {
       if (activeTool === 'asin') return <AsinConflictChecker theme={theme} />;
       if (activeTool === 'basecamp') return <BasecampGenerator theme={theme} />;
       if (activeTool === 'bulk-analyzer') return <FileGenerator theme={theme} />;
+      if (activeTool === 'get-brand') return <GetBrand theme={theme} />;
     }
     return null;
   };
@@ -1003,11 +1014,13 @@ function ToolSidebarButton({
   const activeClass = tool.accent === 'violet' ? 'border-violet-500/40 bg-violet-500/10'
     : tool.accent === 'cyan' ? 'border-cyan-500/40 bg-cyan-500/10'
     : tool.accent === 'orange' ? 'border-orange-500/40 bg-orange-500/10'
+    : tool.accent === 'blue' ? 'border-blue-500/40 bg-blue-500/10'
     : 'border-emerald-500/40 bg-emerald-500/10';
 
   const activeTextClass = tool.accent === 'violet' ? 'text-violet-300'
     : tool.accent === 'cyan' ? 'text-cyan-300'
     : tool.accent === 'orange' ? 'text-orange-300'
+    : tool.accent === 'blue' ? 'text-blue-300'
     : 'text-emerald-300';
 
   const iconBgClass = tool.accent === 'violet'
@@ -1016,7 +1029,9 @@ function ToolSidebarButton({
       ? isDark ? 'bg-cyan-500/15 text-cyan-400' : 'bg-cyan-50 text-cyan-600'
       : tool.accent === 'orange'
         ? isDark ? 'bg-orange-500/15 text-orange-400' : 'bg-orange-50 text-orange-600'
-        : isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-600';
+        : tool.accent === 'blue'
+          ? isDark ? 'bg-blue-500/15 text-blue-400' : 'bg-blue-50 text-blue-600'
+          : isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-600';
 
   return (
     <button
@@ -1051,6 +1066,7 @@ function ToolSidebarButton({
             tool.accent === 'violet' ? 'bg-violet-400' 
             : tool.accent === 'cyan' ? 'bg-cyan-400'
             : tool.accent === 'orange' ? 'bg-orange-400'
+            : tool.accent === 'blue' ? 'bg-blue-400'
             : 'bg-emerald-400'
           }`} />
         )}
@@ -1069,6 +1085,7 @@ function CollapsedToolButton({
   const activeColor = tool.accent === 'violet' ? 'border-violet-500/50 bg-violet-500/10 text-violet-300'
     : tool.accent === 'cyan' ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-300'
     : tool.accent === 'orange' ? 'border-orange-500/50 bg-orange-500/10 text-orange-300'
+    : tool.accent === 'blue' ? 'border-blue-500/50 bg-blue-500/10 text-blue-300'
     : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300';
 
   return (

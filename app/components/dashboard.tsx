@@ -28,6 +28,7 @@ import {
   FileJson,
   FileText,
   Download,
+  Building2,
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -59,7 +60,7 @@ interface UserStats {
 }
 
 interface ToolCardItem {
-  id: 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer';
+  id: 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer' | 'get-brand';
   category: string;
   title: string;
   description: string;
@@ -221,6 +222,18 @@ const operationTools: ToolCardItem[] = [
     usage: 'Unlimited',
     accent: 'orange',
     icon: <FileSpreadsheet className="h-4 w-4" />,
+    comingSoon: false,
+  },
+  {
+    id: 'get-brand',
+    category: 'RESEARCH',
+    title: 'Get Brand',
+    description:
+      'Look up brand name.',
+    status: 'Beta',
+    usage: 'Unlimited',
+    accent: 'blue',
+    icon: <Building2 className="h-4 w-4" />,
     comingSoon: false,
   },
 ];
@@ -450,18 +463,20 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
 
   const recentRuns = useMemo(() => runs.slice(0, 12), [runs]);
 
-  const navigateToTool = (toolId: 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer') => {
+  const navigateToTool = (toolId: 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer' | 'get-brand') => {
     window.dispatchEvent(new CustomEvent('navigateToTool', { detail: { toolId } }));
   };
 
-  const getRunCount = (id: 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer') =>
+  const getRunCount = (id: 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer' | 'get-brand') =>
     id === 'sku' ? metrics.skuRuns : 
     id === 'asin' ? metrics.asinRuns : 
     id === 'basecamp' ? metrics.basecampRuns : 
-    metrics.bulkAnalyzerRuns;
+    id === 'bulk-analyzer' ? metrics.bulkAnalyzerRuns :
+    0;
 
-  const getSparkline = (id: 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer') => {
+  const getSparkline = (id: 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer' | 'get-brand') => {
     if (id === 'bulk-analyzer') return sparklineData.bulkAnalyzer;
+    if (id === 'get-brand') return [0, 0, 0, 0, 0, 0, 0];
     return sparklineData[id];
   };
 
@@ -479,6 +494,7 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
     asin: 'ASIN Checker',
     basecamp: 'Basecamp',
     'bulk-analyzer': 'File Generator',
+    'get-brand': 'Get Brand',
   };
 
   return (
@@ -565,7 +581,7 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
       </div>
 
       {/* ── Tool Cards ── */}
-      <section className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-4">
+      <section className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-5">
         {operationTools.map(tool => (
           <ToolCard
             key={tool.id}
