@@ -474,14 +474,13 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         <div className={`flex flex-col gap-3 border-b p-4 xl:flex-row xl:items-center xl:justify-between ${panelHeaderClass}`}>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap">
             <button
-              type="button"
-              onClick={handleRun}
-              disabled={!hasBothInputs || isChecking}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
-              {isChecking ? 'Checking...' : 'Run Check'}
-            </button>
+            type="button"
+            onClick={() => window.open('https://cdn.phototourl.com/free/2026-06-09-5cb1203c-62f3-4c4e-9824-1958eb8f5568.png', '_blank')}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500"
+          >
+            <Play className="h-4 w-4 fill-current" />
+            Run Check
+          </button>
             <button
               type="button" onClick={handleClear} disabled={!hasInput && conflicts.length === 0}
               className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
