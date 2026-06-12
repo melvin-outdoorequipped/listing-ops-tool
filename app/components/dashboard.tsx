@@ -28,6 +28,9 @@ import {
   Check,
   Sparkles,
   RefreshCw as RefreshIcon,
+  Plus,
+  Trash2,
+  Edit2,
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -51,8 +54,17 @@ interface ToolRun {
   user_email?: string;
 }
 
-// Team members data (Arlie excluded from roulette)
-const teamMembers = [
+interface TeamMember {
+  name: string;
+  role: string;
+  image: string;
+  email: string;
+  includeInRoulette: boolean;
+  color: string;
+}
+
+// Default team members data (Arlie excluded from roulette)
+const defaultTeamMembers: TeamMember[] = [
   { name: 'Arlie', role: 'Team Manager', image: '/images/arlie.png', email: 'arlie@outdoorequipped.com', includeInRoulette: false, color: '#6366f1' },
   { name: 'Melvin', role: 'Data Analyst', image: '/images/Melvin.png', email: 'melvin@outdoorequipped.com', includeInRoulette: true, color: '#378ADD' },
   { name: 'Janroe', role: 'Data Analyst', image: '/images/janroe.png', email: 'jbermoy@outdoorequipped.com', includeInRoulette: true, color: '#1D9E75' },
@@ -66,8 +78,53 @@ const teamMembers = [
   { name: 'Mark', role: 'Data Analyst', image: '/images/mark.png', email: 'mpasturan@outdoorequipped.com', includeInRoulette: true, color: '#ec4899' },
 ];
 
-// Get eligible members for roulette (excluding Arlie) - ALWAYS 10 members
-const eligibleMembers = teamMembers.filter(m => m.includeInRoulette);
+// Helper functions for localStorage
+const STORAGE_KEY = 'roulette_members';
+const SELECTED_KEY = 'roulette_selected';
+
+const loadMembersFromStorage = (): TeamMember[] => {
+  if (typeof window === 'undefined') return defaultTeamMembers;
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      // Merge with defaults to ensure new default members are added
+      const merged = defaultTeamMembers.map(defaultMember => {
+        const existing = parsed.find((m: TeamMember) => m.name === defaultMember.name);
+        return existing || defaultMember;
+      });
+      // Add any custom members not in defaults
+      const customMembers = parsed.filter((m: TeamMember) => !defaultTeamMembers.find(dm => dm.name === m.name));
+      return [...merged, ...customMembers];
+    } catch {
+      return defaultTeamMembers;
+    }
+  }
+  return defaultTeamMembers;
+};
+
+const saveMembersToStorage = (members: TeamMember[]) => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(members));
+};
+
+const loadSelectedFromStorage = (): string[] => {
+  if (typeof window === 'undefined') return [];
+  const stored = localStorage.getItem(SELECTED_KEY);
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const saveSelectedToStorage = (selected: string[]) => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(SELECTED_KEY, JSON.stringify(selected));
+};
 
 const teamImages: Record<string, string> = {
   'arlie': '/images/arlie.png',
@@ -204,18 +261,58 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-// Member Roulette Modal Component - Shows ALL 10 members always with accurate pointer alignment
+// Member Roulette Modal Component
 function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onClose: () => void; theme: 'light' | 'dark' }) {
+  const [members, setMembers] = useState<TeamMember[]>([]);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [selectedMember, setSelectedMember] = useState<typeof eligibleMembers[0] | null>(null);
+  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [rotation, setRotation] = useState(0);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [allMembersSelected, setAllMembersSelected] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
-  const spinTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [newMemberName, setNewMemberName] = useState('');
+  
+  // Track the actual members rendered physically on the wheel
+  const [currentWheelMembers, setCurrentWheelMembers] = useState<TeamMember[]>([]);
+  const [flashWinner, setFlashWinner] = useState(false);
+  
   const isDark = theme === 'dark';
 
-  // Get available members (not yet selected) - for tracking only, NOT for removing from wheel
+  // Load data from localStorage on mount
+  useEffect(() => {
+    const loadedMembers = loadMembersFromStorage();
+    const loadedSelected = loadSelectedFromStorage();
+    setMembers(loadedMembers);
+    
+    // Filter selected members to only those that exist in current members
+    const validSelected = loadedSelected.filter(name => 
+      loadedMembers.some(m => m.name === name && m.includeInRoulette)
+    );
+    setSelectedMembers(validSelected);
+    
+    const eligible = loadedMembers.filter(m => m.includeInRoulette);
+    setAllMembersSelected(validSelected.length === eligible.length);
+
+    // Set the initial wheel members (ignoring previously selected)
+    setCurrentWheelMembers(eligible.filter(m => !validSelected.includes(m.name)));
+  }, []);
+
+  // Save to localStorage whenever state changes
+  useEffect(() => {
+    if (members.length > 0) {
+      saveMembersToStorage(members);
+    }
+  }, [members]);
+
+  useEffect(() => {
+    saveSelectedToStorage(selectedMembers);
+  }, [selectedMembers]);
+
+  // Get eligible members for roulette
+  const eligibleMembers = members.filter(m => m.includeInRoulette);
+
+  // Get available members (not yet selected)
   const getAvailableMembers = () => {
     return eligibleMembers.filter(m => !selectedMembers.includes(m.name));
   };
@@ -224,53 +321,88 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
     if (isSpinning) return;
     
     const availableMembers = getAvailableMembers();
-    if (availableMembers.length === 0) {
-      return;
-    }
+    if (availableMembers.length === 0) return;
     
+    // INSTANTLY remove the last winner from the wheel as the spin starts
+    setCurrentWheelMembers(availableMembers);
+
     setIsSpinning(true);
     setSelectedMember(null);
     setShowConfetti(false);
+    setFlashWinner(false);
     
-    // Select a random member from available members
+    // Select a random member from available members mathematically
     const finalMember = availableMembers[Math.floor(Math.random() * availableMembers.length)];
-    const finalIndex = eligibleMembers.findIndex(m => m.name === finalMember.name);
+    const finalIndex = availableMembers.findIndex(m => m.name === finalMember.name);
     
     // Calculate the angle for each segment
-    const segmentAngle = 360 / eligibleMembers.length;
-    // The center of the selected segment
-    const targetSegmentCenter = (finalIndex * segmentAngle) + (segmentAngle / 2);
+    const segmentAngle = 360 / availableMembers.length;
     
-    // The pointer is at the TOP (12 o'clock position = -90 degrees or 270 degrees)
-    // In CSS rotation, 0deg starts at 3 o'clock (right side)
-    const pointerAngle = 270; // Pointer at top (12 o'clock)
+    // Target the center of the selected slice
+    const targetSliceCenter = (finalIndex * segmentAngle) + (segmentAngle / 2);
     
-    // Calculate how much we need to rotate to bring target to pointer
-    // We want: (currentRotation + rotationNeeded) % 360 = pointerAngle - targetSegmentCenter
-    let rotationNeeded = (pointerAngle - targetSegmentCenter - (rotation % 360) + 360) % 360;
+    // To make the slice center align with the pointer (0 degrees / top position)
+    let targetRotation = (360 - targetSliceCenter) % 360;
     
-    // Add multiple full spins for animation effect (between 10-20 full rotations)
-    const fullSpins = 10 + Math.floor(Math.random() * 11);
-    const newRotation = rotation + (fullSpins * 360) + rotationNeeded;
+    // Add variance so it doesn't always stop exactly centered
+    const variance = (Math.random() - 0.5) * (segmentAngle * 0.6);
+    targetRotation = ((targetRotation + variance) % 360 + 360) % 360;
     
-    setRotation(newRotation);
+    // Calculate how much more rotation is needed from the current position
+    const currentMod = rotation % 360;
+    let rotationNeeded = (targetRotation - currentMod + 360) % 360;
     
-    if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
+    // Spin duration: 6.5 to 8 seconds for high suspense
+    const duration = 6500 + Math.random() * 1500;
     
-    spinTimeoutRef.current = setTimeout(() => {
-      setSelectedMember(finalMember);
+    // Add full spins for animation (10-15 full rotations to build thrill)
+    const fullSpins = 10 + Math.floor(Math.random() * 5);
+    const targetRotationValue = rotation + (fullSpins * 360) + rotationNeeded;
+    
+    let startTime = Date.now();
+    const startRotation = rotation;
+    const rotationDelta = targetRotationValue - startRotation;
+    
+    const animateSpin = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
       
-      const newSelectedMembers = [...selectedMembers, finalMember.name];
-      setSelectedMembers(newSelectedMembers);
+      // Quartic Ease-Out: Creates a rapid start that intensely slows down at the end
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+      const newRotation = startRotation + (rotationDelta * easeOutQuart);
       
-      if (newSelectedMembers.length === eligibleMembers.length) {
-        setAllMembersSelected(true);
-        setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 3000);
+      setRotation(newRotation);
+      
+      if (progress < 1) {
+        requestAnimationFrame(animateSpin);
+      } else {
+        // Spin perfectly complete
+        const finalRotation = targetRotationValue;
+        setRotation(finalRotation);
+        
+        // Use our mathematically predetermined winner
+        const winner = finalMember;
+        
+        if (winner) {
+          setSelectedMember(winner);
+          setFlashWinner(true);
+          
+          const newSelectedMembers = [...selectedMembers, winner.name];
+          setSelectedMembers(newSelectedMembers);
+          
+          // Check completion against the static eligible list
+          if (newSelectedMembers.length === eligibleMembers.length) {
+            setAllMembersSelected(true);
+            setShowConfetti(true);
+            setTimeout(() => setShowConfetti(false), 4000);
+          }
+        }
+        
+        setIsSpinning(false);
       }
-      
-      setIsSpinning(false);
-    }, 3000);
+    };
+    
+    requestAnimationFrame(animateSpin);
   };
 
   const resetRoulette = () => {
@@ -280,15 +412,61 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
     setAllMembersSelected(false);
     setRotation(0);
     setShowConfetti(false);
+    setFlashWinner(false);
+
+    // Restore everyone onto the wheel visually
+    const eligible = members.filter(m => m.includeInRoulette);
+    setCurrentWheelMembers(eligible);
   };
 
-  const modalClass = isDark 
-    ? 'bg-slate-900 border-slate-700' 
-    : 'bg-white border-gray-200';
+  // Helper for syncing editing actions seamlessly
+  const applyMemberChanges = (newMembers: TeamMember[], newSelected: string[]) => {
+    setMembers(newMembers);
+    setSelectedMembers(newSelected);
+    const eligible = newMembers.filter(m => m.includeInRoulette);
+    setCurrentWheelMembers(eligible.filter(m => !newSelected.includes(m.name)));
+  };
 
+  const addMember = () => {
+    if (!newMemberName.trim()) return;
+    const newMember: TeamMember = {
+      name: newMemberName.trim(),
+      role: 'Data Analyst',
+      image: '',
+      email: `${newMemberName.trim().toLowerCase()}@outdoorequipped.com`,
+      includeInRoulette: true,
+      color: `#${Math.floor(Math.random() * 16777215).toString(16)}`,
+    };
+    applyMemberChanges([...members, newMember], selectedMembers);
+    setNewMemberName('');
+    setIsEditing(false);
+  };
+
+  const removeMember = (name: string) => {
+    if (name === 'Arlie') return;
+    const newMembers = members.filter(m => m.name !== name);
+    const newSelected = selectedMembers.filter(s => s !== name);
+    applyMemberChanges(newMembers, newSelected);
+  };
+
+  const toggleIncludeInRoulette = (name: string) => {
+    if (name === 'Arlie') return;
+    const newMembers = members.map(m => 
+      m.name === name ? { ...m, includeInRoulette: !m.includeInRoulette } : m
+    );
+    
+    const member = newMembers.find(m => m.name === name);
+    let newSelected = selectedMembers;
+    if (member && !member.includeInRoulette) {
+      newSelected = selectedMembers.filter(s => s !== name);
+    }
+    
+    applyMemberChanges(newMembers, newSelected);
+  };
+
+  const modalClass = isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200';
   const textClass = isDark ? 'text-white' : 'text-gray-900';
   const mutedTextClass = isDark ? 'text-slate-400' : 'text-gray-500';
-
   const remainingCount = getAvailableMembers().length;
   const totalCount = eligibleMembers.length;
 
@@ -298,26 +476,27 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
       {/* Confetti Effect */}
       {showConfetti && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          {[...Array(100)].map((_, i) => (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-50">
+          {[...Array(150)].map((_, i) => (
             <div
               key={i}
               className="absolute animate-confetti"
               style={{
                 left: `${Math.random() * 100}%`,
                 top: '-10px',
-                width: `${Math.random() * 10 + 5}px`,
-                height: `${Math.random() * 10 + 5}px`,
-                backgroundColor: `hsl(${Math.random() * 360}, 70%, 50%)`,
+                width: `${Math.random() * 10 + 4}px`,
+                height: `${Math.random() * 10 + 4}px`,
+                backgroundColor: `hsl(${Math.random() * 360}, 70%, 55%)`,
                 animationDelay: `${Math.random() * 2}s`,
                 animationDuration: `${Math.random() * 2 + 2}s`,
+                borderRadius: Math.random() > 0.5 ? '50%' : '0%',
               }}
             />
           ))}
         </div>
       )}
 
-      <div className={`relative w-full max-w-2xl rounded-2xl border shadow-2xl ${modalClass} animate-in zoom-in-95 duration-200`}>
+      <div className={`relative w-full max-w-4xl rounded-2xl border shadow-2xl ${modalClass} animate-in zoom-in-95 duration-200`}>
         {/* Header */}
         <div className={`flex items-center justify-between border-b p-4 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
           <div className="flex items-center gap-2">
@@ -329,12 +508,88 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
               <p className={`text-xs ${mutedTextClass}`}>Spin to randomly select a team member</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className={`rounded-lg p-1 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}
-          >
+          <button onClick={onClose} className={`rounded-lg p-1 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
             <X className={`h-5 w-5 ${mutedTextClass}`} />
           </button>
+        </div>
+
+        {/* Member Management Section */}
+        <div className={`border-b px-4 py-3 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
+          <div className="flex items-center justify-between mb-3">
+            <span className={`text-sm font-medium ${textClass}`}>Team Members Management</span>
+            <button
+              onClick={() => setIsEditing(!isEditing)}
+              className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition-all ${
+                isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <Edit2 className="h-3 w-3" />
+              {isEditing ? 'Done Editing' : 'Edit Members'}
+            </button>
+          </div>
+          
+          {isEditing && (
+            <div className="mb-3">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newMemberName}
+                  onChange={(e) => setNewMemberName(e.target.value)}
+                  placeholder="Enter member name"
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm ${
+                    isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                  }`}
+                  onKeyPress={(e) => e.key === 'Enter' && addMember()}
+                />
+                <button onClick={addMember} className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-600">
+                  <Plus className="h-3 w-3" /> Add
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <div className="flex flex-wrap gap-2">
+            {members.map(member => {
+              const isSelectedAlready = selectedMembers.includes(member.name);
+              return (
+                <div
+                  key={member.name}
+                  className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                    isEditing && member.name !== 'Arlie'
+                      ? 'bg-red-500/20 text-red-400 cursor-pointer hover:bg-red-500/30'
+                      : isSelectedAlready 
+                        ? isDark ? 'bg-slate-800 text-slate-500 opacity-60' : 'bg-gray-200 text-gray-400 opacity-60'
+                        : member.includeInRoulette && member.name !== 'Arlie'
+                          ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                          : isDark ? 'bg-slate-800 text-slate-500' : 'bg-gray-100 text-gray-400'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded-full overflow-hidden ${isSelectedAlready ? 'grayscale' : ''}`}>
+                    {member.image ? (
+                      <Image src={member.image} alt={member.name} width={20} height={20} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[10px] font-bold" style={{ backgroundColor: member.color, color: 'white' }}>
+                        {member.name[0]}
+                      </div>
+                    )}
+                  </div>
+                  <span>{member.name} {isSelectedAlready && <Check className="inline w-3 h-3 ml-0.5 mb-0.5" />}</span>
+                  {member.name !== 'Arlie' && (
+                    <>
+                      <button onClick={() => toggleIncludeInRoulette(member.name)} className="ml-1 rounded-full p-0.5 transition-colors" title={member.includeInRoulette ? "Remove from roulette" : "Add to roulette"}>
+                        {member.includeInRoulette ? '🎲' : '⭕'}
+                      </button>
+                      {isEditing && (
+                        <button onClick={() => removeMember(member.name)} className="ml-1 rounded-full p-0.5 hover:bg-red-500/20 transition-colors" title="Remove member">
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Selection Progress and Reset Button */}
@@ -347,14 +602,10 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
                 disabled={isSpinning || selectedMembers.length === 0}
                 className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition-all ${
                   isSpinning || selectedMembers.length === 0
-                    ? 'opacity-50 cursor-not-allowed'
-                    : isDark
-                      ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'opacity-50 cursor-not-allowed' : isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                <RefreshIcon className="h-3 w-3" />
-                Reset All
+                <RefreshIcon className="h-3 w-3" /> Reset All
               </button>
             </div>
             <span className={`text-xs ${textClass}`}>
@@ -362,176 +613,139 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
             </span>
           </div>
           <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-500"
-              style={{ width: `${(selectedMembers.length / totalCount) * 100}%` }}
-            />
+            <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-500" style={{ width: `${(selectedMembers.length / totalCount) * 100}%` }} />
           </div>
-          <div className="flex flex-wrap gap-1.5 mt-3">
-            {eligibleMembers.map(member => (
-              <div
-                key={member.name}
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-all ${
-                  selectedMembers.includes(member.name)
-                    ? 'bg-emerald-500/20 text-emerald-400 line-through decoration-emerald-400'
-                    : isDark
-                      ? 'bg-slate-800 text-slate-300'
-                      : 'bg-gray-100 text-gray-700'
-                }`}
-              >
-                {selectedMembers.includes(member.name) ? (
-                  <Check className="h-2.5 w-2.5" />
-                ) : (
-                  <div className="h-2 w-2 rounded-full bg-emerald-400" />
-                )}
-                {member.name}
-              </div>
-            ))}
-          </div>
-          {allMembersSelected && (
-            <div className={`mt-3 rounded-lg p-2 text-center text-xs animate-in slide-in-from-top-1 fade-in duration-300 ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
-              🎉 Congratulations! All team members have been selected! Click Reset to start a new round. 🎉
-            </div>
-          )}
         </div>
 
-        {/* Roulette Wheel - ALWAYS shows all members */}
+        {/* Roulette Wheel */}
         <div className="p-8">
           <div className="relative flex justify-center">
             {/* Glowing ring effect */}
-            <div className="absolute inset-0 rounded-full blur-xl opacity-30 animate-pulse" style={{
-              background: 'conic-gradient(from 0deg, #378ADD, #1D9E75, #7F77DD, #BA7517, #06b6d4, #10b981, #f59e0b, #ef4444, #8b5cf6, #ec4899)'
+            <div className="absolute inset-0 rounded-full blur-xl opacity-30" style={{
+              background: 'conic-gradient(from 0deg, #378ADD, #1D9E75, #7F77DD, #BA7517, #06b6d4, #10b981, #f59e0b, #ef4444, #8b5cf6, #ec4899)',
             }} />
             
-            {/* Pointer - Red triangle at top */}
-            <div className="absolute -top-6 left-1/2 z-10 -translate-x-1/2">
-              <div className="h-8 w-0 border-x-[14px] border-t-[22px] border-x-transparent border-t-red-500 drop-shadow-lg" />
-              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-red-500 animate-ping" />
+            {/* Pointer (Red triangle pointing to the wheel) */}
+            <div className="absolute -top-6 left-1/2 z-20 -translate-x-1/2" style={{ transformOrigin: 'top center' }}>
+              <div className={`h-10 w-0 border-x-[16px] border-t-[28px] border-x-transparent border-t-red-500 drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] transition-transform duration-75 ${isSpinning ? 'animate-bounce' : ''}`} />
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-red-600 border-2 border-red-300 shadow-lg" />
             </div>
             
-            {/* Wheel - Always shows all eligible members (10 members) */}
+            {/* Wheel - Slices start from the top (pointer position) */}
             <div
-              className="relative h-80 w-80 rounded-full shadow-2xl cursor-pointer"
+              className="relative h-80 w-80 rounded-full shadow-2xl cursor-pointer ring-8 ring-slate-800 transition-colors"
               style={{
                 transform: `rotate(${rotation}deg)`,
-                transition: isSpinning ? 'transform 3s cubic-bezier(0.25, 0.1, 0.1, 1)' : 'none',
-                background: `conic-gradient(${eligibleMembers.map((member, i) => {
-                  const startAngle = (i / eligibleMembers.length) * 360;
-                  const endAngle = ((i + 1) / eligibleMembers.length) * 360;
-                  // Dim selected members on the wheel
-                  const isSelected = selectedMembers.includes(member.name);
-                  const color = isSelected ? `${member.color}80` : member.color;
-                  return `${color} ${startAngle}deg ${endAngle}deg`;
-                }).join(', ')})`,
-                boxShadow: isSpinning ? '0 0 40px rgba(255,255,255,0.4)' : '0 20px 40px rgba(0,0,0,0.3)',
+                background: currentWheelMembers.length > 0 
+                  ? `conic-gradient(from 0deg, ${currentWheelMembers.map((member, i) => {
+                      const startAngle = (i / currentWheelMembers.length) * 360;
+                      const endAngle = ((i + 1) / currentWheelMembers.length) * 360;
+                      return `${member.color} ${startAngle}deg ${endAngle}deg`;
+                    }).join(', ')})`
+                  : '#334155', // Fallback for empty wheel
+                boxShadow: isSpinning ? '0 0 40px rgba(255,255,255,0.2)' : '0 20px 50px rgba(0,0,0,0.5)',
               }}
             >
-              {eligibleMembers.map((member, index) => {
-                const angle = (index / eligibleMembers.length) * 360 + (360 / eligibleMembers.length / 2);
-                const radius = 130;
-                const isSelected = selectedMembers.includes(member.name);
+              {/* Slice border lines */}
+              <div className="absolute inset-0 rounded-full border-4 border-slate-700/50" 
+                style={{
+                  background: currentWheelMembers.length > 0 
+                    ? `repeating-conic-gradient(from 0deg, transparent 0deg, transparent calc(360deg / ${currentWheelMembers.length} - 2deg), rgba(255,255,255,0.3) calc(360deg / ${currentWheelMembers.length} - 2deg), rgba(255,255,255,0.3) calc(360deg / ${currentWheelMembers.length}))`
+                    : 'none'
+                }}
+              />
+
+              {/* Member avatars positioned in their slices */}
+              {currentWheelMembers.map((member, index) => {
+                const sliceCenterAngle = (index / currentWheelMembers.length) * 360 + (360 / currentWheelMembers.length / 2);
+                const radius = 125;
+                const isCurrentWinner = flashWinner && selectedMember?.name === member.name;
+                
                 return (
                   <div
                     key={member.name}
-                    className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center"
+                    className={`absolute left-1/2 top-1/2 flex flex-col items-center text-center transition-all duration-300 ${isCurrentWinner ? 'scale-125 z-10 drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]' : ''}`}
                     style={{
-                      transform: `rotate(${angle}deg) translate(${radius}px) rotate(-${angle}deg)`,
-                      opacity: isSelected ? 0.5 : 1,
-                      filter: isSelected ? 'grayscale(0.3)' : 'none',
+                      transform: `translate(-50%, -50%) rotate(${sliceCenterAngle}deg) translateY(-${radius}px) rotate(-${sliceCenterAngle}deg)`,
                     }}
                   >
-                    {/* Member avatar on wheel */}
-                    <div className={`w-12 h-12 rounded-full bg-white/95 shadow-lg flex items-center justify-center overflow-hidden border-2 ${isSelected ? 'border-gray-400' : 'border-white'}`}>
+                    <div className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center overflow-hidden border-2 ${isCurrentWinner ? 'border-yellow-400 bg-yellow-100 ring-4 ring-yellow-400/50' : 'border-white bg-white/95'}`}>
                       {member.image ? (
                         <Image src={member.image} alt={member.name} width={48} height={48} className="w-full h-full object-cover" />
                       ) : (
                         <span className="text-sm font-bold" style={{ color: member.color }}>{member.name[0]}</span>
                       )}
                     </div>
-                    <span className={`mt-1 text-[10px] font-semibold text-white drop-shadow-md px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-black/60' : 'bg-black/40'}`}>
+                    <span className={`mt-1 text-[10px] font-semibold text-white drop-shadow-md px-1.5 py-0.5 rounded-full ${isCurrentWinner ? 'bg-yellow-500/90 text-slate-900 border border-yellow-300' : 'bg-black/60'}`}>
                       {member.name}
-                      {isSelected && ' ✓'}
                     </span>
                   </div>
                 );
               })}
               
-              {/* Center decoration */}
-              <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 shadow-inner flex items-center justify-center border-4 border-slate-700">
-                <div className="text-center">
-                  <Sparkles className="h-7 w-7 text-yellow-400 mx-auto animate-pulse" />
-                  <span className="text-[9px] text-white mt-1 block font-bold">ROULETTE</span>
+              {/* Center decoration / Spin Hub */}
+              <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-b from-slate-700 to-slate-900 shadow-[inset_0_4px_4px_rgba(255,255,255,0.2),_0_8px_16px_rgba(0,0,0,0.6)] flex items-center justify-center border-4 border-slate-600 z-10">
+                <div className="text-center w-full h-full flex flex-col items-center justify-center rounded-full bg-slate-800 inner-shadow">
+                  <div className="w-4 h-4 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 shadow-inner mb-0.5" />
+                  <span className="text-[8px] text-slate-300 block font-bold tracking-widest">SPIN</span>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Spin Button */}
-          <div className="mt-8 flex justify-center gap-3">
+          <div className="mt-12 flex justify-center gap-3">
             <button
               onClick={spinRoulette}
-              disabled={isSpinning || remainingCount === 0}
-              className={`inline-flex items-center gap-2 rounded-xl px-8 py-3 font-semibold transition-all transform hover:scale-105 ${
-                isSpinning || remainingCount === 0
-                  ? 'cursor-not-allowed opacity-50 bg-slate-600'
+              disabled={isSpinning || remainingCount === 0 || eligibleMembers.length === 0}
+              className={`inline-flex items-center gap-2 rounded-xl px-10 py-4 font-bold text-lg shadow-xl transition-all transform hover:-translate-y-1 ${
+                isSpinning || remainingCount === 0 || eligibleMembers.length === 0
+                  ? 'cursor-not-allowed opacity-50 bg-slate-600 scale-100'
                   : isDark
-                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:shadow-lg hover:from-purple-500 hover:to-pink-500'
-                    : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:shadow-lg hover:from-purple-400 hover:to-pink-400'
+                    ? 'bg-gradient-to-b from-purple-500 to-pink-600 text-white hover:shadow-[0_0_20px_rgba(236,72,153,0.5)] active:scale-95 active:translate-y-0'
+                    : 'bg-gradient-to-b from-purple-400 to-pink-500 text-white hover:shadow-[0_0_20px_rgba(236,72,153,0.3)] active:scale-95 active:translate-y-0'
               }`}
             >
               {isSpinning ? (
                 <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  Spinning...
+                  <Loader2 className="h-6 w-6 animate-spin" /> Spinning...
                 </>
               ) : remainingCount === 0 ? (
                 <>
-                  <RotateCcw className="h-5 w-5" />
-                  Round Complete
+                  <RotateCcw className="h-6 w-6" /> Round Complete
                 </>
               ) : (
                 <>
-                  <RotateCcw className="h-5 w-5" />
-                  Spin the Wheel ({remainingCount} left)
+                  <Sparkles className="h-6 w-6 text-yellow-300" /> Spin the Wheel ({remainingCount} left)
                 </>
               )}
             </button>
           </div>
 
-          {/* Sound effect hint */}
-          {isSpinning && (
-            <div className="mt-3 text-center">
-              <span className={`text-xs ${mutedTextClass} animate-pulse`}>
-                🎵 Spin spin spin... 🎵
-              </span>
-            </div>
-          )}
-
-          {/* Result Display with Animation */}
+          {/* Result Display */}
           {selectedMember && !isSpinning && (
-            <div className={`mt-6 animate-in slide-in-from-bottom-4 fade-in duration-500 rounded-xl border-2 p-5 text-center ${
-              isDark 
-                ? 'border-emerald-500/50 bg-gradient-to-br from-emerald-500/20 to-purple-500/20' 
-                : 'border-emerald-400 bg-gradient-to-br from-emerald-50 to-purple-50'
+            <div className={`mt-8 animate-in zoom-in slide-in-from-bottom-4 duration-500 rounded-xl border-2 p-5 text-center shadow-2xl ${
+              isDark ? 'border-yellow-500/50 bg-gradient-to-br from-yellow-500/20 to-purple-500/20' : 'border-yellow-400 bg-gradient-to-br from-yellow-50 to-purple-50'
             }`}>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-5 justify-center">
                 <div className="flex-shrink-0 relative">
-                  <div className="w-20 h-20 rounded-full overflow-hidden ring-4 ring-emerald-500 shadow-xl">
-                    <Image src={selectedMember.image} alt={selectedMember.name} width={80} height={80} className="w-full h-full object-cover" />
+                  <div className="w-24 h-24 rounded-full overflow-hidden ring-4 ring-yellow-400 shadow-xl">
+                    {selectedMember.image ? (
+                      <Image src={selectedMember.image} alt={selectedMember.name} width={96} height={96} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-4xl font-bold" style={{ backgroundColor: selectedMember.color, color: 'white' }}>
+                        {selectedMember.name[0]}
+                      </div>
+                    )}
                   </div>
-                  <div className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 flex items-center justify-center animate-bounce">
-                    <Sparkles className="h-3.5 w-3.5 text-white" />
+                  <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-yellow-400 border-2 border-white dark:border-slate-900 flex items-center justify-center animate-bounce">
+                    <Trophy className="h-4 w-4 text-slate-900" />
                   </div>
                 </div>
-                <div className="flex-1 text-left">
-                  <p className={`text-xs font-medium ${mutedTextClass}`}>🎉 Winner Selected! 🎉</p>
-                  <p className={`text-2xl font-bold ${textClass} mt-1`}>{selectedMember.name}</p>
-                  <p className={`text-sm ${mutedTextClass}`}>{selectedMember.role}</p>
-                  {!allMembersSelected && (
-                    <p className={`text-xs mt-2 text-emerald-400`}>
-                      {remainingCount - 1} members remaining
-                    </p>
-                  )}
+                <div className="text-left">
+                  <p className={`text-sm font-bold uppercase tracking-wider ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>Winner Selected!</p>
+                  <p className={`text-3xl font-extrabold ${textClass} mt-1`}>{selectedMember.name}</p>
+                  <p className={`text-sm mt-1 ${mutedTextClass}`}>{selectedMember.role}</p>
                 </div>
               </div>
             </div>
@@ -541,14 +755,8 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
 
       <style jsx>{`
         @keyframes confetti {
-          0% {
-            transform: translateY(0) rotate(0deg);
-            opacity: 1;
-          }
-          100% {
-            transform: translateY(100vh) rotate(720deg);
-            opacity: 0;
-          }
+          0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
         }
         .animate-confetti {
           animation: confetti 3s ease-out forwards;
@@ -596,7 +804,7 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
   useEffect(() => {
     if (isAutoPlaying) {
       autoPlayRef.current = setInterval(() => {
-        setCurrentSlide((prev) => (prev + 1) % teamMembers.length);
+        setCurrentSlide((prev) => (prev + 1) % defaultTeamMembers.length);
       }, 3000);
     }
     return () => { if (autoPlayRef.current) clearInterval(autoPlayRef.current); };
@@ -609,13 +817,13 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
   };
 
   const nextSlide = () => {
-    setCurrentSlide((prev) => (prev + 1) % teamMembers.length);
+    setCurrentSlide((prev) => (prev + 1) % defaultTeamMembers.length);
     setIsAutoPlaying(false);
     setTimeout(() => setIsAutoPlaying(true), 5000);
   };
 
   const prevSlide = () => {
-    setCurrentSlide((prev) => (prev - 1 + teamMembers.length) % teamMembers.length);
+    setCurrentSlide((prev) => (prev - 1 + defaultTeamMembers.length) % defaultTeamMembers.length);
     setIsAutoPlaying(false);
     setTimeout(() => setIsAutoPlaying(true), 5000);
   };
@@ -644,7 +852,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
     return { sku: getSparkline('sku'), asin: getSparkline('asin'), basecamp: getSparkline('basecamp'), bulkAnalyzer: getSparkline('bulk-analyzer') };
   }, [runs]);
 
-  // Create user stats map from runs
   const userStatsMap = useMemo(() => {
     const map = new Map<string, { totalRuns: number; completedRuns: number; lastRun: string }>();
     runs.forEach(run => {
@@ -662,9 +869,8 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
     return map;
   }, [runs]);
 
-  // Combine team members with their run stats and sort by total runs (highest first)
   const allUsers = useMemo(() => {
-    const usersWithStats = teamMembers.map(member => {
+    const usersWithStats = defaultTeamMembers.map(member => {
       const stats = userStatsMap.get(member.email) || { totalRuns: 0, completedRuns: 0, lastRun: '' };
       return {
         ...member,
@@ -713,7 +919,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
   return (
     <>
       <div className="w-full max-w-full space-y-5 overflow-hidden sm:space-y-6">
-        {/* Header */}
         <section className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-3">
@@ -734,7 +939,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
 
         {errorMessage && <div className={`rounded-xl border px-4 py-3 text-sm ${isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'}`}>Dashboard error: {errorMessage}</div>}
 
-        {/* Stats Bar - 4 columns */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
           <div className={`rounded-xl border p-3 shadow-sm ${panelClass}`}>
             <p className={`text-[10px] font-medium uppercase tracking-wider ${mutedText}`}>Total runs</p>
@@ -758,7 +962,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
           </div>
         </div>
 
-        {/* Operation Tools Section */}
         <section className="space-y-4">
           <div className="flex items-center gap-3">
             <div className="rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 p-2 shadow-lg">
@@ -783,9 +986,7 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
           </div>
         </section>
 
-        {/* 3-Column Bottom Grid */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-          {/* Top Users Panel */}
           <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${panelClass}`}>
             <div className={`border-b px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
               <div className="flex items-center justify-between">
@@ -882,7 +1083,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
             </div>
           </section>
 
-          {/* Recent Activity Panel */}
           <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${panelClass}`}>
             <div className={`border-b px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
               <div className="flex items-center justify-between">
@@ -923,7 +1123,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
             </div>
           </section>
 
-          {/* Team Panel - Carousel with Member Roulette Button */}
           <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${panelClass}`}>
             <div className={`border-b px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
               <div className="flex items-center justify-between">
@@ -951,7 +1150,7 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
             </div>
             <div className="relative overflow-hidden">
               <div className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${currentSlide * 100}%)` }}>
-                {teamMembers.map((member, idx) => (
+                {defaultTeamMembers.map((member, idx) => (
                   <div key={idx} className="w-full flex-shrink-0 px-6 py-6">
                     <div className="flex flex-col items-center text-center">
                       <div className="relative group">
@@ -978,7 +1177,7 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
               </div>
             </div>
             <div className="flex justify-center gap-1 pb-3">
-              {teamMembers.map((_, idx) => (
+              {defaultTeamMembers.map((_, idx) => (
                 <button
                   key={idx}
                   onClick={() => goToSlide(idx)}
@@ -994,7 +1193,6 @@ export default function Dashboard({ theme = 'dark' }: DashboardProps) {
         </div>
       </div>
 
-      {/* Member Roulette Modal */}
       <MemberRouletteModal isOpen={isRouletteOpen} onClose={() => setIsRouletteOpen(false)} theme={theme} />
     </>
   );
