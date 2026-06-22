@@ -297,6 +297,7 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
   const [currentWheelMembers, setCurrentWheelMembers] = useState<TeamMember[]>([]);
   const [flashWinner, setFlashWinner] = useState(false);
   
+  
   const isDark = theme === 'dark';
 
   useEffect(() => {
@@ -754,47 +755,129 @@ export default function Dashboard({ theme = 'dark', currentUserEmail = '' }: Das
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
   const [isRouletteOpen, setIsRouletteOpen] = useState(false);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [settings, setSettings] = useState<any>(null);
   const autoPlayRef = useRef<NodeJS.Timeout | null>(null);
 
   const isDark = theme === 'dark';
   const isAdmin = currentUserEmail === 'melvin@outdoorequipped.com';
 
-  // Load announcements from localStorage
+  // Load settings and announcements from Supabase
   useEffect(() => {
-    const loadAnnouncements = () => {
-      const saved = localStorage.getItem('lot_announcements');
-      if (saved) {
-        try {
-          const allAnnouncements = JSON.parse(saved);
-          const filtered = isAdmin 
-            ? allAnnouncements 
-            : allAnnouncements.filter((a: Announcement) => a.active);
-          setAnnouncements(filtered);
-        } catch {
-          setAnnouncements([]);
-        }
-      }
-    };
-    
-    loadAnnouncements();
+    const loadData = async () => {
+      try {
+        // Load settings
+        const { data: settingsData, error: settingsError } = await supabase
+          .from('system_settings')
+          .select('maintenance_mode')
+          .eq('id', 1)
+          .single();
 
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'lot_announcements') {
-        loadAnnouncements();
+        if (!settingsError && settingsData) {
+          setSettings(settingsData);
+        } else {
+          // Fallback to localStorage
+          const saved = localStorage.getItem('lot_admin_settings');
+          if (saved) {
+            try {
+              const parsed = JSON.parse(saved);
+              setSettings({ maintenance_mode: parsed.maintenanceMode });
+            } catch {
+              setSettings({ maintenance_mode: false });
+            }
+          }
+        }
+
+        // Load announcements
+        const { data: annData, error: annError } = await supabase
+          .from('announcements')
+          .select('*')
+          .eq('active', true)
+          .order('created_at', { ascending: false });
+
+        if (!annError && annData) {
+          const formatted = annData.map((a: any) => ({
+            id: a.id,
+            title: a.title,
+            message: a.message,
+            type: a.type,
+            targetAll: a.target_all,
+            targetEmails: a.target_emails || [],
+            createdAt: a.created_at,
+            pinned: a.pinned,
+            active: a.active,
+          }));
+          setAnnouncements(formatted);
+        } else {
+          // Fallback to localStorage
+          const saved = localStorage.getItem('lot_announcements');
+          if (saved) {
+            try {
+              const allAnnouncements = JSON.parse(saved);
+              const active = allAnnouncements.filter((a: Announcement) => a.active);
+              setAnnouncements(active);
+            } catch {
+              setAnnouncements([]);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load data:', err);
       }
     };
-    
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [isAdmin]);
+
+    loadData();
+
+    // Real-time subscription for settings changes
+    const settingsChannel = supabase
+      .channel('system_settings_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'system_settings',
+          filter: 'id=eq.1',
+        },
+        (payload) => {
+          setSettings(payload.new);
+        }
+      )
+      .subscribe();
+
+    // Real-time subscription for announcements changes
+    const announcementsChannel = supabase
+      .channel('announcements_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'announcements',
+        },
+        () => {
+          // Reload announcements
+          loadData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(settingsChannel);
+      supabase.removeChannel(announcementsChannel);
+    };
+  }, []);
 
   // Check if maintenance mode is enabled
   const isMaintenanceMode = (): boolean => {
+    if (settings) {
+      return settings.maintenance_mode === true;
+    }
+    // Fallback to localStorage
     const saved = localStorage.getItem('lot_admin_settings');
     if (saved) {
       try {
-        const settings = JSON.parse(saved);
-        return settings.maintenanceMode || false;
+        const parsed = JSON.parse(saved);
+        return parsed.maintenanceMode || false;
       } catch {
         return false;
       }

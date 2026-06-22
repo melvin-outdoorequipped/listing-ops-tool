@@ -224,7 +224,6 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   
-  // Add a ref to track if data has been loaded
   const dataLoadedRef = useRef(false);
   const isMountedRef = useRef(true);
   const fetchInProgressRef = useRef(false);
@@ -278,31 +277,234 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400';
   const hoverRowClass = isDark ? 'hover:bg-slate-800/50' : 'hover:bg-gray-50';
 
+  // ─── State Fixes ──────────────────────────────────────────────────────────────
+
+  // 1. Force isLoading to false when data is already loaded
+  useEffect(() => {
+    if (dataLoadedRef.current) {
+      console.log('Data already loaded, forcing isLoading to false');
+      setIsLoading(false);
+    }
+  }, []);
+
+  // 2. Fallback timeout - if still loading after 8 seconds, force it
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (isLoading) {
+        console.log('⚠️ Force setting isLoading to false after timeout');
+        setIsLoading(false);
+      }
+    }, 8000);
+
+    return () => clearTimeout(timeoutId);
+  }, [isLoading]);
+
+  // 3. Safety check - if data is loaded but isLoading is true, fix it
+  useEffect(() => {
+    if (dataLoadedRef.current && isLoading) {
+      console.log('🔄 Safety check: Data loaded but isLoading is true, fixing...');
+      setIsLoading(false);
+    }
+  }, [isLoading, dataLoadedRef.current]);
+
+  // ─── Supabase Database Functions ──────────────────────────────────────────
+
+  const loadSettingsFromDB = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('*')
+        .eq('id', 1)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setSettings({
+          maintenanceMode: data.maintenance_mode ?? false,
+          registrationOpen: data.registration_open ?? true,
+          maxRunsPerUser: data.max_runs_per_user ?? 500,
+          siteName: data.site_name ?? 'LOT – Listing Operations Tools',
+          supportEmail: data.support_email ?? 'melvin@outdoorequipped.com',
+          sessionTimeout: data.session_timeout ?? 60,
+          debugMode: data.debug_mode ?? false,
+          autoRefreshInterval: data.auto_refresh_interval ?? 60,
+        });
+      }
+      return true;
+    } catch (err) {
+      console.error('Failed to load settings from DB:', err);
+      // Fallback to localStorage
+      const saved = localStorage.getItem('lot_admin_settings');
+      if (saved) {
+        try {
+          setSettings(JSON.parse(saved));
+        } catch {
+          setSettings(DEFAULT_SETTINGS);
+        }
+      }
+      return false;
+    }
+  };
+
+  const saveSettingsToDB = async () => {
+    try {
+      const { error } = await supabase
+        .from('system_settings')
+        .update({
+          maintenance_mode: settings.maintenanceMode,
+          registration_open: settings.registrationOpen,
+          max_runs_per_user: settings.maxRunsPerUser,
+          site_name: settings.siteName,
+          support_email: settings.supportEmail,
+          session_timeout: settings.sessionTimeout,
+          debug_mode: settings.debugMode,
+          auto_refresh_interval: settings.autoRefreshInterval,
+          updated_at: new Date().toISOString(),
+          updated_by: currentUser?.email || 'admin',
+        })
+        .eq('id', 1);
+
+      if (error) throw error;
+
+      // Also save to localStorage as backup
+      localStorage.setItem('lot_admin_settings', JSON.stringify(settings));
+      
+      // Dispatch events to notify all components
+      window.dispatchEvent(new CustomEvent('settingsUpdated'));
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'lot_admin_settings',
+        newValue: JSON.stringify(settings),
+      }));
+
+      return true;
+    } catch (err) {
+      console.error('Failed to save settings to DB:', err);
+      // Fallback to localStorage
+      localStorage.setItem('lot_admin_settings', JSON.stringify(settings));
+      return false;
+    }
+  };
+
+  const loadAnnouncementsFromDB = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('announcements')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        const formatted = data.map((a: any) => ({
+          id: a.id,
+          title: a.title,
+          message: a.message,
+          type: a.type,
+          targetAll: a.target_all,
+          targetEmails: a.target_emails || [],
+          createdAt: a.created_at,
+          pinned: a.pinned,
+          active: a.active,
+        }));
+        setAnnouncements(formatted);
+        // Also save to localStorage as backup
+        localStorage.setItem('lot_announcements', JSON.stringify(formatted));
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Failed to load announcements from DB:', err);
+      // Fallback to localStorage
+      const saved = localStorage.getItem('lot_announcements');
+      if (saved) {
+        try {
+          setAnnouncements(JSON.parse(saved));
+        } catch {
+          setAnnouncements([]);
+        }
+      }
+      return false;
+    }
+  };
+
+  const saveAnnouncementToDB = async (announcement: Announcement) => {
+    try {
+      const { error } = await supabase
+        .from('announcements')
+        .upsert({
+          id: announcement.id,
+          title: announcement.title,
+          message: announcement.message,
+          type: announcement.type,
+          target_all: announcement.targetAll,
+          target_emails: announcement.targetEmails,
+          pinned: announcement.pinned,
+          active: announcement.active,
+          created_at: announcement.createdAt,
+          created_by: currentUser?.email || 'admin',
+        }, { onConflict: 'id' });
+
+      if (error) throw error;
+      return true;
+    } catch (err) {
+      console.error('Failed to save announcement to DB:', err);
+      return false;
+    }
+  };
+
+  const deleteAnnouncementFromDB = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('announcements')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return true;
+    } catch (err) {
+      console.error('Failed to delete announcement from DB:', err);
+      return false;
+    }
+  };
+
   // ─── Data Fetching ──────────────────────────────────────────────────────────
 
   const checkAdminStatus = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) {
+        console.error('Auth error:', error);
+        setError('Please sign in to access admin panel.');
+        return false;
+      }
       setCurrentUser(user);
-      if (!user) { setError('Please sign in to access admin panel.'); return false; }
-      if (user.email !== ADMIN_EMAIL) { setError(`Access denied. Only ${ADMIN_EMAIL} can access the admin panel.`); return false; }
+      if (!user) { 
+        setError('Please sign in to access admin panel.'); 
+        return false; 
+      }
+      if (user.email !== ADMIN_EMAIL) { 
+        setError(`Access denied. Only ${ADMIN_EMAIL} can access the admin panel.`); 
+        return false; 
+      }
+      console.log('Admin verified:', user.email);
       return true;
     } catch (err: any) {
+      console.error('Failed to verify admin status:', err);
       setError('Failed to verify admin status: ' + err.message);
       return false;
     }
   };
 
   const fetchData = useCallback(async (force = false) => {
-    // Prevent multiple simultaneous fetches
     if (fetchInProgressRef.current && !force) {
       console.log('Fetch already in progress, skipping');
       return;
     }
 
-    // Only fetch if data hasn't been loaded or force is true
     if (dataLoadedRef.current && !force) {
       console.log('Data already loaded, skipping fetch');
+      setIsLoading(false);
       return;
     }
 
@@ -311,21 +513,34 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     setError(null);
 
     try {
+      console.log('Starting fetchData...');
+      
       const isAdmin = await checkAdminStatus();
+      console.log('isAdmin:', isAdmin);
+      
       if (!isAdmin) { 
+        console.log('Not admin, stopping fetch');
         setIsLoading(false); 
         fetchInProgressRef.current = false;
         return; 
       }
 
+      // Load settings and announcements from Supabase
+      console.log('Loading settings from DB...');
+      await loadSettingsFromDB();
+      console.log('Loading announcements from DB...');
+      await loadAnnouncementsFromDB();
+
       // Tool runs
       let toolRuns: any[] = [];
       try {
+        console.log('Fetching tool runs...');
         const { data, error } = await supabaseAdmin
           .from('tool_runs')
           .select('id, user_email, tool_type, status, title, total_count, created_at')
           .order('created_at', { ascending: false });
         if (error) {
+          console.log('Error fetching tool runs, using fallback:', error);
           const { data: fallback } = await supabase
             .from('tool_runs')
             .select('id, user_email, tool_type, status, title, total_count, created_at')
@@ -334,7 +549,12 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         } else {
           toolRuns = data || [];
         }
-      } catch { toolRuns = []; }
+      } catch (err) {
+        console.error('Tool runs fetch error:', err);
+        toolRuns = [];
+      }
+
+      console.log('Tool runs count:', toolRuns.length);
 
       setAllActivities(toolRuns.map((run: any) => ({
         id: run.id,
@@ -350,16 +570,20 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
       let authUsers: any[] = [];
       let authSuccess = false;
       try {
+        console.log('Fetching auth users...');
         const { data, error: authError } = await supabaseAdmin.auth.admin.listUsers();
         if (!authError && data?.users) {
           authUsers = data.users;
           authSuccess = true;
           setAuthUserCount(authUsers.length);
+          console.log('Auth users count:', authUsers.length);
         } else {
+          console.log('Auth users fetch failed, using fallback');
           setUsingFallbackData(true);
         }
-      } catch { 
-        setUsingFallbackData(true); 
+      } catch (err) {
+        console.error('Auth users fetch error:', err);
+        setUsingFallbackData(true);
       }
 
       let userMap = new Map<string, UserStats>();
@@ -445,97 +669,96 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         total_count: run.total_count || 0,
       })));
 
-      // Load settings from localStorage
-      const saved = localStorage.getItem('lot_admin_settings');
-      if (saved) setSettings(JSON.parse(saved));
-
-      // Load announcements from localStorage
-      const savedAnnouncements = localStorage.getItem('lot_announcements');
-      if (savedAnnouncements) setAnnouncements(JSON.parse(savedAnnouncements));
-
-      // Mark data as loaded
       dataLoadedRef.current = true;
+      setIsLoading(false); // Force set loading to false immediately
+      console.log('Data loaded successfully!');
 
     } catch (err: any) {
       console.error('Fetch error:', err);
       setError(err.message || 'Failed to load data');
+      setIsLoading(false);
     } finally {
       if (isMountedRef.current) {
         setIsLoading(false);
+        console.log('Loading complete, isLoading set to false');
       }
       fetchInProgressRef.current = false;
     }
   }, []);
 
-  // Only fetch data on mount if not already loaded
+  // ─── Effects ──────────────────────────────────────────────────────────────
+
   useEffect(() => {
-    console.log('Component mounted, dataLoadedRef:', dataLoadedRef.current);
     if (!dataLoadedRef.current && !fetchInProgressRef.current) {
       fetchData();
     }
     
-    // Cleanup
     return () => {
       isMountedRef.current = false;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchData]);
 
-  // Listen for settings updates from other tabs
+  // Listen for settings updates from other tabs/windows
   useEffect(() => {
     const handleSettingsUpdate = () => {
-      // Reload settings and announcements from localStorage
-      const saved = localStorage.getItem('lot_admin_settings');
-      if (saved) setSettings(JSON.parse(saved));
-      
-      const savedAnnouncements = localStorage.getItem('lot_announcements');
-      if (savedAnnouncements) setAnnouncements(JSON.parse(savedAnnouncements));
+      loadSettingsFromDB();
+      loadAnnouncementsFromDB();
     };
 
     window.addEventListener('settingsUpdated', handleSettingsUpdate);
     window.addEventListener('storage', handleSettingsUpdate);
 
+    // Real-time subscription for settings changes
+    const channel = supabase
+      .channel('system_settings_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'system_settings',
+          filter: 'id=eq.1',
+        },
+        (payload) => {
+          console.log('Settings updated in real-time:', payload);
+          loadSettingsFromDB();
+        }
+      )
+      .subscribe();
+
+    // Real-time subscription for announcements changes
+    const announcementsChannel = supabase
+      .channel('announcements_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'announcements',
+        },
+        (payload) => {
+          console.log('Announcements updated in real-time:', payload);
+          loadAnnouncementsFromDB();
+        }
+      )
+      .subscribe();
+
     return () => {
       window.removeEventListener('settingsUpdated', handleSettingsUpdate);
       window.removeEventListener('storage', handleSettingsUpdate);
+      supabase.removeChannel(channel);
+      supabase.removeChannel(announcementsChannel);
     };
   }, []);
 
   const refreshData = useCallback(async () => {
     setIsRefreshing(true);
-    dataLoadedRef.current = false; // Reset to force refetch
+    dataLoadedRef.current = false;
     await fetchData(true);
     setIsRefreshing(false);
   }, [fetchData]);
 
-  // ─── User Activity History ─────────────────────────────────────────────────
-
-  const openUserActivity = (user: UserStats) => {
-    setViewingUserActivity(user);
-    setActiveTab('activity');
-    setActivityPage(1);
-    setUserActivityLoading(true);
-
-    // Filter all activities for this user
-    const userLogs = allActivities.filter(a => a.user_email === user.email);
-    setUserActivityLogs(userLogs);
-    setUserActivityLoading(false);
-  };
-
-  const closeUserActivity = () => {
-    setViewingUserActivity(null);
-    setActiveTab('overview');
-    setUserActivityLogs([]);
-    setActivityPage(1);
-  };
-
-  const paginatedActivity = userActivityLogs.slice(
-    (activityPage - 1) * ACTIVITY_PAGE_SIZE,
-    activityPage * ACTIVITY_PAGE_SIZE
-  );
-  const totalActivityPages = Math.ceil(userActivityLogs.length / ACTIVITY_PAGE_SIZE);
-
-  // ─── System Settings ────────────────────────────────────────────────────────
+  // ─── System Settings Functions ────────────────────────────────────────────
 
   const handleSettingChange = (key: keyof SystemSettings, value: any) => {
     setSettings(prev => ({ ...prev, [key]: value }));
@@ -544,22 +767,20 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
 
   const saveSettings = async () => {
     setSettingsSaving(true);
-    await new Promise(r => setTimeout(r, 600));
-    localStorage.setItem('lot_admin_settings', JSON.stringify(settings));
-    setSettingsDirty(false);
-    setSettingsSaving(false);
-    setActionSuccess('System settings saved successfully.');
-    
-    // Dispatch events to notify all components
-    window.dispatchEvent(new CustomEvent('settingsUpdated'));
-    
-    // Also trigger storage event for cross-tab communication
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'lot_admin_settings',
-      newValue: JSON.stringify(settings),
-    }));
-    
-    setTimeout(() => setActionSuccess(null), 3000);
+    try {
+      const success = await saveSettingsToDB();
+      if (success) {
+        setSettingsDirty(false);
+        setActionSuccess('System settings saved successfully to database! All users will see the changes.');
+      } else {
+        setActionSuccess('Settings saved locally. Database save failed, but changes are applied.');
+      }
+    } catch (err: any) {
+      setError('Failed to save settings: ' + err.message);
+    } finally {
+      setSettingsSaving(false);
+      setTimeout(() => setActionSuccess(null), 4000);
+    }
   };
 
   const resetSettings = () => {
@@ -567,61 +788,82 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     setSettingsDirty(true);
   };
 
-  // ─── Announcements ─────────────────────────────────────────────────────────
-
-  const saveAnnouncements = (updated: Announcement[]) => {
-    setAnnouncements(updated);
-    localStorage.setItem('lot_announcements', JSON.stringify(updated));
-    // Trigger storage event for other tabs
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'lot_announcements',
-      newValue: JSON.stringify(updated),
-    }));
-  };
+  // ─── Announcements Functions ──────────────────────────────────────────────
 
   const sendAnnouncement = async () => {
     if (!announceForm.title || !announceForm.message) {
       setError('Please fill in the title and message.');
       return;
     }
+    
     setAnnounceSending(true);
-    await new Promise(r => setTimeout(r, 700));
+    setError(null);
 
-    const newAnn: Announcement = {
-      id: Date.now().toString(),
-      title: announceForm.title!,
-      message: announceForm.message!,
-      type: announceForm.type || 'info',
-      targetAll: announceForm.targetAll ?? true,
-      targetEmails: announceForm.targetEmails || [],
-      createdAt: new Date().toISOString(),
-      pinned: announceForm.pinned || false,
-      active: true,
-    };
+    try {
+      const newAnn: Announcement = {
+        id: Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9),
+        title: announceForm.title!,
+        message: announceForm.message!,
+        type: announceForm.type || 'info',
+        targetAll: announceForm.targetAll ?? true,
+        targetEmails: announceForm.targetEmails || [],
+        createdAt: new Date().toISOString(),
+        pinned: announceForm.pinned || false,
+        active: true,
+      };
 
-    const updated = [newAnn, ...announcements];
-    saveAnnouncements(updated);
-    setAnnounceSending(false);
-    setShowAnnounceModal(false);
-    setAnnounceForm({ title: '', message: '', type: 'info', targetAll: true, targetEmails: [], pinned: false });
-    setTargetEmailInput('');
-    setActionSuccess(`Announcement "${newAnn.title}" published.`);
-    setTimeout(() => setActionSuccess(null), 3000);
+      const success = await saveAnnouncementToDB(newAnn);
+      if (success) {
+        setAnnouncements(prev => [newAnn, ...prev]);
+        setShowAnnounceModal(false);
+        setAnnounceForm({ title: '', message: '', type: 'info', targetAll: true, targetEmails: [], pinned: false });
+        setTargetEmailInput('');
+        setActionSuccess(`Announcement "${newAnn.title}" published to all users!`);
+        window.dispatchEvent(new CustomEvent('settingsUpdated'));
+      } else {
+        const updated = [newAnn, ...announcements];
+        localStorage.setItem('lot_announcements', JSON.stringify(updated));
+        setAnnouncements(updated);
+        setShowAnnounceModal(false);
+        setActionSuccess(`Announcement "${newAnn.title}" saved locally.`);
+      }
+    } catch (err: any) {
+      setError('Failed to publish announcement: ' + err.message);
+    } finally {
+      setAnnounceSending(false);
+      setTimeout(() => setActionSuccess(null), 4000);
+    }
   };
 
-  const togglePin = (id: string) => {
-    const updated = announcements.map(a => a.id === id ? { ...a, pinned: !a.pinned } : a);
-    saveAnnouncements(updated);
+  const togglePin = async (id: string) => {
+    const updated = announcements.map(a => 
+      a.id === id ? { ...a, pinned: !a.pinned } : a
+    );
+    const announcement = updated.find(a => a.id === id);
+    if (announcement) {
+      await saveAnnouncementToDB(announcement);
+      setAnnouncements(updated);
+    }
   };
 
-  const toggleActive = (id: string) => {
-    const updated = announcements.map(a => a.id === id ? { ...a, active: !a.active } : a);
-    saveAnnouncements(updated);
+  const toggleActive = async (id: string) => {
+    const updated = announcements.map(a => 
+      a.id === id ? { ...a, active: !a.active } : a
+    );
+    const announcement = updated.find(a => a.id === id);
+    if (announcement) {
+      await saveAnnouncementToDB(announcement);
+      setAnnouncements(updated);
+    }
   };
 
-  const deleteAnnouncement = (id: string) => {
-    const updated = announcements.filter(a => a.id !== id);
-    saveAnnouncements(updated);
+  const deleteAnnouncement = async (id: string) => {
+    const success = await deleteAnnouncementFromDB(id);
+    if (success) {
+      setAnnouncements(prev => prev.filter(a => a.id !== id));
+      setActionSuccess('Announcement deleted.');
+      setTimeout(() => setActionSuccess(null), 3000);
+    }
   };
 
   // ─── User Actions ───────────────────────────────────────────────────────────
@@ -720,6 +962,29 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     return matchesSearch && matchesRole;
   });
 
+  const openUserActivity = (user: UserStats) => {
+    setViewingUserActivity(user);
+    setActiveTab('activity');
+    setActivityPage(1);
+    setUserActivityLoading(true);
+    const userLogs = allActivities.filter(a => a.user_email === user.email);
+    setUserActivityLogs(userLogs);
+    setUserActivityLoading(false);
+  };
+
+  const closeUserActivity = () => {
+    setViewingUserActivity(null);
+    setActiveTab('overview');
+    setUserActivityLogs([]);
+    setActivityPage(1);
+  };
+
+  const paginatedActivity = userActivityLogs.slice(
+    (activityPage - 1) * ACTIVITY_PAGE_SIZE,
+    activityPage * ACTIVITY_PAGE_SIZE
+  );
+  const totalActivityPages = Math.ceil(userActivityLogs.length / ACTIVITY_PAGE_SIZE);
+
   // ─── Access Denied ──────────────────────────────────────────────────────────
 
   if (error?.includes('Access denied')) {
@@ -738,6 +1003,8 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
   // ─── Render Content ────────────────────────────────────────────────────────
 
   const renderContent = () => {
+    console.log('renderContent called, isLoading:', isLoading);
+    
     if (isLoading) {
       return (
         <div className="flex items-center justify-center py-12">
@@ -746,6 +1013,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
       );
     }
 
+    // User Activity History Tab
     if (activeTab === 'activity' && viewingUserActivity) {
       const displayName = viewingUserActivity.email.split('@')[0];
       const cap = displayName.charAt(0).toUpperCase() + displayName.slice(1);
@@ -754,7 +1022,6 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
 
       return (
         <div className="space-y-6">
-          {/* Back + Header */}
           <div className="flex items-center gap-4">
             <button
               onClick={closeUserActivity}
@@ -769,7 +1036,6 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             </div>
           </div>
 
-          {/* Stats strip */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {[
               { label: 'Total Runs', value: viewingUserActivity.totalRuns, color: 'text-white' },
@@ -790,7 +1056,6 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             ))}
           </div>
 
-          {/* Tool breakdown */}
           {Object.keys(toolBreakdown).length > 0 && (
             <div className={`rounded-xl border ${panelClass} p-4`}>
               <h3 className={`mb-3 text-sm font-semibold ${textClass}`}>Tool Usage Breakdown</h3>
@@ -807,7 +1072,6 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             </div>
           )}
 
-          {/* Activity log table */}
           <div className={`rounded-xl border ${panelClass} overflow-hidden`}>
             <div className={`border-b px-6 py-4 ${borderClass}`}>
               <h3 className={`font-semibold ${textClass}`}>Run History</h3>
@@ -847,7 +1111,6 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                     </tbody>
                   </table>
                 </div>
-                {/* Pagination */}
                 {totalActivityPages > 1 && (
                   <div className={`flex items-center justify-between border-t px-6 py-3 ${borderClass}`}>
                     <p className={`text-sm ${mutedTextClass}`}>
@@ -878,6 +1141,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
       );
     }
 
+    // Settings Tab
     if (activeTab === 'settings') {
       return (
         <div className="space-y-6">
@@ -885,6 +1149,11 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             <div>
               <h2 className={`text-xl font-bold ${textClass}`}>System Settings</h2>
               <p className={`text-sm ${mutedTextClass}`}>Configure site-wide behaviour and access controls</p>
+              <div className="mt-1 flex items-center gap-2">
+                <span className={`text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                  ✅ Changes apply to ALL users in real-time
+                </span>
+              </div>
             </div>
             <div className="flex items-center gap-3">
               {settingsDirty && (
@@ -904,7 +1173,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                 className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {settingsSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Save Changes
+                Save to All Users
               </button>
             </div>
           </div>
@@ -915,7 +1184,6 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             </div>
           )}
 
-          {/* Site Configuration */}
           <div className={`rounded-xl border ${panelClass} overflow-hidden`}>
             <div className={`border-b px-6 py-4 ${borderClass} flex items-center gap-2`}>
               <Globe className={`h-4 w-4 ${mutedTextClass}`} />
@@ -974,7 +1242,6 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             </div>
           </div>
 
-          {/* Access Controls */}
           <div className={`rounded-xl border ${panelClass} overflow-hidden`}>
             <div className={`border-b px-6 py-4 ${borderClass} flex items-center gap-2`}>
               <Lock className={`h-4 w-4 ${mutedTextClass}`} />
@@ -985,7 +1252,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                 {
                   key: 'maintenanceMode' as keyof SystemSettings,
                   label: 'Maintenance Mode',
-                  desc: 'Block all users (except admin) from accessing tools.',
+                  desc: 'Block all users (except admin) from accessing tools. Affects ALL users immediately.',
                   danger: true,
                 },
                 {
@@ -1036,6 +1303,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
       );
     }
 
+    // Announcements Tab
     if (activeTab === 'announcements') {
       return (
         <div className="space-y-6">
@@ -1043,6 +1311,11 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             <div>
               <h2 className={`text-xl font-bold ${textClass}`}>Announcements</h2>
               <p className={`text-sm ${mutedTextClass}`}>Broadcast messages to all or specific team members</p>
+              <div className="mt-1 flex items-center gap-2">
+                <span className={`text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                  ✅ Announcements appear to ALL users in real-time
+                </span>
+              </div>
             </div>
             <button
               onClick={() => setShowAnnounceModal(true)}
@@ -1063,7 +1336,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             <div className={`rounded-xl border ${panelClass} py-16 text-center`}>
               <Megaphone className={`mx-auto h-12 w-12 opacity-20 ${mutedTextClass}`} />
               <p className={`mt-3 font-medium ${textClass}`}>No announcements yet</p>
-              <p className={`text-sm ${mutedTextClass}`}>Create one to broadcast to the team.</p>
+              <p className={`text-sm ${mutedTextClass}`}>Create one to broadcast to all users.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -1126,7 +1399,6 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             </div>
           )}
 
-          {/* New Announcement Modal */}
           {showAnnounceModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
               <div className={`w-full max-w-lg rounded-2xl border p-6 shadow-2xl ${panelClass}`}>
@@ -1181,7 +1453,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                         onChange={e => setAnnounceForm(f => ({ ...f, targetAll: e.target.value === 'all', targetEmails: [] }))}
                         className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass}`}
                       >
-                        <option value="all">All Team Members</option>
+                        <option value="all">All Users</option>
                         <option value="specific">Specific Users</option>
                       </select>
                     </div>
@@ -1254,7 +1526,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                       className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
                     >
                       {announceSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      Publish Announcement
+                      Publish to All Users
                     </button>
                     <button
                       onClick={() => setShowAnnounceModal(false)}
@@ -1271,59 +1543,9 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
       );
     }
 
-    // ─── Overview (default) ────────────────────────────────────────────────
+    // ─── Overview Tab (default) ─────────────────────────────────────────────
     return (
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className={`text-2xl font-bold ${textClass}`}>Admin Dashboard</h2>
-            <p className={`text-sm ${mutedTextClass}`}>
-              Logged in as <span className="font-semibold text-amber-400">{currentUser?.email}</span>
-            </p>
-            {usingFallbackData ? (
-              <div className={`mt-1 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-2 text-xs ${isDark ? 'text-yellow-400' : 'text-yellow-700'}`}>
-                <Info className="h-3 w-3 inline mr-1" />
-                Fallback mode — auth users unavailable. User management limited.
-                <button onClick={refreshData} className="ml-2 inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300">
-                  <RefreshIcon className="h-3 w-3" /> Retry
-                </button>
-              </div>
-            ) : (
-              <p className={`mt-1 text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                ✅ Auth connected · {authUserCount} users
-              </p>
-            )}
-            {actionSuccess && (
-              <p className={`mt-1 text-xs text-emerald-400`}>✅ {actionSuccess}</p>
-            )}
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setIsAddingUser(true)}
-              disabled={usingFallbackData}
-              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${usingFallbackData ? 'opacity-50 cursor-not-allowed bg-slate-700 text-slate-400' : isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
-            >
-              <UserPlus className="h-4 w-4" /> Add User
-            </button>
-            <button
-              onClick={refreshData}
-              disabled={isRefreshing}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
-            >
-              {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        {/* Error */}
-        {error && !error.includes('Access denied') && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-400 flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 flex-shrink-0" /> {error}
-          </div>
-        )}
-
         {/* Stats Cards */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
           {[
@@ -1386,11 +1608,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             )}
           </div>
 
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-            </div>
-          ) : filteredUsers.length === 0 ? (
+          {filteredUsers.length === 0 ? (
             <div className={`py-12 text-center ${mutedTextClass}`}>
               <Users className="mx-auto h-12 w-12 opacity-30" />
               <p className="mt-2">No users found</p>
@@ -1536,24 +1754,32 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className={`text-2xl font-bold ${textClass}`}>Admin Dashboard</h2>
           <p className={`text-sm ${mutedTextClass}`}>
             Logged in as <span className="font-semibold text-amber-400">{currentUser?.email}</span>
           </p>
+          <div className="mt-1 flex items-center gap-2">
+            <span className={`text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+              ✅ Changes apply to ALL users
+            </span>
+            <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>·</span>
+            <span className={`text-xs ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+              🔄 Real-time sync enabled
+            </span>
+          </div>
           {usingFallbackData ? (
             <div className={`mt-1 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-2 text-xs ${isDark ? 'text-yellow-400' : 'text-yellow-700'}`}>
               <Info className="h-3 w-3 inline mr-1" />
-              Fallback mode — auth users unavailable. User management limited.
+              Fallback mode — using localStorage. Some features may not sync across users.
               <button onClick={refreshData} className="ml-2 inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300">
                 <RefreshIcon className="h-3 w-3" /> Retry
               </button>
             </div>
           ) : (
             <p className={`mt-1 text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-              ✅ Auth connected · {authUserCount} users
+              ✅ Database connected · {authUserCount} users
             </p>
           )}
           {actionSuccess && (
@@ -1579,7 +1805,6 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         </div>
       </div>
 
-      {/* Tab Navigation - ALWAYS VISIBLE */}
       <AdminTabNavigation
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -1590,14 +1815,12 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         borderClass={borderClass}
       />
 
-      {/* Error */}
       {error && !error.includes('Access denied') && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-400 flex items-center gap-2">
           <AlertTriangle className="h-5 w-5 flex-shrink-0" /> {error}
         </div>
       )}
 
-      {/* Content */}
       {renderContent()}
 
       {/* ── Modals ── */}
