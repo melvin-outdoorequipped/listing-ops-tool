@@ -20,6 +20,19 @@ import {
   LogOut,
   FileSpreadsheet,
   Building2,
+  Shield,
+  Users as UsersIcon,
+  Trash2,
+  Edit2,
+  Check,
+  XCircle,
+  RefreshCw,
+  Loader2,
+  UserPlus,
+  Mail,
+  UserX,
+  Crown,
+  AlertTriangle,
 } from 'lucide-react';
 
 import SkuProcessor from './components/SkuProcessor';
@@ -31,17 +44,21 @@ import Dashboard from './components/dashboard';
 import Documentation from './components/documentation';
 import Terms from './components/terms';
 import DownloadPage from './components/download';
+import AdminDashboard from './components/AdminDashboard';
 import { supabase } from '@/lib/supabase/client';
+import { MaintenanceProvider } from '../contexts/MaintenanceContext';
+import MaintenanceGuard from './components/MaintenanceGuard';
 
 type Theme = 'light' | 'dark';
 type ToolId = 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer' | 'get-brand';
-type MainMenuId = 'Dashboard' | 'Tools' | 'Downloads' | 'Documentation' | 'Terms';
+type MainMenuId = 'Dashboard' | 'Tools' | 'Downloads' | 'Documentation' | 'Terms' | 'Admin';
 
 interface MenuItem {
   id: MainMenuId;
   label: string;
   icon: ReactNode;
   shortcut?: string;
+  adminOnly?: boolean;
 }
 
 interface ToolItem {
@@ -67,6 +84,9 @@ interface User {
 }
 
 const STORAGE_THEME_KEY = 'theme';
+
+// Admin email - only this user can access admin panel
+const ADMIN_EMAIL = 'melvin@outdoorequipped.com';
 
 const toolsSubItems: ToolItem[] = [
   {
@@ -111,6 +131,7 @@ const ALL_COMMANDS = [
   { label: 'Go to Downloads', menuId: 'Downloads' as MainMenuId, toolId: null },
   { label: 'Go to Documentation', menuId: 'Documentation' as MainMenuId, toolId: null },
   { label: 'Go to Terms & Conditions', menuId: 'Terms' as MainMenuId, toolId: null },
+  { label: 'Open Admin Panel', menuId: 'Admin' as MainMenuId, toolId: null, adminOnly: true },
   { label: 'Open Shopkeep Tool', menuId: 'Tools' as MainMenuId, toolId: 'sku' as ToolId },
   { label: 'Open ASIN Checker', menuId: 'Tools' as MainMenuId, toolId: 'asin' as ToolId },
   { label: 'Open Basecamp Generator', menuId: 'Tools' as MainMenuId, toolId: 'basecamp' as ToolId },
@@ -296,6 +317,7 @@ export default function HomePage() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [cmdOpen, setCmdOpen] = useState(false);
   const [cmdQuery, setCmdQuery] = useState('');
@@ -319,6 +341,8 @@ export default function HomePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUser({ id: user.id, email: user.email || '' });
+        // Check if user is admin (Melvin)
+        setIsAdmin(user.email === ADMIN_EMAIL);
       } else {
         setShowAuthModal(true);
       }
@@ -331,9 +355,11 @@ export default function HomePage() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser({ id: session.user.id, email: session.user.email || '' });
+        setIsAdmin(session.user.email === ADMIN_EMAIL);
         setShowAuthModal(false);
       } else {
         setUser(null);
+        setIsAdmin(false);
         setShowAuthModal(true);
       }
     });
@@ -348,15 +374,25 @@ export default function HomePage() {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     setUser(null);
+    setIsAdmin(false);
     setShowAuthModal(true);
     setUserOpen(false);
   };
 
-  const mainMenuItems = useMemo<MenuItem[]>(() => [
-    { id: 'Dashboard', label: 'Dashboard', icon: <Home className="h-5 w-5" />, shortcut: '⌘1' },
-    { id: 'Tools', label: 'Tools', icon: <Settings className="h-5 w-5" />, shortcut: '⌘2' },
-    { id: 'Downloads', label: 'Downloads', icon: <Download className="h-5 w-5" />, shortcut: '⌘3' },
-  ], []);
+  const mainMenuItems = useMemo<MenuItem[]>(() => {
+    const items: MenuItem[] = [
+      { id: 'Dashboard', label: 'Dashboard', icon: <Home className="h-5 w-5" />, shortcut: '⌘1' },
+      { id: 'Tools', label: 'Tools', icon: <Settings className="h-5 w-5" />, shortcut: '⌘2' },
+      { id: 'Downloads', label: 'Downloads', icon: <Download className="h-5 w-5" />, shortcut: '⌘3' },
+    ];
+    
+    // Only show Admin menu if user is admin (Melvin)
+    if (isAdmin) {
+      items.push({ id: 'Admin', label: 'Admin Panel', icon: <Shield className="h-5 w-5" />, adminOnly: true });
+    }
+    
+    return items;
+  }, [isAdmin]);
 
   const resourceMenuItems = useMemo<MenuItem[]>(() => [
     { id: 'Documentation', label: 'Documentation', icon: <BookOpen className="h-5 w-5" /> },
@@ -431,6 +467,11 @@ export default function HomePage() {
   }, []);
 
   const handleMainMenuClick = (id: MainMenuId) => {
+    // Check if trying to access admin without being admin
+    if (id === 'Admin' && !isAdmin) {
+      alert('Access denied. Only Melvin can access the admin panel.');
+      return;
+    }
     navigateTo(id);
     setIsMobileSidebarOpen(false);
   };
@@ -455,9 +496,10 @@ export default function HomePage() {
 
   const markAllRead = () => setNotifications(ns => ns.map(n => ({ ...n, read: true })));
 
-  const filteredCmds = ALL_COMMANDS.filter(c =>
-    c.label.toLowerCase().includes(cmdQuery.toLowerCase())
-  );
+  const filteredCmds = ALL_COMMANDS.filter(c => {
+    if (c.adminOnly && !isAdmin) return false;
+    return c.label.toLowerCase().includes(cmdQuery.toLowerCase());
+  });
 
   const selectedTool = toolsSubItems.find(t => t.id === activeTool);
 
@@ -478,17 +520,40 @@ export default function HomePage() {
       title: 'Documentation', breadcrumb: 'Resources / Documentation',
       description: 'Simple guide for using LOT tools.',
     };
+    if (activeMainMenu === 'Admin') return {
+      title: 'Admin Panel', breadcrumb: 'Admin / Panel',
+      description: 'Manage users and system settings.',
+    };
     return { title: 'Terms & Conditions', breadcrumb: 'Resources / Terms & Conditions', description: 'Simple usage terms and reminders.' };
   }, [activeMainMenu, activeTool]);
 
   const renderContent = () => {
-    // Don't render content if not authenticated
     if (!user) return null;
     
-    if (activeMainMenu === 'Dashboard') return <Dashboard theme={theme} />;
+    if (activeMainMenu === 'Dashboard') return <Dashboard theme={theme} currentUserEmail={user?.email || ''} />;
     if (activeMainMenu === 'Downloads') return <DownloadPage theme={theme} />;
     if (activeMainMenu === 'Documentation') return <Documentation theme={theme} />;
     if (activeMainMenu === 'Terms') return <Terms theme={theme} />;
+    if (activeMainMenu === 'Admin') {
+      if (!isAdmin) {
+        return (
+          <div className={`rounded-xl border border-red-500/30 bg-red-500/10 p-8 text-center`}>
+            <Shield className="mx-auto h-16 w-16 text-red-400 opacity-50" />
+            <h3 className={`mt-4 text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Access Denied</h3>
+            <p className={`mt-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+              Only <span className="font-semibold text-amber-400">{ADMIN_EMAIL}</span> can access the admin panel.
+            </p>
+            <button
+              onClick={() => navigateTo('Dashboard')}
+              className="mt-4 rounded-lg bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500"
+            >
+              Return to Dashboard
+            </button>
+          </div>
+        );
+      }
+      return <AdminDashboard theme={theme} />;
+    }
     if (activeMainMenu === 'Tools') {
       if (activeTool === 'sku') return <SkuProcessor theme={theme} />;
       if (activeTool === 'asin') return <AsinConflictChecker theme={theme} />;
@@ -514,6 +579,8 @@ export default function HomePage() {
   }
 
   return (
+     <MaintenanceProvider>
+      <MaintenanceGuard theme={theme}>
     <div className={`relative flex h-screen overflow-hidden transition-colors duration-200 ${
       isDark ? 'bg-[#0F172A] text-slate-100' : 'bg-gray-100 text-gray-900'
     }`}>
@@ -560,6 +627,11 @@ export default function HomePage() {
                   key={i}
                   type="button"
                   onClick={() => {
+                    if (cmd.adminOnly && !isAdmin) {
+                      alert('Access denied. Only Melvin can access the admin panel.');
+                      setCmdOpen(false);
+                      return;
+                    }
                     if (cmd.toolId) {
                       const tool = toolsSubItems.find(t => t.id === cmd.toolId);
                       if (tool?.comingSoon) { setCmdOpen(false); return; }
@@ -573,6 +645,11 @@ export default function HomePage() {
                 >
                   <Command className="h-3.5 w-3.5 flex-shrink-0 opacity-50" />
                   {cmd.label}
+                  {cmd.adminOnly && (
+                    <span className="ml-auto rounded bg-amber-500/20 px-1.5 py-0.5 text-[8px] font-semibold text-amber-400">
+                      ADMIN
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -612,13 +689,25 @@ export default function HomePage() {
               isSidebarCollapsed ? 'lg:w-0 lg:opacity-0' : 'w-auto opacity-100'
             }`}>
               <div className="flex items-center gap-3">
-                <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500 shadow-lg">
-                  <span className="text-lg font-bold text-white">LOT</span>
-                  <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#172235] bg-emerald-400" />
+                <div className={`relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl shadow-lg ${
+                  isAdmin ? 'bg-gradient-to-r from-amber-500 to-orange-600' : 'bg-emerald-500'
+                }`}>
+                  {isAdmin ? (
+                    <Shield className="h-5 w-5 text-white" />
+                  ) : (
+                    <span className="text-lg font-bold text-white">LOT</span>
+                  )}
+                  <span className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 ${
+                    isAdmin ? 'border-amber-500 bg-amber-400' : 'border-[#172235] bg-emerald-400'
+                  }`} />
                 </div>
                 <div className="min-w-0">
-                  <h1 className={`truncate text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>LOT</h1>
-                  <p className={`truncate text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Listing Operations Tools</p>
+                  <h1 className={`truncate text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    {isAdmin ? 'Admin Panel' : 'LOT'}
+                  </h1>
+                  <p className={`truncate text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                    {isAdmin ? 'Administration' : 'Listing Operations Tools'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -683,7 +772,14 @@ export default function HomePage() {
                   active={activeMainMenu === item.id}
                   collapsed={isSidebarCollapsed}
                   theme={theme}
-                  onClick={() => handleMainMenuClick(item.id)}
+                  isAdmin={item.adminOnly}
+                  onClick={() => {
+                    if (item.adminOnly && !isAdmin) {
+                      alert('Access denied. Only Melvin can access the admin panel.');
+                      return;
+                    }
+                    handleMainMenuClick(item.id);
+                  }}
                 />
 
                 {/* Tool sub-items appear immediately after Tools button */}
@@ -743,15 +839,29 @@ export default function HomePage() {
         {/* Sidebar Footer */}
         <div className={`border-t p-4 ${isDark ? 'border-slate-700/60' : 'border-gray-200'}`}>
           {!isSidebarCollapsed ? (
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5">
+            <div className={`rounded-xl border p-3.5 ${
+              isAdmin 
+                ? 'border-amber-500/30 bg-amber-500/10' 
+                : 'border-emerald-500/30 bg-emerald-500/10'
+            }`}>
               <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-sm font-semibold text-emerald-400">Tools ready</span>
+                <span className={`h-2 w-2 rounded-full ${
+                  isAdmin ? 'bg-amber-400' : 'bg-emerald-400'
+                } animate-pulse`} />
+                <span className={`text-sm font-semibold ${
+                  isAdmin ? 'text-amber-400' : 'text-emerald-400'
+                }`}>
+                  {isAdmin ? 'Admin Mode' : 'Tools ready'}
+                </span>
               </div>
-              <p className="mt-0.5 text-xs text-slate-500">Beta v1.0 · Auto-refreshes every 60s</p>
+              <p className={`mt-0.5 text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+                {isAdmin ? 'Managing system settings' : 'Beta v1.0 · Auto-refreshes every 60s'}
+              </p>
             </div>
           ) : (
-            <div className="mx-auto h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <div className={`mx-auto h-2.5 w-2.5 rounded-full ${
+              isAdmin ? 'bg-amber-400' : 'bg-emerald-400'
+            } animate-pulse`} />
           )}
         </div>
       </aside>
@@ -787,6 +897,14 @@ export default function HomePage() {
             </div>
 
             <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2">
+              {/* Admin badge */}
+              {isAdmin && (
+                <span className="hidden rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 px-3 py-1 text-xs font-semibold text-amber-400 md:inline-flex">
+                  <Shield className="mr-1 h-3 w-3" />
+                  Admin
+                </span>
+              )}
+
               {/* User email badge */}
               {user && (
                 <span className="hidden rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-400 md:inline-flex">
@@ -885,7 +1003,9 @@ export default function HomePage() {
                       <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                         {user?.email || 'LOT User'}
                       </p>
-                      <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>Beta Access · v1.0</p>
+                      <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                        {isAdmin ? 'Admin Access' : 'Beta Access · v1.0'}
+                      </p>
                     </div>
                     <div className="py-1">
                       <button
@@ -927,35 +1047,12 @@ export default function HomePage() {
         </main>
       </div>
     </div>
+    </MaintenanceGuard>
+    </MaintenanceProvider>
   );
 }
 
 // Helper Components
-function Loader2({ className }: { className?: string }) {
-  return (
-    <svg
-      className={`animate-spin ${className}`}
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-      />
-    </svg>
-  );
-}
-
 function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean }) {
   return (
     <div className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">
@@ -965,10 +1062,10 @@ function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean 
 }
 
 function SidebarButton({
-  label, icon, shortcut, active, collapsed, theme, onClick,
+  label, icon, shortcut, active, collapsed, theme, isAdmin, onClick,
 }: {
   label: string; icon: ReactNode; shortcut?: string; active: boolean;
-  collapsed: boolean; theme: Theme; onClick: () => void;
+  collapsed: boolean; theme: Theme; isAdmin?: boolean; onClick: () => void;
 }) {
   const isDark = theme === 'dark';
   return (
@@ -979,13 +1076,19 @@ function SidebarButton({
       aria-current={active ? 'page' : undefined}
       className={`group relative flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-all duration-150 ${
         active
-          ? 'border-emerald-500/50 bg-emerald-500/10 text-white shadow-lg shadow-emerald-500/5'
+          ? isAdmin
+            ? 'border-amber-500/50 bg-amber-500/10 text-white shadow-lg shadow-amber-500/5'
+            : 'border-emerald-500/50 bg-emerald-500/10 text-white shadow-lg shadow-emerald-500/5'
           : isDark
             ? 'border-transparent text-slate-400 hover:bg-slate-800/60 hover:text-white'
             : 'border-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900'
       }`}
     >
-      <span className={`flex-shrink-0 transition-colors ${active ? 'text-emerald-400' : 'group-hover:text-emerald-400'}`}>
+      <span className={`flex-shrink-0 transition-colors ${
+        active 
+          ? isAdmin ? 'text-amber-400' : 'text-emerald-400' 
+          : 'group-hover:text-emerald-400'
+      }`}>
         {icon}
       </span>
       <span className={`${collapsed ? 'hidden' : 'block'} min-w-0 flex-1 truncate font-medium`}>
@@ -996,7 +1099,16 @@ function SidebarButton({
           isDark ? 'bg-slate-800 text-slate-500' : 'bg-gray-100 text-gray-400'
         }`}>{shortcut}</kbd>
       )}
-      {active && !collapsed && <span className="ml-1 h-7 w-1 rounded-full bg-emerald-400" />}
+      {active && !collapsed && (
+        <span className={`ml-1 h-7 w-1 rounded-full ${
+          isAdmin ? 'bg-amber-400' : 'bg-emerald-400'
+        }`} />
+      )}
+      {isAdmin && !active && !collapsed && (
+        <span className="ml-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[8px] font-semibold text-amber-400">
+          ADMIN
+        </span>
+      )}
       {collapsed && (
         <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
           {label}
