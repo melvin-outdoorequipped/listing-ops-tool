@@ -16,6 +16,13 @@ const getSafeColumnValue = (row: any, columnName: string | undefined): string =>
   return getValueOrDash(row.get(columnName));
 };
 
+// Helper function to safely get SKU value
+const getSkuValue = (row: any, columnName: string | undefined): string | undefined => {
+  if (!columnName) return undefined;
+  const value = row.get(columnName)?.toString().trim();
+  return value && value !== '' ? value : undefined;
+};
+
 export async function POST(req: Request) {
   try {
     const { skus, userId } = await req.json();
@@ -59,7 +66,7 @@ export async function POST(req: Request) {
 
         // Check each row in the Google Sheet against the user's requested SKUs
         for (const row of rows) {
-          const rowSku = row.get(config.columns.sku)?.toString().trim();
+          const rowSku = getSkuValue(row, config.columns.sku);
           
           if (rowSku && skuArray.includes(rowSku)) {
             brandMatchCount++;
