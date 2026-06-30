@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
-    "@supabase/supabase-js": "^2.108.2",
+    "@supabase/supabase-js": "^2.110.0",
     "exceljs": "^4.4.0",
     "google-auth-library": "^10.6.2",
     "google-spreadsheet": "^5.2.0",
@@ -23,14 +23,14 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.3.2",
     "@types/exceljs": "^0.5.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
-    "tailwindcss": "^4",
+    "tailwindcss": "^4.3.2",
     "typescript": "^5"
   }
 }

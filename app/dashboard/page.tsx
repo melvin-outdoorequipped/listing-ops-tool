@@ -1,3 +1,4 @@
+// app/dashboard/page.tsx
 import { google } from 'googleapis';
 import { createClient } from '@/lib/supabase/server';
 import DashboardClient from '../components/dashboard';
