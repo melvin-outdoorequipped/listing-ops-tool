@@ -1,7 +1,7 @@
-// components/dashboard.tsx
+// components/dashboard-client.tsx
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -39,27 +39,39 @@ import {
   AlertCircle,
   CheckCircle,
   Shield,
+  Filter,
 } from 'lucide-react';
 import Image from 'next/image';
 
 import { supabase } from '@/lib/supabase/client';
 
-// Announcement interface
-interface Announcement {
+// Task interface - status is a string
+interface Task {
   id: string;
-  title: string;
-  message: string;
-  type: 'info' | 'warning' | 'success' | 'error';
-  targetAll: boolean;
-  targetEmails: string[];
-  createdAt: string;
-  pinned: boolean;
-  active: boolean;
+  date_requested: string;
+  tat: string;
+  segment: string;
+  type: string;
+  task: string;
+  brand: string;
+  date_assigned: string;
+  agent: string;
+  due_date: string;
+  date_completed: string | null;
+  remarks: string;
+  auditor: string;
+  status: string;
+  bc_links: string;
+  reason_for_pending: string;
+  reason_for_cancel: string;
+  rowIndex: number;
 }
 
-interface DashboardProps {
+interface DashboardClientProps {
+  initialTasks?: any[];
   theme?: 'light' | 'dark';
   currentUserEmail?: string;
+  currentUserName?: string;
 }
 
 interface ToolRun {
@@ -85,7 +97,7 @@ interface TeamMember {
   color: string;
 }
 
-// Default team members data (Arlie excluded from roulette)
+// Default team members data
 const defaultTeamMembers: TeamMember[] = [
   { name: 'Arlie', role: 'Team Manager', image: '/images/arlie.png', email: 'arlie@outdoorequipped.com', includeInRoulette: false, color: '#6366f1' },
   { name: 'Melvin', role: 'Data Analyst', image: '/images/Melvin.png', email: 'melvin@outdoorequipped.com', includeInRoulette: true, color: '#378ADD' },
@@ -281,6 +293,100 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return 'N/A';
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+}
+
+function normalizeStatus(statusRaw: string, dateCompleted?: string | null): string {
+  // Handle null, undefined, or empty status
+  const hasStatus = statusRaw && statusRaw !== '' && statusRaw !== 'null' && statusRaw !== 'undefined';
+  
+  // If there's a completion date, check if it should be Completed or Cancelled
+  const hasDateCompleted = dateCompleted && dateCompleted !== '' && dateCompleted !== 'null' && dateCompleted !== 'undefined';
+  
+  if (!hasStatus) {
+    // No status value
+    if (hasDateCompleted) {
+      return 'Completed';
+    }
+    return 'Pending';
+  }
+  
+  const statusStr = statusRaw.toString().trim();
+  const upper = statusStr.toUpperCase();
+  
+  // Check for Cancelled FIRST - this overrides everything
+  if (upper.includes('CANCEL') || upper.includes('CANCELLED')) {
+    return 'Cancelled';
+  }
+  
+  // Check for Completed variations
+  if (upper.includes('COMPLETE') || upper.includes('DONE') || upper.includes('FINISHED')) {
+    if (!upper.includes('INCOMPLETE')) {
+      return 'Completed';
+    }
+  }
+  
+  // Check for Pending
+  if (upper === 'PENDING' || upper === 'PEND') {
+    // If it says "Pending" but has a completion date, it's actually Completed
+    if (hasDateCompleted) {
+      return 'Completed';
+    }
+    return 'Pending';
+  }
+  
+  // Check for Ongoing or In Progress
+  if (upper.includes('ONGOING') || upper.includes('PROGRESS') || upper === 'IN PROGRESS' || upper === 'IN-PROGRESS') {
+    return 'Ongoing';
+  }
+  
+  // Check for WIP
+  if (upper === 'WIP' || upper.includes('WORKING') || upper.includes('WORK IN PROGRESS')) {
+    return 'WIP';
+  }
+  
+  // Check for Assigned
+  if (upper === 'ASSIGNED' || upper.includes('ASSIGN')) {
+    return 'Assigned';
+  }
+  
+  // Check for For Audit
+  if (upper.includes('AUDIT')) {
+    return 'For Audit';
+  }
+  
+  // Check for For Investigation
+  if (upper.includes('INVESTIGATION')) {
+    return 'For Investigation';
+  }
+  
+  // Check for Hold
+  if (upper.includes('HOLD')) {
+    return 'Hold';
+  }
+  
+  // Check for For Correx
+  if (upper.includes('CORREX') || upper.includes('CORRECTION')) {
+    return 'For Correx';
+  }
+  
+  // Unknown status - check if it has a completion date
+  if (hasDateCompleted) {
+    console.log(`⚠️ UNKNOWN STATUS: "${statusStr}" but has completion date, marking as Completed`);
+    return 'Completed';
+  }
+  
+  // Log unknown statuses without completion date
+  console.log(`⚠️ UNKNOWN STATUS: "${statusStr}" - keeping as-is`);
+  return statusStr;
+}
+
 // ─── Member Roulette Modal Component ───────────────────────────────────────────
 
 function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onClose: () => void; theme: 'light' | 'dark' }) {
@@ -293,23 +399,21 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
   const [showConfetti, setShowConfetti] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [newMemberName, setNewMemberName] = useState('');
-  
   const [currentWheelMembers, setCurrentWheelMembers] = useState<TeamMember[]>([]);
   const [flashWinner, setFlashWinner] = useState(false);
-  
-  
+
   const isDark = theme === 'dark';
 
   useEffect(() => {
     const loadedMembers = loadMembersFromStorage();
     const loadedSelected = loadSelectedFromStorage();
     setMembers(loadedMembers);
-    
-    const validSelected = loadedSelected.filter(name => 
+
+    const validSelected = loadedSelected.filter(name =>
       loadedMembers.some(m => m.name === name && m.includeInRoulette)
     );
     setSelectedMembers(validSelected);
-    
+
     const eligible = loadedMembers.filter(m => m.includeInRoulette);
     setAllMembersSelected(validSelected.length === eligible.length);
     setCurrentWheelMembers(eligible.filter(m => !validSelected.includes(m.name)));
@@ -332,16 +436,16 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
 
   const spinRoulette = () => {
     if (isSpinning) return;
-    
+
     const availableMembers = getAvailableMembers();
     if (availableMembers.length === 0) return;
-    
+
     setCurrentWheelMembers(availableMembers);
     setIsSpinning(true);
     setSelectedMember(null);
     setShowConfetti(false);
     setFlashWinner(false);
-    
+
     const finalMember = availableMembers[Math.floor(Math.random() * availableMembers.length)];
     const finalIndex = availableMembers.findIndex(m => m.name === finalMember.name);
     const segmentAngle = 360 / availableMembers.length;
@@ -354,18 +458,18 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
     const duration = 6500 + Math.random() * 1500;
     const fullSpins = 10 + Math.floor(Math.random() * 5);
     const targetRotationValue = rotation + (fullSpins * 360) + rotationNeeded;
-    
+
     let startTime = Date.now();
     const startRotation = rotation;
     const rotationDelta = targetRotationValue - startRotation;
-    
+
     const animateSpin = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const easeOutQuart = 1 - Math.pow(1 - progress, 4);
       const newRotation = startRotation + (rotationDelta * easeOutQuart);
       setRotation(newRotation);
-      
+
       if (progress < 1) {
         requestAnimationFrame(animateSpin);
       } else {
@@ -431,7 +535,7 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
 
   const toggleIncludeInRoulette = (name: string) => {
     if (name === 'Arlie') return;
-    const newMembers = members.map(m => 
+    const newMembers = members.map(m =>
       m.name === name ? { ...m, includeInRoulette: !m.includeInRoulette } : m
     );
     const member = newMembers.find(m => m.name === name);
@@ -452,7 +556,6 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-      {/* Confetti Effect */}
       {showConfetti && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-50">
           {[...Array(150)].map((_, i) => (
@@ -475,7 +578,6 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
       )}
 
       <div className={`relative w-full max-w-4xl rounded-2xl border shadow-2xl ${modalClass} animate-in zoom-in-95 duration-200`}>
-        {/* Header */}
         <div className={`flex items-center justify-between border-b p-4 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
           <div className="flex items-center gap-2">
             <div className="rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 p-1.5 animate-pulse">
@@ -491,7 +593,6 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
           </button>
         </div>
 
-        {/* Member Management Section */}
         <div className={`border-b px-4 py-3 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
           <div className="flex items-center justify-between mb-3">
             <span className={`text-sm font-medium ${textClass}`}>Team Members Management</span>
@@ -505,7 +606,7 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
               {isEditing ? 'Done Editing' : 'Edit Members'}
             </button>
           </div>
-          
+
           {isEditing && (
             <div className="mb-3">
               <div className="flex gap-2">
@@ -525,7 +626,7 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
               </div>
             </div>
           )}
-          
+
           <div className="flex flex-wrap gap-2">
             {members.map(member => {
               const isSelectedAlready = selectedMembers.includes(member.name);
@@ -535,7 +636,7 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
                   className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
                     isEditing && member.name !== 'Arlie'
                       ? 'bg-red-500/20 text-red-400 cursor-pointer hover:bg-red-500/30'
-                      : isSelectedAlready 
+                      : isSelectedAlready
                         ? isDark ? 'bg-slate-800 text-slate-500 opacity-60' : 'bg-gray-200 text-gray-400 opacity-60'
                         : member.includeInRoulette && member.name !== 'Arlie'
                           ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
@@ -570,7 +671,6 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
           </div>
         </div>
 
-        {/* Selection Progress and Reset Button */}
         <div className={`border-b px-4 py-3 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-3">
@@ -595,26 +695,22 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
           </div>
         </div>
 
-        {/* Roulette Wheel */}
         <div className="p-8">
           <div className="relative flex justify-center">
-            {/* Glowing ring effect */}
             <div className="absolute inset-0 rounded-full blur-xl opacity-30" style={{
               background: 'conic-gradient(from 0deg, #378ADD, #1D9E75, #7F77DD, #BA7517, #06b6d4, #10b981, #f59e0b, #ef4444, #8b5cf6, #ec4899)',
             }} />
-            
-            {/* Pointer */}
+
             <div className="absolute -top-6 left-1/2 z-20 -translate-x-1/2" style={{ transformOrigin: 'top center' }}>
               <div className={`h-10 w-0 border-x-[16px] border-t-[28px] border-x-transparent border-t-red-500 drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] transition-transform duration-75 ${isSpinning ? 'animate-bounce' : ''}`} />
               <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-red-600 border-2 border-red-300 shadow-lg" />
             </div>
-            
-            {/* Wheel */}
+
             <div
               className="relative h-80 w-80 rounded-full shadow-2xl cursor-pointer ring-8 ring-slate-800 transition-colors"
               style={{
                 transform: `rotate(${rotation}deg)`,
-                background: currentWheelMembers.length > 0 
+                background: currentWheelMembers.length > 0
                   ? `conic-gradient(from 0deg, ${currentWheelMembers.map((member, i) => {
                       const startAngle = (i / currentWheelMembers.length) * 360;
                       const endAngle = ((i + 1) / currentWheelMembers.length) * 360;
@@ -624,21 +720,19 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
                 boxShadow: isSpinning ? '0 0 40px rgba(255,255,255,0.2)' : '0 20px 50px rgba(0,0,0,0.5)',
               }}
             >
-              {/* Slice border lines */}
-              <div className="absolute inset-0 rounded-full border-4 border-slate-700/50" 
+              <div className="absolute inset-0 rounded-full border-4 border-slate-700/50"
                 style={{
-                  background: currentWheelMembers.length > 0 
+                  background: currentWheelMembers.length > 0
                     ? `repeating-conic-gradient(from 0deg, transparent 0deg, transparent calc(360deg / ${currentWheelMembers.length} - 2deg), rgba(255,255,255,0.3) calc(360deg / ${currentWheelMembers.length} - 2deg), rgba(255,255,255,0.3) calc(360deg / ${currentWheelMembers.length}))`
                     : 'none'
                 }}
               />
 
-              {/* Member avatars */}
               {currentWheelMembers.map((member, index) => {
                 const sliceCenterAngle = (index / currentWheelMembers.length) * 360 + (360 / currentWheelMembers.length / 2);
                 const radius = 125;
                 const isCurrentWinner = flashWinner && selectedMember?.name === member.name;
-                
+
                 return (
                   <div
                     key={member.name}
@@ -660,8 +754,7 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
                   </div>
                 );
               })}
-              
-              {/* Center hub */}
+
               <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-b from-slate-700 to-slate-900 shadow-[inset_0_4px_4px_rgba(255,255,255,0.2),_0_8px_16px_rgba(0,0,0,0.6)] flex items-center justify-center border-4 border-slate-600 z-10">
                 <div className="text-center w-full h-full flex flex-col items-center justify-center rounded-full bg-slate-800 inner-shadow">
                   <div className="w-4 h-4 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 shadow-inner mb-0.5" />
@@ -671,7 +764,6 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
             </div>
           </div>
 
-          {/* Spin Button */}
           <div className="mt-12 flex justify-center gap-3">
             <button
               onClick={spinRoulette}
@@ -700,7 +792,6 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
             </button>
           </div>
 
-          {/* Result Display */}
           {selectedMember && !isSpinning && (
             <div className={`mt-8 animate-in zoom-in slide-in-from-bottom-4 duration-500 rounded-xl border-2 p-5 text-center shadow-2xl ${
               isDark ? 'border-yellow-500/50 bg-gradient-to-br from-yellow-500/20 to-purple-500/20' : 'border-yellow-400 bg-gradient-to-br from-yellow-50 to-purple-50'
@@ -745,27 +836,387 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
   );
 }
 
-// ─── Main Dashboard Component ─────────────────────────────────────────────────
+// ─── Main Dashboard Client Component ─────────────────────────────────────────
 
-export default function Dashboard({ theme = 'dark', currentUserEmail = '' }: DashboardProps) {
+export default function DashboardClient({
+  initialTasks = [],
+  theme = 'dark',
+  currentUserEmail = '',
+  currentUserName = ''
+}: DashboardClientProps) {
   const [runs, setRuns] = useState<ToolRun[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
   const [isRouletteOpen, setIsRouletteOpen] = useState(false);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [settings, setSettings] = useState<any>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const autoPlayRef = useRef<NodeJS.Timeout | null>(null);
+  const didInitialLoadRef = useRef(false);
 
   const isDark = theme === 'dark';
   const isAdmin = currentUserEmail === 'melvin@outdoorequipped.com';
 
-  // Load settings and announcements from Supabase
+  // Google Sheets configuration
+  const SPREADSHEET_ID = '1aBOYH2ShWyW8ASamH23WAFdoi0NR8bIebsQGuAnU67A';
+  const SHEET_NAME = 'Copy of Task Masterlist - Operations';
+
+  const processTasksFromSheet = useCallback((sheetData: any) => {
+  // Handle both old and new format for backward compatibility
+  let headers: string[];
+  let rowData: { row: any[], rowIndex: number }[];
+
+  // Check if we got the new format (object with headers and rows)
+  if (sheetData && typeof sheetData === 'object' && sheetData.headers && sheetData.rows) {
+    headers = sheetData.headers;
+    rowData = sheetData.rows;
+    console.log('📊 Using new format with preserved row indices');
+  } 
+  // Check if we got the old format (array of arrays)
+  else if (Array.isArray(sheetData) && sheetData.length > 0) {
+    console.log('📊 Using legacy format, converting...');
+    headers = sheetData[0] || [];
+    const rows = sheetData.slice(1) || [];
+    // Convert legacy format to new format
+    rowData = rows.map((row, index) => ({
+      row,
+      rowIndex: index + 2 // Legacy fallback
+    }));
+  } else {
+    console.warn('⚠️ Unknown sheet data format:', sheetData);
+    setTasks([]);
+    return;
+  }
+
+  if (!headers || headers.length === 0 || rowData.length === 0) {
+    setTasks([]);
+    return;
+  }
+
+  // Normalize headers for column mapping
+  const columnMap: { [key: string]: number } = {};
+  headers.forEach((header: string, index: number) => {
+    if (header) {
+      columnMap[header.toString().trim().toLowerCase()] = index;
+    }
+  });
+
+  const taskCol = columnMap['task'];
+  const statusCol = columnMap['status'];
+  const dateRequestedCol = columnMap['date requested'];
+  const dateAssignedCol = columnMap['date assigned'];
+  const dueDateCol = columnMap['due date'];
+  const dateCompletedCol = columnMap['date completed'];
+  const tatCol = columnMap['tat'];
+  const segmentCol = columnMap['segment'];
+  const typeCol = columnMap['type'];
+  const brandCol = columnMap['brand'];
+  const agentCol = columnMap['agent'];
+  const remarksCol = columnMap['remarks'];
+  const auditorCol = columnMap['auditor'];
+  const bcLinksCol = columnMap['bc links'] ?? columnMap['bc link'];
+  const reasonPendingCol = columnMap['reason for pending'];
+  const reasonCancelCol = columnMap['reason for cancel'];
+
+  if (taskCol === undefined) {
+    console.error('⚠️ "Task" column not found in sheet headers:', headers);
+    setTasks([]);
+    return;
+  }
+
+  const get = (row: any[], idx: number | undefined) =>
+    idx !== undefined && idx < row.length ? (row[idx] ?? '') : '';
+
+  const taskList: Task[] = [];
+  
+  // Debug: Collect unique statuses
+  const uniqueStatuses = new Set<string>();
+
+  rowData.forEach(({ row, rowIndex }: { row: any[], rowIndex: number }) => {
+    const taskName = get(row, taskCol);
+    if (!taskName) return;
+
+    const dateRequested = get(row, dateRequestedCol);
+    const dateAssigned = get(row, dateAssignedCol);
+    const dueDate = get(row, dueDateCol);
+    const dateCompleted = get(row, dateCompletedCol);
+
+    // Only include rows that reference 2025/2026 in any date field
+    const isYearMatch =
+      (dateRequested && /202[56]/.test(dateRequested.toString())) ||
+      (dateAssigned && /202[56]/.test(dateAssigned.toString())) ||
+      (dueDate && /202[56]/.test(dueDate.toString())) ||
+      (dateCompleted && /202[56]/.test(dateCompleted.toString()));
+
+    if (!isYearMatch) return;
+
+    const statusRaw = get(row, statusCol);
+    // ✅ FIX: Pass dateCompleted to normalizeStatus
+    const normalizedStatus = normalizeStatus(statusRaw, dateCompleted);
+    
+    // Collect unique statuses for debugging
+    if (statusRaw) {
+      uniqueStatuses.add(statusRaw);
+    }
+
+    taskList.push({
+      id: `task-${rowIndex}`,
+      rowIndex: rowIndex, // Use the preserved row index
+      date_requested: dateRequested,
+      tat: get(row, tatCol),
+      segment: get(row, segmentCol),
+      type: get(row, typeCol),
+      task: taskName,
+      brand: get(row, brandCol),
+      date_assigned: dateAssigned,
+      agent: get(row, agentCol),
+      due_date: dueDate,
+      date_completed: dateCompleted || null,
+      remarks: get(row, remarksCol),
+      auditor: get(row, auditorCol),
+      status: normalizedStatus,
+      bc_links: get(row, bcLinksCol),
+      reason_for_pending: get(row, reasonPendingCol),
+      reason_for_cancel: get(row, reasonCancelCol),
+    });
+  });
+
+  console.log('📊 Unique statuses found in sheet:', Array.from(uniqueStatuses));
+  console.log('📊 Total tasks processed:', taskList.length);
+  
+  // Debug: Show final status distribution
+  const statusDistribution: Record<string, number> = {};
+  taskList.forEach(t => {
+    const status = t.status?.toString().trim() || 'Pending';
+    statusDistribution[status] = (statusDistribution[status] || 0) + 1;
+  });
+  console.log('📊 Final Status Distribution:', statusDistribution);
+  
+  // Log first 5 tasks with their row indices for debugging
+  console.log('📊 Sample tasks with row indices:');
+  taskList.slice(0, 5).forEach(t => {
+    console.log(`  Row ${t.rowIndex}: "${t.task}" (${t.status})`);
+  });
+  
+  setTasks(taskList);
+}, []);
+
+  // Load tasks from Google Sheets
+  const loadTasksFromSheet = useCallback(async () => {
+    // Check if user is logged in
+    if (!currentUserEmail && !currentUserName) {
+      setTasks([]);
+      setTasksLoading(false);
+      setUpdateError('Please log in to view your tasks');
+      return;
+    }
+
+    setTasksLoading(true);
+    setUpdateError(null);
+
+    try {
+      console.log('📤 Loading tasks for user:', currentUserEmail);
+      
+      const response = await fetch("/api/google-sheets", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          spreadsheetId: SPREADSHEET_ID,
+          sheetName: SHEET_NAME,
+          userEmail: currentUserEmail || '',
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ API error response:', errorData);
+        throw new Error(errorData.error || `HTTP error ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ API response:', { 
+        hasHeaders: !!data.headers, 
+        hasRows: !!data.rows, 
+        total: data.total,
+        rowCount: data.rows?.length || 0 
+      });
+
+      // Check if we got the new format with rows
+      if (data.rows && data.rows.length > 0) {
+        // Pass the entire data object to processTasksFromSheet
+        processTasksFromSheet(data);
+      } else if (data.values && data.values.length > 0) {
+        // Fallback to legacy format
+        processTasksFromSheet(data.values);
+      } else {
+        setTasks([]);
+      }
+    } catch (error) {
+      console.error('Failed to load tasks:', error);
+      setUpdateError(error instanceof Error ? error.message : 'Failed to load tasks');
+      setTasks([]);
+    } finally {
+      setTasksLoading(false);
+    }
+  }, [currentUserEmail, currentUserName, processTasksFromSheet]);
+
+  // Single effect handles initial render
   useEffect(() => {
-    const loadData = async () => {
+    if (didInitialLoadRef.current) return;
+    didInitialLoadRef.current = true;
+
+    if (initialTasks && initialTasks.length > 0) {
+      // For initial tasks from server, they might be in the new format
+      if (initialTasks.headers && initialTasks.rows) {
+        processTasksFromSheet(initialTasks);
+      } else {
+        // Legacy format - array of arrays
+        processTasksFromSheet(initialTasks);
+      }
+      setTasksLoading(false);
+    } else {
+      loadTasksFromSheet();
+    }
+  }, [initialTasks, processTasksFromSheet, loadTasksFromSheet]);
+
+  // Optional: Auto-refresh every 90 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadTasksFromSheet();
+    }, 90000);
+    return () => clearInterval(interval);
+  }, [loadTasksFromSheet]);
+
+  const updateTaskStatus = useCallback(async (taskId: string, newStatus: string) => {
+    if (updatingTaskId) {
+      console.log('⏳ Update already in progress, skipping...');
+      return;
+    }
+    
+    setUpdatingTaskId(taskId);
+    setUpdateError(null);
+
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) {
+      setUpdatingTaskId(null);
+      setUpdateError('Task not found');
+      return;
+    }
+
+    // Ensure rowIndex is a valid number
+    const rowIndex = Number(task.rowIndex);
+    if (isNaN(rowIndex) || rowIndex < 2) {
+      console.error('❌ Invalid rowIndex:', task.rowIndex);
+      setUpdateError(`Invalid row index: ${task.rowIndex}`);
+      setUpdatingTaskId(null);
+      return;
+    }
+
+    console.log(`🔍 UPDATING: Task "${task.task}" at ROW ${rowIndex} from "${task.status}" to "${newStatus}"`);
+
+    // Save current state for rollback
+    const previousTasks = [...tasks];
+
+    // Determine if the new status is Completed or Cancelled
+    const isCompletedOrCancelled = newStatus.toLowerCase() === 'completed' || newStatus.toLowerCase() === 'cancelled';
+
+    // Optimistic UI update
+    setTasks(prevTasks =>
+      prevTasks.map(t =>
+        t.id === taskId
+          ? {
+              ...t,
+              status: newStatus,
+              date_completed: isCompletedOrCancelled
+                ? new Date().toLocaleDateString('en-US')
+                : null,
+            }
+          : t
+      )
+    );
+
+    if (showTaskModal) {
+      setShowTaskModal(false);
+      setSelectedTask(null);
+    }
+
+    try {
+      const payload = {
+        spreadsheetId: SPREADSHEET_ID,
+        sheetName: SHEET_NAME,
+        rowIndex: rowIndex,
+        newStatus: newStatus,
+        taskName: task.task,
+        agentEmail: task.agent || '',
+      };
+      
+      console.log(`📤 Sending update to API:`, payload);
+      
+      const response = await fetch('/api/google-sheets/update-status', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const responseText = await response.text();
+      console.log("📥 API Response Status:", response.status);
+      console.log("📥 API Response Body:", responseText);
+
+      if (!response.ok) {
+        // Try to parse error response
+        let errorDetail = responseText;
+        try {
+          const errorJson = JSON.parse(responseText);
+          errorDetail = errorJson.error || errorJson.message || responseText;
+        } catch {
+          // Keep as text if not JSON
+        }
+        throw new Error(`API Error ${response.status}: ${errorDetail}`);
+      }
+
+      let responseData;
       try {
-        // Load settings
+        responseData = JSON.parse(responseText);
+      } catch {
+        responseData = { raw: responseText };
+      }
+      
+      console.log('✅ Update successful:', responseData);
+      
+      // Reload after a short delay to ensure the sheet has been updated
+      setTimeout(() => {
+        console.log('🔄 Reloading tasks after update...');
+        loadTasksFromSheet();
+      }, 1500);
+      
+    } catch (error) {
+      console.error('❌ Failed to update task status:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update task status';
+      setUpdateError(errorMessage);
+      
+      // Roll back optimistic update
+      setTasks(previousTasks);
+    } finally {
+      setUpdatingTaskId(null);
+    }
+  }, [tasks, showTaskModal, loadTasksFromSheet, updatingTaskId, SPREADSHEET_ID, SHEET_NAME]);
+
+  // Load settings from Supabase
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
         const { data: settingsData, error: settingsError } = await supabase
           .from('system_settings')
           .select('maintenance_mode')
@@ -775,7 +1226,6 @@ export default function Dashboard({ theme = 'dark', currentUserEmail = '' }: Das
         if (!settingsError && settingsData) {
           setSettings(settingsData);
         } else {
-          // Fallback to localStorage
           const saved = localStorage.getItem('lot_admin_settings');
           if (saved) {
             try {
@@ -786,48 +1236,13 @@ export default function Dashboard({ theme = 'dark', currentUserEmail = '' }: Das
             }
           }
         }
-
-        // Load announcements
-        const { data: annData, error: annError } = await supabase
-          .from('announcements')
-          .select('*')
-          .eq('active', true)
-          .order('created_at', { ascending: false });
-
-        if (!annError && annData) {
-          const formatted = annData.map((a: any) => ({
-            id: a.id,
-            title: a.title,
-            message: a.message,
-            type: a.type,
-            targetAll: a.target_all,
-            targetEmails: a.target_emails || [],
-            createdAt: a.created_at,
-            pinned: a.pinned,
-            active: a.active,
-          }));
-          setAnnouncements(formatted);
-        } else {
-          // Fallback to localStorage
-          const saved = localStorage.getItem('lot_announcements');
-          if (saved) {
-            try {
-              const allAnnouncements = JSON.parse(saved);
-              const active = allAnnouncements.filter((a: Announcement) => a.active);
-              setAnnouncements(active);
-            } catch {
-              setAnnouncements([]);
-            }
-          }
-        }
       } catch (err) {
-        console.error('Failed to load data:', err);
+        console.error('Failed to load settings:', err);
       }
     };
 
-    loadData();
+    loadSettings();
 
-    // Real-time subscription for settings changes
     const settingsChannel = supabase
       .channel('system_settings_changes')
       .on(
@@ -844,26 +1259,8 @@ export default function Dashboard({ theme = 'dark', currentUserEmail = '' }: Das
       )
       .subscribe();
 
-    // Real-time subscription for announcements changes
-    const announcementsChannel = supabase
-      .channel('announcements_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'announcements',
-        },
-        () => {
-          // Reload announcements
-          loadData();
-        }
-      )
-      .subscribe();
-
     return () => {
       supabase.removeChannel(settingsChannel);
-      supabase.removeChannel(announcementsChannel);
     };
   }, []);
 
@@ -872,7 +1269,6 @@ export default function Dashboard({ theme = 'dark', currentUserEmail = '' }: Das
     if (settings) {
       return settings.maintenance_mode === true;
     }
-    // Fallback to localStorage
     const saved = localStorage.getItem('lot_admin_settings');
     if (saved) {
       try {
@@ -885,9 +1281,34 @@ export default function Dashboard({ theme = 'dark', currentUserEmail = '' }: Das
     return false;
   };
 
-  // If maintenance mode is enabled and user is not admin, show maintenance page
+  // Get unique statuses from tasks for filter options - FIXED to use normalized statuses
+  const uniqueStatuses = useMemo(() => {
+    const statusSet = new Set<string>();
+    tasks.forEach(task => {
+      if (task.status) {
+        const normalized = normalizeStatus(task.status);
+        statusSet.add(normalized);
+      }
+    });
+    return Array.from(statusSet).sort();
+  }, [tasks]);
+
+  // Task status counts - FIXED to properly count statuses
+  const taskCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: tasks.length };
+    
+    tasks.forEach(task => {
+      // Trim and normalize the status to ensure consistent counting
+      const status = task.status?.toString().trim() || 'Pending';
+      const normalizedStatus = normalizeStatus(status);
+      counts[normalizedStatus] = (counts[normalizedStatus] || 0) + 1;
+    });
+    
+    return counts;
+  }, [tasks]);
+
+  // If maintenance mode is enabled and user is not admin
   if (isMaintenanceMode() && !isAdmin) {
-    const maintenanceAnnouncement = announcements.find(a => a.type === 'warning');
     return (
       <div className={`flex min-h-[400px] flex-col items-center justify-center rounded-2xl border p-12 text-center ${isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'}`}>
         <div className="mb-6 rounded-full bg-amber-500/20 p-4">
@@ -897,33 +1318,18 @@ export default function Dashboard({ theme = 'dark', currentUserEmail = '' }: Das
           Under Maintenance
         </h2>
         <p className={`mb-6 max-w-md text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-          We're currently performing scheduled maintenance to improve your experience. 
+          We're currently performing scheduled maintenance to improve your experience.
           The tools will be back online shortly.
         </p>
         <div className="flex items-center gap-2 text-sm text-amber-400">
           <ClockIcon className="h-4 w-4" />
           <span>Please check back later</span>
         </div>
-        {maintenanceAnnouncement && (
-          <div className="mt-6 max-w-md rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-left">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-400" />
-              <div>
-                <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  {maintenanceAnnouncement.title}
-                </p>
-                <p className={`text-sm ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
-                  {maintenanceAnnouncement.message}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     setIsLoading(true);
     setErrorMessage('');
     const { data, error } = await supabase
@@ -938,13 +1344,13 @@ export default function Dashboard({ theme = 'dark', currentUserEmail = '' }: Das
       setRuns((data ?? []) as ToolRun[]);
     }
     setIsLoading(false);
-  };
+  }, []);
 
-  useEffect(() => { fetchDashboardData(); }, []);
+  useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
   useEffect(() => {
     const interval = setInterval(fetchDashboardData, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchDashboardData]);
 
   useEffect(() => {
     if (isAutoPlaying) {
@@ -1049,358 +1455,675 @@ export default function Dashboard({ theme = 'dark', currentUserEmail = '' }: Das
 
   const maxRuns = allUsers.length > 0 ? allUsers[0].totalRuns : 1;
 
-  const formatDate = (d: string | null) => {
-    if (!d) return 'Never';
-    return new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  // Update filtered tasks
+  const filteredTasks = useMemo(() => {
+    let filtered = tasks;
+
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter(task => {
+        const normalizedStatus = normalizeStatus(task.status);
+        return normalizedStatus === filterStatus;
+      });
+    }
+
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(task =>
+        task.task.toLowerCase().includes(term) ||
+        task.brand.toLowerCase().includes(term) ||
+        task.type.toLowerCase().includes(term) ||
+        task.segment.toLowerCase().includes(term)
+      );
+    }
+
+    return filtered;
+  }, [tasks, filterStatus, searchTerm]);
+
+  const getStatusColor = (status: string) => {
+    const statusLower = status.toLowerCase();
+    
+    if (statusLower === 'completed' || statusLower === 'complete' || statusLower === 'done') {
+      return { bg: isDark ? 'bg-emerald-500/20' : 'bg-emerald-100', text: isDark ? 'text-emerald-400' : 'text-emerald-700', dot: 'bg-emerald-400' };
+    }
+    if (statusLower === 'cancelled' || statusLower === 'cancel' || statusLower === 'canceled') {
+      return { bg: isDark ? 'bg-red-500/20' : 'bg-red-100', text: isDark ? 'text-red-400' : 'text-red-700', dot: 'bg-red-400' };
+    }
+    if (statusLower === 'ongoing' || statusLower === 'in progress') {
+      return { bg: isDark ? 'bg-blue-500/20' : 'bg-blue-100', text: isDark ? 'text-blue-400' : 'text-blue-700', dot: 'bg-blue-400' };
+    }
+    if (statusLower === 'wip') {
+      return { bg: isDark ? 'bg-indigo-500/20' : 'bg-indigo-100', text: isDark ? 'text-indigo-400' : 'text-indigo-700', dot: 'bg-indigo-400' };
+    }
+    if (statusLower === 'for audit' || statusLower === 'audit') {
+      return { bg: isDark ? 'bg-purple-500/20' : 'bg-purple-100', text: isDark ? 'text-purple-400' : 'text-purple-700', dot: 'bg-purple-400' };
+    }
+    if (statusLower === 'for investigation' || statusLower === 'investigation') {
+      return { bg: isDark ? 'bg-orange-500/20' : 'bg-orange-100', text: isDark ? 'text-orange-400' : 'text-orange-700', dot: 'bg-orange-400' };
+    }
+    if (statusLower === 'hold' || statusLower === 'on hold') {
+      return { bg: isDark ? 'bg-amber-500/20' : 'bg-amber-100', text: isDark ? 'text-amber-400' : 'text-amber-700', dot: 'bg-amber-400' };
+    }
+    if (statusLower === 'for correx' || statusLower === 'for correction' || statusLower === 'correx') {
+      return { bg: isDark ? 'bg-pink-500/20' : 'bg-pink-100', text: isDark ? 'text-pink-400' : 'text-pink-700', dot: 'bg-pink-400' };
+    }
+    if (statusLower === 'assigned') {
+      return { bg: isDark ? 'bg-cyan-500/20' : 'bg-cyan-100', text: isDark ? 'text-cyan-400' : 'text-cyan-700', dot: 'bg-cyan-400' };
+    }
+    if (statusLower === 'pending') {
+      return { bg: isDark ? 'bg-yellow-500/20' : 'bg-yellow-100', text: isDark ? 'text-yellow-400' : 'text-yellow-700', dot: 'bg-yellow-400' };
+    }
+    
+    // Default for unknown statuses
+    return { bg: isDark ? 'bg-slate-500/20' : 'bg-gray-100', text: isDark ? 'text-slate-400' : 'text-gray-700', dot: 'bg-slate-400' };
   };
 
-  const getAnnounceColor = (type: string) => {
-    switch (type) {
-      case 'info': return { bg: isDark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200', text: 'text-blue-400', icon: <Info className="h-4 w-4" /> };
-      case 'warning': return { bg: isDark ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-yellow-50 border-yellow-200', text: 'text-yellow-400', icon: <AlertTriangle className="h-4 w-4" /> };
-      case 'success': return { bg: isDark ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200', text: 'text-emerald-400', icon: <CheckCircle className="h-4 w-4" /> };
-      case 'error': return { bg: isDark ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200', text: 'text-red-400', icon: <AlertCircle className="h-4 w-4" /> };
-      default: return { bg: '', text: mutedText, icon: null };
-    }
+  // Get status options for dropdown
+  const getStatusOptions = (currentStatus: string) => {
+    // All possible statuses from your tracker
+    const allStatuses = [
+      'Pending', 'Assigned', 'Ongoing', 'WIP', 
+      'For Audit', 'For Investigation', 'Hold', 
+      'For Correx', 'Completed', 'Cancelled'
+    ];
+    return allStatuses.filter(s => s.toLowerCase() !== currentStatus.toLowerCase());
+  };
+
+  const openTaskModal = (task: Task) => {
+    setSelectedTask(task);
+    setShowTaskModal(true);
+  };
+
+  const closeTaskModal = () => {
+    setShowTaskModal(false);
+    setSelectedTask(null);
   };
 
   return (
     <>
-      <div className="w-full max-w-full space-y-5 overflow-hidden sm:space-y-6">
-        <section className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-emerald-500/10 p-2">
-                <TrendingUp className="h-5 w-5 text-emerald-400" />
-              </div>
-              <h1 className={`break-words text-2xl font-bold tracking-tight sm:text-3xl ${pageText}`}>Dashboard</h1>
-              <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />LIVE
-              </span>
-              {isAdmin && (
-                <span className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-400">
-                  <Shield className="h-3.5 w-3.5" />
-                  Admin
+      <div className="flex h-[calc(100vh-2rem)] w-full max-w-full flex-col overflow-y-auto overflow-x-hidden">
+        <div className="w-full max-w-full space-y-5 overflow-hidden sm:space-y-6 pb-6">
+          <section className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-emerald-500/10 p-2">
+                  <TrendingUp className="h-5 w-5 text-emerald-400" />
+                </div>
+                <h1 className={`break-words text-2xl font-bold tracking-tight sm:text-3xl ${pageText}`}>Dashboard</h1>
+                <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />LIVE
                 </span>
-              )}
-            </div>
-            <p className={`mt-1.5 text-sm ${mutedText}`}>Listing Operations · Real-time overview</p>
-          </div>
-          <button onClick={fetchDashboardData} disabled={isLoading} className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}`}>
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Refresh
-          </button>
-        </section>
-
-        {errorMessage && <div className={`rounded-xl border px-4 py-3 text-sm ${isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'}`}>Dashboard error: {errorMessage}</div>}
-
-        {/* Announcements Section - Always shown, no statistics */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Megaphone className={`h-5 w-5 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
-              <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                Announcements
-              </h3>
-              <span className={`rounded-full px-2 py-0.5 text-xs ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
-                {announcements.length}
-              </span>
-              {isAdmin && (
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
-                  <Shield className="inline h-3 w-3 mr-0.5" />
-                  Admin View
-                </span>
-              )}
-            </div>
-          </div>
-
-          {announcements.length === 0 ? (
-            <div className={`rounded-xl border p-8 text-center ${panelClass}`}>
-              <Megaphone className={`mx-auto h-10 w-10 opacity-30 ${mutedText}`} />
-              <p className={`mt-2 text-sm ${mutedText}`}>No announcements available</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {announcements.map(ann => {
-                const color = getAnnounceColor(ann.type);
-                return (
-                  <div key={ann.id} className={`rounded-xl border p-4 ${color.bg} ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
-                    <div className="flex items-start gap-3">
-                      <span className={`mt-0.5 flex-shrink-0 ${color.text}`}>
-                        {color.icon}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                            {ann.title}
-                          </p>
-                          {ann.pinned && (
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
-                              📌 Pinned
-                            </span>
-                          )}
-                          {isAdmin && !ann.active && (
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-200 text-gray-500'}`}>
-                              Inactive
-                            </span>
-                          )}
-                        </div>
-                        <p className={`mt-1 text-sm ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
-                          {ann.message}
-                        </p>
-                        <p className={`mt-2 text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                          {formatDate(ann.createdAt)}
-                          {isAdmin && !ann.targetAll && (
-                            <span className="ml-2 text-[10px]">
-                              · {ann.targetEmails.length} recipients
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <section className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 p-2 shadow-lg">
-              <Wrench className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h2 className={`text-lg font-bold ${pageText}`}>Operation Tools</h2>
-              <p className={`text-xs ${mutedText}`}>Streamline your workflow with these tools</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {operationTools.map(tool => (
-              <ToolCard
-                key={tool.id}
-                tool={tool}
-                theme={theme}
-                runCount={getRunCount(tool.id)}
-                sparkline={getSparklineForTool(tool.id)}
-                onOpen={() => navigateToTool(tool.id)}
-              />
-            ))}
-          </div>
-        </section>
-
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-          <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${panelClass}`}>
-            <div className={`border-b px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="rounded-lg bg-yellow-500/20 p-1.5">
-                    <Trophy className="h-4 w-4 text-yellow-500" />
-                  </div>
-                  <div>
-                    <h2 className={`text-sm font-semibold ${pageText}`}>Top Users</h2>
-                    <p className={`text-xs ${mutedText}`}>Ranked by runs · Most active first</p>
-                  </div>
-                </div>
-                <span className={`text-xs ${mutedText}`}>{allUsers.length} members</span>
+                {isAdmin && (
+                  <span className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-400">
+                    <Shield className="h-3.5 w-3.5" />
+                    Admin
+                  </span>
+                )}
               </div>
+              <p className={`mt-1.5 text-sm ${mutedText}`}>Listing Operations · Real-time overview</p>
             </div>
-            <div className="flex-1 overflow-y-auto max-h-[400px]">
-              {allUsers.length === 0 ? (
-                <div className="flex items-center justify-center h-full min-h-[200px]">
-                  <div className={`text-center text-sm ${mutedText}`}>No user data available</div>
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-700/50">
-                  {allUsers.map((user, index) => {
-                    const percentage = (user.totalRuns / maxRuns) * 100;
-                    const userImage = getUserImage(user.email);
-                    const isTopPerformer = index === 0;
-                    
-                    return (
-                      <div key={user.email} className={`group relative transition-all duration-200 p-3 ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-gray-50'} ${isTopPerformer ? (isDark ? 'bg-gradient-to-r from-yellow-500/5 to-transparent' : 'bg-gradient-to-r from-yellow-100/30 to-transparent') : ''}`}>
-                        <div className="flex items-center gap-3">
-                          <div className="flex-shrink-0 w-7">
-                            {index === 0 && <Crown className="h-4 w-4 text-yellow-500" />}
-                            {index === 1 && <Medal className="h-4 w-4 text-gray-400" />}
-                            {index === 2 && <Medal className="h-4 w-4 text-amber-600" />}
-                            {index >= 3 && <span className={`text-xs font-bold ${mutedText}`}>{index + 1}</span>}
-                          </div>
-                          
-                          {userImage ? (
-                            <div className="relative">
-                              <div className="w-8 h-8 rounded-full overflow-hidden ring-2 ring-emerald-500/30">
-                                <Image src={userImage} alt={user.name} width={32} height={32} className="w-full h-full object-cover" />
-                              </div>
-                              {isTopPerformer && (
-                                <div className="absolute -top-1 -right-1">
-                                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse" />
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${isTopPerformer ? 'bg-gradient-to-br from-yellow-500 to-yellow-600 text-white' : (isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}`}>
-                              {user.name[0]?.toUpperCase()}
-                            </div>
-                          )}
-                          
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <p className={`text-sm font-semibold truncate ${pageText}`}>{user.name}</p>
-                                {user.role === 'Team Manager' && (
-                                  <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-bold ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
-                                    Manager
-                                  </span>
-                                )}
-                              </div>
-                              <span className={`text-sm font-bold tabular-nums ${isTopPerformer ? 'text-yellow-400' : 'text-emerald-400'}`}>{user.totalRuns}</span>
-                            </div>
-                            <div className="flex items-center gap-3 mt-0.5">
-                              <div className="flex items-center gap-1">
-                                <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />
-                                <span className={`text-[9px] ${mutedText}`}>{user.completedRuns} completed</span>
-                              </div>
-                              {user.lastRun && (
-                                <div className="flex items-center gap-1">
-                                  <Clock className="h-2.5 w-2.5 text-slate-500" />
-                                  <span className={`text-[9px] ${mutedText}`}>{relativeTime(user.lastRun)}</span>
-                                </div>
-                              )}
-                            </div>
-                            <div className="mt-1.5">
-                              <div className={`h-1 overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
-                                <div
-                                  className={`h-full rounded-full transition-all duration-700 ${isTopPerformer ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' : 'bg-emerald-500'}`}
-                                  style={{ width: `${percentage}%` }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <button onClick={fetchDashboardData} disabled={isLoading} className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}`}>
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Refresh
+            </button>
           </section>
 
-          <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${panelClass}`}>
-            <div className={`border-b px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="rounded-lg bg-orange-500/20 p-1.5">
-                    <Flame className="h-4 w-4 text-orange-400" />
-                  </div>
-                  <div>
-                    <h2 className={`text-sm font-semibold ${pageText}`}>Recent Activity</h2>
-                    <p className={`text-xs ${mutedText}`}>Latest tool runs</p>
-                  </div>
-                </div>
-                <span className={`text-xs ${mutedText}`}>last {recentRuns.length}</span>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto max-h-[400px]">
-              {isLoading ? (
-                <div className="flex items-center justify-center h-full min-h-[200px]"><Loader2 className={`h-6 w-6 animate-spin ${mutedText}`} /></div>
-              ) : recentRuns.length === 0 ? (
-                <div className="flex items-center justify-center h-full min-h-[200px]"><div className={`text-center text-sm ${mutedText}`}>No activity yet</div></div>
-              ) : (
-                <div className="divide-y divide-slate-700/50">
-                  {recentRuns.map(run => (
-                    <div key={run.id} className={`group flex items-center gap-3 px-4 py-2.5 transition-colors ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-gray-50'}`}>
-                      <StatusDot status={run.status} />
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium truncate ${pageText}`}>{run.title}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className={`text-xs ${run.status === 'completed' ? 'text-emerald-400' : run.status === 'warning' ? 'text-yellow-400' : 'text-red-400'}`}>{run.status}</span>
-                          <span className={`text-[10px] ${mutedText}`}>{toolLabel[run.tool_type]} {run.total_count > 0 && `· ${run.total_count.toLocaleString()} items`}</span>
-                        </div>
-                      </div>
-                      <div className={`text-[10px] flex-shrink-0 ${mutedText}`}>{relativeTime(run.created_at)}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
+          {errorMessage && <div className={`rounded-xl border px-4 py-3 text-sm ${isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'}`}>Dashboard error: {errorMessage}</div>}
+          {updateError && <div className={`rounded-xl border px-4 py-3 text-sm ${isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'}`}>{updateError}</div>}
 
+          {/* ─── TASK MANAGEMENT SECTION ─────────────────────────────────────────── */}
           <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${panelClass}`}>
-            <div className={`border-b px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+            <div className={`border-b px-5 py-4 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
                   <div className="rounded-lg bg-emerald-500/20 p-1.5">
-                    <Users className="h-4 w-4 text-emerald-400" />
+                    <CheckCircle2 className="h-5 w-5 text-emerald-400" />
                   </div>
                   <div>
-                    <h2 className={`text-sm font-semibold ${pageText}`}>Team Gallery</h2>
-                    <p className={`text-xs ${mutedText}`}>Meet the team</p>
+                    <h2 className={`text-sm font-semibold ${pageText}`}>My Tasks</h2>
+                    <p className={`text-xs ${mutedText}`}>
+                      {currentUserName || currentUserEmail ? `Tasks assigned to ${currentUserName || currentUserEmail}` : 'No user logged in'}
+                    </p>
                   </div>
                 </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search tasks..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className={`rounded-lg border px-3 py-1.5 text-sm pl-8 ${
+                        isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                      }`}
+                    />
+                    <Filter className={`absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 ${mutedText}`} />
+                  </div>
+                  <button
+                    onClick={loadTasksFromSheet}
+                    disabled={tasksLoading}
+                    className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
+                      tasksLoading ? 'opacity-50 cursor-not-allowed' : ''
+                    } ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}`}
+                  >
+                    {tasksLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    {tasksLoading ? 'Loading...' : 'Refresh Tasks'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Status filter tabs - dynamic from actual data */}
+              <div className="flex gap-1 mt-3 overflow-x-auto pb-1">
                 <button
-                  onClick={() => setIsRouletteOpen(true)}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all transform hover:scale-105 ${
-                    isDark
-                      ? 'bg-gradient-to-r from-purple-600/20 to-pink-600/20 text-purple-400 hover:from-purple-600/30 hover:to-pink-600/30 border border-purple-500/30'
-                      : 'bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 hover:from-purple-200 hover:to-pink-200 border border-purple-300'
+                  onClick={() => setFilterStatus('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+                    filterStatus === 'all'
+                      ? isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                      : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Member Roulette
+                  All ({taskCounts.all || 0})
                 </button>
+                
+                {uniqueStatuses.map((status) => {
+                  const count = taskCounts[status] || 0;
+                  const isActive = filterStatus === status;
+                  
+                  return (
+                    <button
+                      key={status}
+                      onClick={() => setFilterStatus(status)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+                        isActive
+                          ? isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                          : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      <span>{status}</span>
+                      <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] ${
+                        isActive
+                          ? isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800'
+                          : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
-            <div className="relative overflow-hidden">
-              <div className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${currentSlide * 100}%)` }}>
-                {defaultTeamMembers.map((member, idx) => (
-                  <div key={idx} className="w-full flex-shrink-0 px-6 py-6">
-                    <div className="flex flex-col items-center text-center">
-                      <div className="relative group">
-                        <div className="w-28 h-28 rounded-full overflow-hidden ring-4 ring-emerald-500/30 group-hover:ring-emerald-500 transition-all duration-300 shadow-xl">
-                          <Image src={member.image} alt={member.name} width={112} height={112} className="w-full h-full object-cover" priority unoptimized />
-                        </div>
-                        <div className="absolute -bottom-1 -right-1">
-                          <div className="w-5 h-5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 flex items-center justify-center shadow-md">
-                            <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          </div>
-                        </div>
-                      </div>
-                      <h3 className={`mt-3 text-base font-bold ${pageText}`}>{member.name}</h3>
-                      <p className={`text-[10px] ${mutedText}`}>{member.role}</p>
-                      <div className="mt-2">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
-                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                          Active
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+
+            {/* Tasks List */}
+            <div className="max-h-[420px] overflow-y-auto overflow-x-auto">
+              {tasksLoading && tasks.length === 0 ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className={`h-8 w-8 animate-spin ${mutedText}`} />
+                </div>
+              ) : filteredTasks.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                  <CheckCircle2 className={`h-12 w-12 ${mutedText} opacity-30`} />
+                  <p className={`mt-3 font-medium ${pageText}`}>No tasks found</p>
+                  <p className={`text-sm ${mutedText}`}>
+                    {searchTerm || filterStatus !== 'all'
+                      ? 'Try adjusting your filters'
+                      : 'You have no tasks assigned yet'}
+                  </p>
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className={`sticky top-0 z-10 backdrop-blur ${isDark ? 'bg-slate-800/95' : 'bg-gray-50/95'}`}>
+                    <tr>
+                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Task</th>
+                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Brand</th>
+                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Type</th>
+                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Due Date</th>
+                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Status</th>
+                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className={`divide-y ${isDark ? 'divide-slate-700/50' : 'divide-gray-200'}`}>
+                    {filteredTasks.map((task) => {
+                      const statusColor = getStatusColor(task.status);
+                      const isUpdating = updatingTaskId === task.id;
+                      const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
+
+                      return (
+                        <tr
+                          key={task.id}
+                          className={`transition-colors ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-gray-50'} cursor-pointer`}
+                          onClick={() => openTaskModal(task)}
+                        >
+                          <td className={`px-4 py-3 font-medium ${pageText}`}>
+                            <div className="max-w-[200px] truncate">{task.task}</div>
+                            <div className={`text-xs ${mutedText}`}>{formatDate(task.date_requested)}</div>
+                          </td>
+                          <td className={`px-4 py-3 ${pageText}`}>{task.brand}</td>
+                          <td className={`px-4 py-3 ${pageText}`}>
+                            <span className="text-xs">{task.type}</span>
+                            <div className={`text-xs ${mutedText}`}>{task.segment}</div>
+                          </td>
+                          <td className={`px-4 py-3 ${pageText}`}>
+                            {formatDate(task.due_date)}
+                            {isOverdue && (
+                              <span className="ml-2 inline-block rounded-full bg-red-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-red-400">
+                                Overdue
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${statusColor.bg} ${statusColor.text}`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${statusColor.dot}`} />
+                              <span>{task.status}</span>
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                              {getStatusOptions(task.status).slice(0, 3).map((newStatus) => (
+                                <button
+                                  key={newStatus}
+                                  onClick={() => updateTaskStatus(task.id, newStatus)}
+                                  disabled={isUpdating}
+                                  className={`rounded-lg px-2 py-1 text-[10px] font-medium transition-all ${
+                                    isUpdating ? 'opacity-50 cursor-not-allowed' :
+                                    isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                  }`}
+                                >
+                                  {isUpdating ? <Loader2 className="h-3 w-3 animate-spin" /> : newStatus}
+                                </button>
+                              ))}
+                              {getStatusOptions(task.status).length > 3 && (
+                                <span className={`text-[10px] ${mutedText}`}>+{getStatusOptions(task.status).length - 3}</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Footer with task count */}
+            <div className={`border-t px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
+              <div className="flex items-center justify-between">
+                <span className={`text-xs ${mutedText}`}>
+                  Showing {filteredTasks.length} of {tasks.length} tasks
+                </span>
+                <span className={`text-xs ${mutedText}`}>
+                  {tasksLoading ? 'Refreshing…' : `Last updated: ${new Date().toLocaleTimeString()}`}
+                </span>
               </div>
             </div>
-            <div className="flex justify-center gap-1 pb-3">
-              {defaultTeamMembers.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => goToSlide(idx)}
-                  className={`h-1.5 rounded-full transition-all ${
-                    currentSlide === idx
-                      ? 'w-4 bg-emerald-500'
-                      : `w-1.5 ${isDark ? 'bg-slate-600' : 'bg-gray-300'}`
-                  }`}
+          </section>
+
+          <section className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 p-2 shadow-lg">
+                <Wrench className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h2 className={`text-lg font-bold ${pageText}`}>Operation Tools</h2>
+                <p className={`text-xs ${mutedText}`}>Streamline your workflow with these tools</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+              {operationTools.map(tool => (
+                <ToolCard
+                  key={tool.id}
+                  tool={tool}
+                  theme={theme}
+                  runCount={getRunCount(tool.id)}
+                  sparkline={getSparklineForTool(tool.id)}
+                  onOpen={() => navigateToTool(tool.id)}
                 />
               ))}
             </div>
           </section>
+
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+            <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${panelClass}`}>
+              <div className={`border-b px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-lg bg-yellow-500/20 p-1.5">
+                      <Trophy className="h-4 w-4 text-yellow-500" />
+                    </div>
+                    <div>
+                      <h2 className={`text-sm font-semibold ${pageText}`}>Top Users</h2>
+                      <p className={`text-xs ${mutedText}`}>Ranked by runs · Most active first</p>
+                    </div>
+                  </div>
+                  <span className={`text-xs ${mutedText}`}>{allUsers.length} members</span>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto max-h-[400px]">
+                {allUsers.length === 0 ? (
+                  <div className="flex items-center justify-center h-full min-h-[200px]">
+                    <div className={`text-center text-sm ${mutedText}`}>No user data available</div>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-700/50">
+                    {allUsers.map((user, index) => {
+                      const percentage = (user.totalRuns / maxRuns) * 100;
+                      const userImage = getUserImage(user.email);
+                      const isTopPerformer = index === 0;
+
+                      return (
+                        <div key={user.email} className={`group relative transition-all duration-200 p-3 ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-gray-50'} ${isTopPerformer ? (isDark ? 'bg-gradient-to-r from-yellow-500/5 to-transparent' : 'bg-gradient-to-r from-yellow-100/30 to-transparent') : ''}`}>
+                          <div className="flex items-center gap-3">
+                            <div className="flex-shrink-0 w-7">
+                              {index === 0 && <Crown className="h-4 w-4 text-yellow-500" />}
+                              {index === 1 && <Medal className="h-4 w-4 text-gray-400" />}
+                              {index === 2 && <Medal className="h-4 w-4 text-amber-600" />}
+                              {index >= 3 && <span className={`text-xs font-bold ${mutedText}`}>{index + 1}</span>}
+                            </div>
+
+                            {userImage ? (
+                              <div className="relative">
+                                <div className="w-8 h-8 rounded-full overflow-hidden ring-2 ring-emerald-500/30">
+                                  <Image src={userImage} alt={user.name} width={32} height={32} className="w-full h-full object-cover" />
+                                </div>
+                                {isTopPerformer && (
+                                  <div className="absolute -top-1 -right-1">
+                                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse" />
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${isTopPerformer ? 'bg-gradient-to-br from-yellow-500 to-yellow-600 text-white' : (isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}`}>
+                                {user.name[0]?.toUpperCase()}
+                              </div>
+                            )}
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <p className={`text-sm font-semibold truncate ${pageText}`}>{user.name}</p>
+                                  {user.role === 'Team Manager' && (
+                                    <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-bold ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+                                      Manager
+                                    </span>
+                                  )}
+                                </div>
+                                <span className={`text-sm font-bold tabular-nums ${isTopPerformer ? 'text-yellow-400' : 'text-emerald-400'}`}>{user.totalRuns}</span>
+                              </div>
+                              <div className="flex items-center gap-3 mt-0.5">
+                                <div className="flex items-center gap-1">
+                                  <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />
+                                  <span className={`text-[9px] ${mutedText}`}>{user.completedRuns} completed</span>
+                                </div>
+                                {user.lastRun && (
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="h-2.5 w-2.5 text-slate-500" />
+                                    <span className={`text-[9px] ${mutedText}`}>{relativeTime(user.lastRun)}</span>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="mt-1.5">
+                                <div className={`h-1 overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
+                                  <div
+                                    className={`h-full rounded-full transition-all duration-700 ${isTopPerformer ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' : 'bg-emerald-500'}`}
+                                    style={{ width: `${percentage}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${panelClass}`}>
+              <div className={`border-b px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-lg bg-orange-500/20 p-1.5">
+                      <Flame className="h-4 w-4 text-orange-400" />
+                    </div>
+                    <div>
+                      <h2 className={`text-sm font-semibold ${pageText}`}>Recent Activity</h2>
+                      <p className={`text-xs ${mutedText}`}>Latest tool runs</p>
+                    </div>
+                  </div>
+                  <span className={`text-xs ${mutedText}`}>last {recentRuns.length}</span>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto max-h-[400px]">
+                {isLoading ? (
+                  <div className="flex items-center justify-center h-full min-h-[200px]"><Loader2 className={`h-6 w-6 animate-spin ${mutedText}`} /></div>
+                ) : recentRuns.length === 0 ? (
+                  <div className="flex items-center justify-center h-full min-h-[200px]"><div className={`text-center text-sm ${mutedText}`}>No activity yet</div></div>
+                ) : (
+                  <div className="divide-y divide-slate-700/50">
+                    {recentRuns.map(run => (
+                      <div key={run.id} className={`group flex items-center gap-3 px-4 py-2.5 transition-colors ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-gray-50'}`}>
+                        <StatusDot status={run.status} />
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium truncate ${pageText}`}>{run.title}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={`text-xs ${run.status === 'completed' ? 'text-emerald-400' : run.status === 'warning' ? 'text-yellow-400' : 'text-red-400'}`}>{run.status}</span>
+                            <span className={`text-[10px] ${mutedText}`}>{toolLabel[run.tool_type]} {run.total_count > 0 && `· ${run.total_count.toLocaleString()} items`}</span>
+                          </div>
+                        </div>
+                        <div className={`text-[10px] flex-shrink-0 ${mutedText}`}>{relativeTime(run.created_at)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${panelClass}`}>
+              <div className={`border-b px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-lg bg-emerald-500/20 p-1.5">
+                      <Users className="h-4 w-4 text-emerald-400" />
+                    </div>
+                    <div>
+                      <h2 className={`text-sm font-semibold ${pageText}`}>Team Gallery</h2>
+                      <p className={`text-xs ${mutedText}`}>Meet the team</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsRouletteOpen(true)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all transform hover:scale-105 ${
+                      isDark
+                        ? 'bg-gradient-to-r from-purple-600/20 to-pink-600/20 text-purple-400 hover:from-purple-600/30 hover:to-pink-600/30 border border-purple-500/30'
+                        : 'bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 hover:from-purple-200 hover:to-pink-200 border border-purple-300'
+                    }`}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Member Roulette
+                  </button>
+                </div>
+              </div>
+              <div className="relative overflow-hidden">
+                <div className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${currentSlide * 100}%)` }}>
+                  {defaultTeamMembers.map((member, idx) => (
+                    <div key={idx} className="w-full flex-shrink-0 px-6 py-6">
+                      <div className="flex flex-col items-center text-center">
+                        <div className="relative group">
+                          <div className="w-28 h-28 rounded-full overflow-hidden ring-4 ring-emerald-500/30 group-hover:ring-emerald-500 transition-all duration-300 shadow-xl">
+                            <Image src={member.image} alt={member.name} width={112} height={112} className="w-full h-full object-cover" priority unoptimized />
+                          </div>
+                          <div className="absolute -bottom-1 -right-1">
+                            <div className="w-5 h-5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 flex items-center justify-center shadow-md">
+                              <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                            </div>
+                          </div>
+                        </div>
+                        <h3 className={`mt-3 text-base font-bold ${pageText}`}>{member.name}</h3>
+                        <p className={`text-[10px] ${mutedText}`}>{member.role}</p>
+                        <div className="mt-2">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            Active
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-center gap-1 pb-3">
+                {defaultTeamMembers.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => goToSlide(idx)}
+                    className={`h-1.5 rounded-full transition-all ${
+                      currentSlide === idx
+                        ? 'w-4 bg-emerald-500'
+                        : `w-1.5 ${isDark ? 'bg-slate-600' : 'bg-gray-300'}`
+                    }`}
+                  />
+                ))}
+              </div>
+            </section>
+          </div>
         </div>
       </div>
+
+      {/* ─── TASK DETAIL MODAL ─────────────────────────────────────────────────── */}
+      {showTaskModal && selectedTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className={`relative w-full max-w-2xl rounded-2xl border shadow-2xl ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'} animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto`}>
+            {/* Header */}
+            <div className={`flex items-center justify-between border-b p-4 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
+              <div className="flex items-center gap-2">
+                <div className="rounded-lg bg-emerald-500/20 p-1.5">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className={`font-semibold ${pageText}`}>Task Details</h3>
+                  <p className={`text-xs ${mutedText}`}>View and manage task information</p>
+                </div>
+              </div>
+              <button onClick={closeTaskModal} className={`rounded-lg p-1 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
+                <X className={`h-5 w-5 ${mutedText}`} />
+              </button>
+            </div>
+
+            {/* Task Content */}
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={`text-xs font-medium ${mutedText}`}>Task</label>
+                  <p className={`text-base font-semibold ${pageText}`}>{selectedTask.task}</p>
+                </div>
+                <div>
+                  <label className={`text-xs font-medium ${mutedText}`}>Brand</label>
+                  <p className={`text-base ${pageText}`}>{selectedTask.brand}</p>
+                </div>
+                <div>
+                  <label className={`text-xs font-medium ${mutedText}`}>Type</label>
+                  <p className={`text-base ${pageText}`}>{selectedTask.type}</p>
+                </div>
+                <div>
+                  <label className={`text-xs font-medium ${mutedText}`}>Segment</label>
+                  <p className={`text-base ${pageText}`}>{selectedTask.segment}</p>
+                </div>
+                <div>
+                  <label className={`text-xs font-medium ${mutedText}`}>Date Requested</label>
+                  <p className={`text-base ${pageText}`}>{formatDate(selectedTask.date_requested)}</p>
+                </div>
+                <div>
+                  <label className={`text-xs font-medium ${mutedText}`}>Due Date</label>
+                  <p className={`text-base ${pageText}`}>{formatDate(selectedTask.due_date)}</p>
+                </div>
+                <div>
+                  <label className={`text-xs font-medium ${mutedText}`}>Status</label>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium ${getStatusColor(selectedTask.status).bg} ${getStatusColor(selectedTask.status).text}`}>
+                    <span className={`h-2 w-2 rounded-full ${getStatusColor(selectedTask.status).dot}`} />
+                    <span>{selectedTask.status}</span>
+                  </span>
+                </div>
+                <div>
+                  <label className={`text-xs font-medium ${mutedText}`}>Auditor</label>
+                  <p className={`text-base ${pageText}`}>{selectedTask.auditor || 'N/A'}</p>
+                </div>
+              </div>
+
+              {selectedTask.remarks && (
+                <div>
+                  <label className={`text-xs font-medium ${mutedText}`}>Remarks</label>
+                  <p className={`text-sm ${pageText} mt-1`}>{selectedTask.remarks}</p>
+                </div>
+              )}
+
+              {selectedTask.reason_for_pending && (
+                <div>
+                  <label className={`text-xs font-medium ${mutedText}`}>Reason for Pending</label>
+                  <p className={`text-sm ${pageText} mt-1`}>{selectedTask.reason_for_pending}</p>
+                </div>
+              )}
+
+              {selectedTask.reason_for_cancel && (
+                <div>
+                  <label className={`text-xs font-medium ${mutedText}`}>Reason for Cancel</label>
+                  <p className={`text-sm ${pageText} mt-1`}>{selectedTask.reason_for_cancel}</p>
+                </div>
+              )}
+
+              {selectedTask.date_completed && (
+                <div>
+                  <label className={`text-xs font-medium ${mutedText}`}>Date Completed</label>
+                  <p className={`text-sm ${pageText} mt-1`}>{formatDate(selectedTask.date_completed)}</p>
+                </div>
+              )}
+
+              {selectedTask.bc_links && (
+                <div>
+                  <label className={`text-xs font-medium ${mutedText}`}>BC Links</label>
+                  <p className={`text-sm text-blue-400 mt-1 break-all`}>{selectedTask.bc_links}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer with actions */}
+            <div className={`border-t p-4 ${isDark ? 'border-slate-700' : 'border-gray-200'} flex flex-wrap gap-2 justify-between`}>
+              <div className="flex gap-2 flex-wrap">
+                {getStatusOptions(selectedTask.status).map((newStatus) => (
+                  <button
+                    key={newStatus}
+                    onClick={() => {
+                      updateTaskStatus(selectedTask.id, newStatus);
+                    }}
+                    disabled={updatingTaskId === selectedTask.id}
+                    className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+                      updatingTaskId === selectedTask.id ? 'opacity-50 cursor-not-allowed' :
+                      newStatus === 'Completed' ? 'bg-emerald-500 text-white hover:bg-emerald-600' :
+                      newStatus === 'Cancelled' ? 'bg-red-500 text-white hover:bg-red-600' :
+                      newStatus === 'Ongoing' ? 'bg-blue-500 text-white hover:bg-blue-600' :
+                      'bg-yellow-500 text-white hover:bg-yellow-600'
+                    }`}
+                  >
+                    {updatingTaskId === selectedTask.id ? <Loader2 className="h-4 w-4 animate-spin" /> : `Mark as ${newStatus}`}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={closeTaskModal}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <MemberRouletteModal isOpen={isRouletteOpen} onClose={() => setIsRouletteOpen(false)} theme={theme} />
     </>
   );
 }
-
-// ─── ToolCard Component ──────────────────────────────────────────────────────
 
 function ToolCard({ tool, theme, runCount, sparkline, onOpen }: any) {
   const isDark = theme === 'dark';

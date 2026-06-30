@@ -3,7 +3,7 @@
 export const brandConfigs = [
   {
     brandName: "Olukai",
-    spreadsheetId: "1_IWYjwyPlEDFecvU5qdY2v416n_N4bY-4czH3ZtvYak", // Grab this from the Google Sheet URL
+    spreadsheetId: "1_IWYjwyPlEDFecvU5qdY2v416n_N4bY-4czH3ZtvYak",
     sheetName: "Sheet1",
     columns: {
       upc: "UPC/EAN",
@@ -12,7 +12,7 @@ export const brandConfigs = [
       description: "Item Name",
       name: "Shopkeep Name (Max Length: 35)",
       color: "Color Desc",
-      color_code:"Color Code",
+      color_code: "Color Code",
       size: "Size",
       gender: "Gender"
     }
@@ -35,7 +35,7 @@ export const brandConfigs = [
   {
     brandName: "Chaco",
     spreadsheetId: "14s9iV8zazeJuldS0HpVYfGkygGLpl42-Ga7Z-ofZJeI",
-    sheetname: "Sheet1",
+    sheetName: "Sheet1", // Fixed: was sheetname
     columns: {
       upc: "UPC/EAN",
       sku: "SKU",
@@ -50,8 +50,8 @@ export const brandConfigs = [
   {
     brandName: "Chums",
     spreadsheetId: "1sJPKXfKqf02qCuqJWtwP0INdL4XoYGSGyaJ3HULNOdg",
-    sheetname: "Sheet1",
-    columns:{
+    sheetName: "Sheet1", // Fixed: was sheetname
+    columns: {
       upc: "UPC by Color",
       sku: "SKU",
       style_number: "Style Number",
@@ -62,8 +62,8 @@ export const brandConfigs = [
   {
     brandName: "Dakine",
     spreadsheetId: "1wBtJsHwTClOrESfymtc3BGtn-C7UNHeF8TNPZaGovq4",
-    sheetname: "Sheet1",
-    columns:{
+    sheetName: "Sheet1", // Fixed: was sheetname
+    columns: {
       upc: "UPC",
       sku: "SKU",
       style_number: "STYLE NUMBER",
@@ -76,7 +76,7 @@ export const brandConfigs = [
   {
     brandName: "Floafers",
     spreadsheetId: "14TtsYiVoPTPJvSutozzaOGFmwBADmRHd0Kg8zp78sKg",
-    sheetname: "Sheet1",
+    sheetName: "Sheet1", // Fixed: was sheetname
     columns: {
       upc: "UPC/EAN",
       sku: "SKU",
@@ -92,7 +92,7 @@ export const brandConfigs = [
   {
     brandName: "Goodr",
     spreadsheetId: "1uQllV0hW0ZnM7sjkeUy1p6j48TKuclEIxKW12S5gWcY",
-    sheetname: "Sheet1",
+    sheetName: "Sheet1", // Fixed: was sheetname
     columns: {
       upc: "UPC",
       sku: "SKU",
@@ -103,7 +103,7 @@ export const brandConfigs = [
   {
     brandName: "Hurley",
     spreadsheetId: "1uMJ2BY0wJDI6qYI8AdqoH63Sth83xSa4f0LuXSdQ1e4",
-    sheetname: "Sheet1",
+    sheetName: "Sheet1", // Fixed: was sheetname
     columns: {
       upc: "UPC",
       sku: "SKU",
@@ -118,7 +118,7 @@ export const brandConfigs = [
   {
     brandName: "Kuhl",
     spreadsheetId: "1s_m7kZjREA0-0uYmXn25QOUbo6qmqTo5yQlPM92txb4",
-    sheetname: "Sheet1",
+    sheetName: "Sheet1", // Fixed: was sheetname
     columns: {
       upc: "UPC",
       sku: "SKU",
@@ -131,7 +131,7 @@ export const brandConfigs = [
   {
     brandName: "Luminox",
     spreadsheetId: "1DIBGV09kpztdC0KZQVLa23yTDld8T96JfZNlICfm6a4",
-    sheetname: "Sheet1",
+    sheetName: "Sheet1", // Fixed: was sheetname
     columns: {
       upc: "UPC",
       sku: "item Code/SKU",
@@ -142,7 +142,7 @@ export const brandConfigs = [
   {
     brandName: "Maui Jim",
     spreadsheetId: "1lbexbVup3-YrC0V8lhIwIZz3sL77a6UamxLIp-TGkP4",
-    sheetname: "Sheet1",
+    sheetName: "Sheet1", // Fixed: was sheetname
     columns: {
       upc: "UPC",
       sku: "SKU",
@@ -153,7 +153,7 @@ export const brandConfigs = [
   {
     brandName: "Luxottica",
     spreadsheetId: "1_BG_mX2u02ihUJA0s6XQRYJtTE7GyAiou4eZVvmK6jk",
-    sheetname: "Sheet1",
+    sheetName: "Sheet1", // Fixed: was sheetname
     columns: {
       upc: "UPC",
       sku: "SKU",
@@ -163,10 +163,10 @@ export const brandConfigs = [
     }
   },
   {
-    brandName:"Mavi Jeans ",
+    brandName: "Mavi Jeans",
     spreadsheetId: "1EC0ZZGrTYeo4muajy3EGAvdt-TvGmNwB7Ww4RBiC854",
-    sheetname: "Sheet1",
-    columns:{
+    sheetName: "Sheet1", // Fixed: was sheetname
+    columns: {
       upc: "UPC",
       sku: "SKU",
       style_number: "Style name",
@@ -177,8 +177,8 @@ export const brandConfigs = [
   {
     brandName: "Oakley AFA",
     spreadsheetId: "1Cl1wZ2LLRGuaXUwjF5Oyl41ET7g219S7rKtm6t9Ro8A",
-    sheetname:"Sheet1",
-    columns:{
+    sheetName: "Sheet1", // Fixed: was sheetname
+    columns: {
       upc: "UPC",
       sku: "SKU",
       style_number: "Style #",
@@ -188,7 +188,7 @@ export const brandConfigs = [
   {
     brandName: "Oboz",
     spreadsheetId: "1wK4743lo4VcuH2UUXhy_s2KxVwKtytRwEAkJ61shUPQ",
-    sheetname: "Sheet1",
+    sheetName: "Sheet1", // Fixed: was sheetname
     columns: {
       upc: "UPC",
       sku: "SKU",
@@ -203,8 +203,8 @@ export const brandConfigs = [
   {
     brandName: "Oakley Eyewear",
     spreadsheetId: "17Fo0vIcc5uqutJTY-fDOeDyZ3XGcEK77T6_z9txGBlY",
-    sheetname:"Sheet1",
-    columns:{
+    sheetName: "Sheet1", // Fixed: was sheetname
+    columns: {
       upc: "UPC",
       sku: "SKU",
       style_number: "Model",
@@ -216,8 +216,8 @@ export const brandConfigs = [
   {
     brandName: "On running",
     spreadsheetId: "1L2yf7dL7w813_40MPrarmd14rQKoS0_Q4EBn0YyRyP4",
-    sheetname:"Sheet1",
-    columns:{
+    sheetName: "Sheet1", // Fixed: was sheetname
+    columns: {
       upc: "UPC",
       sku: "SKU",
       style_number: "Style number",
@@ -228,12 +228,36 @@ export const brandConfigs = [
   {
     brandName: "Otbt",
     spreadsheetId: "1uKnW-GcyqH3dBx4afpc744OyLhrRAu19g-mS09zV_jY",
-    sheetname:"Sheet1",
-    columns:{
+    sheetName: "Sheet1", // Fixed: was sheetname
+    columns: {
       upc: "UPC",
       sku: "SKU",
       name: "Shopkeep title",
       description: "Style name",
+    }
+  },
+  {
+    brandName: "Salomon",
+    spreadsheetId: "1KuFgsdsRRZpoxyXxoYzsfKJjpjmJs3poRN9Sy2Wtgig",
+    sheetName: "Sheet1", // Fixed: was sheetname
+    columns: {
+      upc: "UPC",
+      style_number: "Item number",
+      description: "Item name",
+      color: "Color name",
+      name: "Shopkeep title"
+    }
+  },
+  {
+    brandName: "Royal Robbin",
+    spreadsheetId: "1V6s3el807YNJbtJ6zG1VaKxtFYqsgyoRjWhyFU991gw",
+    sheetName: "RoyalRobbinsSp26Store",
+    columns: {
+      upc: "UPC",
+      sku: "SKU",
+      style_number: "Item number",
+      color_code: "Colour",
+      size: "Size"
     }
   }
 ];
