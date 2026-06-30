@@ -1072,22 +1072,22 @@ export default function DashboardClient({
 
   // Single effect handles initial render
   useEffect(() => {
-    if (didInitialLoadRef.current) return;
-    didInitialLoadRef.current = true;
+  if (didInitialLoadRef.current) return;
+  didInitialLoadRef.current = true;
 
-    if (initialTasks && initialTasks.length > 0) {
-      // For initial tasks from server, they might be in the new format
-      if (initialTasks.headers && initialTasks.rows) {
-        processTasksFromSheet(initialTasks);
-      } else {
-        // Legacy format - array of arrays
-        processTasksFromSheet(initialTasks);
-      }
-      setTasksLoading(false);
+  if (initialTasks && initialTasks.length > 0) {
+    // Check if it's the new format with headers and rows
+    if (typeof initialTasks === 'object' && 'headers' in initialTasks && 'rows' in initialTasks) {
+      processTasksFromSheet(initialTasks as { headers: string[], rows: any[] });
     } else {
-      loadTasksFromSheet();
+      // Legacy format - array of arrays
+      processTasksFromSheet(initialTasks);
     }
-  }, [initialTasks, processTasksFromSheet, loadTasksFromSheet]);
+    setTasksLoading(false);
+  } else {
+    loadTasksFromSheet();
+  }
+}, [initialTasks, processTasksFromSheet, loadTasksFromSheet]);
 
   // Optional: Auto-refresh every 90 seconds
   useEffect(() => {
