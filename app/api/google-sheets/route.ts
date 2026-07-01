@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     console.log('📝 /api/google-sheets request body:', body);
 
-    const { spreadsheetId, sheetName, userEmail } = body;
+    const { spreadsheetId, sheetName, userEmail, viewAll } = body;
 
     // Validate required parameters
     if (!spreadsheetId) {
@@ -40,6 +40,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    // userEmail is still required (so we know who's asking / for logging),
+    // even when viewAll=true and we're not going to filter by it.
     if (!userEmail) {
       return NextResponse.json(
         { error: 'Missing required parameter: userEmail' },
@@ -81,6 +83,25 @@ export async function POST(request: NextRequest) {
     }
 
     const headers = values[0];
+
+    // ─── VIEW ALL MODE ──────────────────────────────────────────────────
+    // Skip the per-agent filter entirely and return every row in the sheet.
+    // Used by the "View All Tasks" button on the dashboard.
+    if (viewAll) {
+      const allRows = values.slice(1).map((row, index) => ({
+        row,
+        rowIndex: index + 2,
+      })).filter(({ row }) => row.some((cell) => cell !== undefined && cell !== ''));
+
+      console.log(`📊 View-all mode: returning ${allRows.length} tasks (requested by ${userEmail})`);
+
+      return NextResponse.json({
+        headers,
+        rows: allRows,
+        total: allRows.length,
+      });
+    }
+
     const agentCol = headers.findIndex(
       (h: string) => h?.toString().trim().toLowerCase() === 'agent'
     );

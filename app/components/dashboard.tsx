@@ -40,10 +40,21 @@ import {
   CheckCircle,
   Shield,
   Filter,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import Image from 'next/image';
 
 import { supabase } from '@/lib/supabase/client';
+import {
+  ADMIN_EMAILS,
+  isTaskAdminEmail,
+  TYPE_OPTIONS,
+  TASK_OPTIONS,
+  BRAND_OPTIONS,
+  AGENT_OPTIONS,
+  VALID_TASK_STATUSES,
+} from '../../lib/task-option';
 
 // Task interface - status is a string
 interface Task {
@@ -303,19 +314,6 @@ function formatDate(dateStr: string | null): string {
 }
 
 // ─── STATUS NORMALIZATION ──────────────────────────────────────────────────
-const VALID_TASK_STATUSES = [
-  'Assigned',
-  'Completed',
-  'Ongoing',
-  'Pending',
-  'For Audit',
-  'WIP',
-  'For Investigation',
-  'Cancelled',
-  'Hold',
-  'For Correx',
-] as const;
-
 function cleanStatusString(value: unknown): string {
   if (value === null || value === undefined) return '';
   return value
@@ -802,6 +800,210 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
   );
 }
 
+// ─── Add / Edit Task Modal Component ───────────────────────────────────────
+
+interface TaskFormValues {
+  dateRequested: string;
+  type: string;
+  task: string;
+  brand: string;
+  customBrand: string;
+  agent: string;
+  dueDate: string;
+  status: string;
+  remarks: string;
+  bcLinks: string; 
+}
+
+const emptyTaskForm: TaskFormValues = {
+  dateRequested: new Date().toISOString().split('T')[0],
+  type: '',
+  task: '',
+  brand: '',
+  customBrand: '',
+  agent: '',
+  dueDate: '',
+  status: 'Pending',
+  remarks: '',
+  bcLinks: '', // Add this
+};
+
+function TaskFormModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  isSubmitting,
+  theme,
+  mode,
+  initialValues,
+  error,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (values: TaskFormValues) => void;
+  isSubmitting: boolean;
+  theme: 'light' | 'dark';
+  mode: 'add' | 'edit';
+  initialValues?: Partial<TaskFormValues>;
+  error: string | null;
+}) {
+  const isDark = theme === 'dark';
+  const [form, setForm] = useState<TaskFormValues>({ ...emptyTaskForm, ...initialValues });
+
+  useEffect(() => {
+    if (isOpen) {
+      setForm({ ...emptyTaskForm, ...initialValues });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const inputClass = `w-full rounded-lg border px-3 py-2 text-sm ${
+    isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+  }`;
+  const labelClass = `mb-1 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`;
+
+  const handleSubmit = () => {
+    onSubmit(form);
+  };
+
+  const usingCustomBrand = form.brand === '__OTHER__';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className={`relative w-full max-w-xl rounded-2xl border shadow-2xl ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'} animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto`}>
+        <div className={`flex items-center justify-between border-b p-4 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
+          <div className="flex items-center gap-2">
+            <div className="rounded-lg bg-emerald-500/20 p-1.5">
+              <Plus className="h-5 w-5 text-emerald-400" />
+            </div>
+            <div>
+              <h3 className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {mode === 'add' ? 'Add New Task' : 'Edit Task'}
+              </h3>
+              <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                {mode === 'add'
+                  ? 'This will be added as a new row in the tracker'
+                  : 'Only Arlie, Jonisa, and Melvin can edit tasks assigned to others'}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className={`rounded-lg p-1 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
+            <X className={`h-5 w-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {error && (
+            <div className={`rounded-lg border px-3 py-2 text-sm ${isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'}`}>
+              {error}
+            </div>
+          )}
+
+          <div className={`rounded-lg border px-3 py-2 text-xs ${isDark ? 'border-slate-700 bg-slate-800/50 text-slate-400' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
+            <Info className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
+            Segment is auto-filled by the sheet's formula and can't be set here — it will populate automatically once the row is created.
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Date Requested</label>
+              <input type="date" className={inputClass} value={form.dateRequested} onChange={(e) => setForm({ ...form, dateRequested: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelClass}>Due Date</label>
+              <input type="date" className={inputClass} value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+            </div>
+
+            <div>
+              <label className={labelClass}>Type</label>
+              <select className={inputClass} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                <option value="">Select type...</option>
+                {TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Task *</label>
+              <select className={inputClass} value={form.task} onChange={(e) => setForm({ ...form, task: e.target.value })}>
+                <option value="">Select task...</option>
+                {TASK_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>Brand *</label>
+              <select className={inputClass} value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })}>
+                <option value="">Select brand...</option>
+                {BRAND_OPTIONS.map((b) => <option key={b} value={b}>{b}</option>)}
+                <option value="__OTHER__">Other (type below)</option>
+              </select>
+              {usingCustomBrand && (
+                <input
+                  type="text"
+                  className={`${inputClass} mt-2`}
+                  placeholder="Enter new brand name"
+                  value={form.customBrand}
+                  onChange={(e) => setForm({ ...form, customBrand: e.target.value })}
+                />
+              )}
+            </div>
+            <div>
+              <label className={labelClass}>Agent *</label>
+              <select className={inputClass} value={form.agent} onChange={(e) => setForm({ ...form, agent: e.target.value })}>
+                <option value="">Select agent...</option>
+                {AGENT_OPTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>Status</label>
+              <select className={inputClass} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                {VALID_TASK_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>BC Links</label>
+            <input
+              type="text"
+              className={inputClass}
+              placeholder="Enter Basecamp links (comma separated)"
+              value={form.bcLinks}
+              onChange={(e) => setForm({ ...form, bcLinks: e.target.value })}
+            />
+            <p className={`text-[10px] mt-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+              Separate multiple links with commas
+            </p>
+          </div>
+
+          <div>
+            <label className={labelClass}>Remarks</label>
+            <textarea className={inputClass} rows={3} value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} />
+          </div>
+        </div>
+
+        <div className={`border-t p-4 ${isDark ? 'border-slate-700' : 'border-gray-200'} flex justify-end gap-2`}>
+          <button onClick={onClose} className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting || !form.task || !form.agent || (!form.brand || (usingCustomBrand && !form.customBrand.trim()))}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-all ${
+              isSubmitting ? 'opacity-50 cursor-not-allowed bg-emerald-600' : 'bg-emerald-500 hover:bg-emerald-600'
+            }`}
+          >
+            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {mode === 'add' ? 'Add Task' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Dashboard Client Component ─────────────────────────────────────────
 
 export default function DashboardClient({
@@ -818,33 +1020,65 @@ export default function DashboardClient({
   const [isRouletteOpen, setIsRouletteOpen] = useState(false);
   const [settings, setSettings] = useState<any>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [viewMode, setViewMode] = useState<'mine' | 'all'>('mine');
   const [tasksLoading, setTasksLoading] = useState(false);
+  const [allTasksLoading, setAllTasksLoading] = useState(false);
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [showEditTaskModal, setShowEditTaskModal] = useState(false);
+  const [isSavingTask, setIsSavingTask] = useState(false);
+  const [taskFormError, setTaskFormError] = useState<string | null>(null);
+  const [filterDateRange, setFilterDateRange] = useState<'all' | 'today' | 'week' | 'month' | 'overdue' | 'unassigned'>('all');
+  const [customDateStart, setCustomDateStart] = useState('');
+  const [customDateEnd, setCustomDateEnd] = useState('');
+  const [showDateFilters, setShowDateFilters] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(25);
+  
   const autoPlayRef = useRef<NodeJS.Timeout | null>(null);
   const didInitialLoadRef = useRef(false);
 
   const isDark = theme === 'dark';
   const isAdmin = currentUserEmail === 'melvin@outdoorequipped.com';
+  const isTaskAdmin = isTaskAdminEmail(currentUserEmail);
+
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      // Reset to page 1 when search changes
+      setCurrentPage(1);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterStatus, viewMode]);
 
   // Google Sheets configuration
   const SPREADSHEET_ID = '1aBOYH2ShWyW8ASamH23WAFdoi0NR8bIebsQGuAnU67A';
   const SHEET_NAME = 'Copy of Task Masterlist - Operations';
 
-  const processTasksFromSheet = useCallback((sheetData: any) => {
+  const processTasksFromSheet = useCallback((sheetData: any): Task[] => {
     let headers: string[];
     let rowData: { row: any[], rowIndex: number }[];
 
     if (sheetData && typeof sheetData === 'object' && sheetData.headers && sheetData.rows) {
       headers = sheetData.headers;
       rowData = sheetData.rows;
-      console.log('📊 Using new format with preserved row indices');
     } else if (Array.isArray(sheetData) && sheetData.length > 0) {
-      console.log('📊 Using legacy format, converting...');
       headers = sheetData[0] || [];
       const rows = sheetData.slice(1) || [];
       rowData = rows.map((row, index) => ({
@@ -853,13 +1087,11 @@ export default function DashboardClient({
       }));
     } else {
       console.warn('⚠️ Unknown sheet data format:', sheetData);
-      setTasks([]);
-      return;
+      return [];
     }
 
     if (!headers || headers.length === 0 || rowData.length === 0) {
-      setTasks([]);
-      return;
+      return [];
     }
 
     // NOTE: this sheet has duplicate header names (e.g. "Status" appears twice,
@@ -896,15 +1128,13 @@ export default function DashboardClient({
 
     if (taskCol === undefined) {
       console.error('⚠️ "Task" column not found in sheet headers:', headers);
-      setTasks([]);
-      return;
+      return [];
     }
 
     const get = (row: any[], idx: number | undefined) =>
       idx !== undefined && idx < row.length ? (row[idx] ?? '') : '';
 
     const taskList: Task[] = [];
-    const uniqueRawStatuses = new Set<string>();
 
     rowData.forEach(({ row, rowIndex }: { row: any[], rowIndex: number }) => {
       const taskName = get(row, taskCol);
@@ -920,10 +1150,6 @@ export default function DashboardClient({
         rowIndex,
         taskName,
       });
-
-      if (statusRaw) {
-        uniqueRawStatuses.add(statusRaw.toString());
-      }
 
       taskList.push({
         id: `task-${rowIndex}`,
@@ -947,16 +1173,7 @@ export default function DashboardClient({
       });
     });
 
-    console.log('📊 Unique raw statuses found in sheet:', Array.from(uniqueRawStatuses));
-    console.log('📊 Total tasks processed:', taskList.length);
-
-    const statusDistribution: Record<string, number> = {};
-    taskList.forEach(t => {
-      statusDistribution[t.status] = (statusDistribution[t.status] || 0) + 1;
-    });
-    console.log('📊 Final Status Distribution:', statusDistribution);
-
-    setTasks(taskList);
+    return taskList;
   }, []);
 
   const loadTasksFromSheet = useCallback(async () => {
@@ -971,8 +1188,6 @@ export default function DashboardClient({
     setUpdateError(null);
 
     try {
-      console.log('📤 Loading tasks for user:', currentUserEmail);
-      
       const response = await fetch("/api/google-sheets", {
         method: "POST",
         headers: {
@@ -987,22 +1202,15 @@ export default function DashboardClient({
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('❌ API error response:', errorData);
         throw new Error(errorData.error || `HTTP error ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('✅ API response:', { 
-        hasHeaders: !!data.headers, 
-        hasRows: !!data.rows, 
-        total: data.total,
-        rowCount: data.rows?.length || 0 
-      });
 
       if (data.rows && data.rows.length > 0) {
-        processTasksFromSheet(data);
+        setTasks(processTasksFromSheet(data));
       } else if (data.values && data.values.length > 0) {
-        processTasksFromSheet(data.values);
+        setTasks(processTasksFromSheet(data.values));
       } else {
         setTasks([]);
       }
@@ -1015,15 +1223,53 @@ export default function DashboardClient({
     }
   }, [currentUserEmail, currentUserName, processTasksFromSheet]);
 
+  const loadAllTasksFromSheet = useCallback(async () => {
+    if (!currentUserEmail && !currentUserName) return;
+
+    setAllTasksLoading(true);
+    setUpdateError(null);
+
+    try {
+      const response = await fetch("/api/google-sheets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          spreadsheetId: SPREADSHEET_ID,
+          sheetName: SHEET_NAME,
+          userEmail: currentUserEmail || '',
+          viewAll: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.rows && data.rows.length > 0) {
+        setAllTasks(processTasksFromSheet(data));
+      } else {
+        setAllTasks([]);
+      }
+    } catch (error) {
+      console.error('Failed to load all tasks:', error);
+      setUpdateError(error instanceof Error ? error.message : 'Failed to load all tasks');
+      setAllTasks([]);
+    } finally {
+      setAllTasksLoading(false);
+    }
+  }, [currentUserEmail, currentUserName, processTasksFromSheet]);
+
   useEffect(() => {
     if (didInitialLoadRef.current) return;
     didInitialLoadRef.current = true;
 
     if (initialTasks && initialTasks.length > 0) {
       if (typeof initialTasks === 'object' && 'headers' in initialTasks && 'rows' in initialTasks) {
-        processTasksFromSheet(initialTasks as { headers: string[], rows: any[] });
+        setTasks(processTasksFromSheet(initialTasks as { headers: string[], rows: any[] }));
       } else {
-        processTasksFromSheet(initialTasks);
+        setTasks(processTasksFromSheet(initialTasks));
       }
       setTasksLoading(false);
     } else {
@@ -1033,21 +1279,44 @@ export default function DashboardClient({
 
   useEffect(() => {
     const interval = setInterval(() => {
-      loadTasksFromSheet();
+      if (viewMode === 'all') {
+        loadAllTasksFromSheet();
+      } else {
+        loadTasksFromSheet();
+      }
     }, 90000);
     return () => clearInterval(interval);
-  }, [loadTasksFromSheet]);
+  }, [loadTasksFromSheet, loadAllTasksFromSheet, viewMode]);
+
+  const toggleViewMode = useCallback(() => {
+    setFilterStatus('all');
+    setSearchTerm('');
+    setDebouncedSearchTerm('');
+    setCurrentPage(1);
+    if (viewMode === 'mine') {
+      setViewMode('all');
+      if (allTasks.length === 0) loadAllTasksFromSheet();
+    } else {
+      setViewMode('mine');
+    }
+  }, [viewMode, allTasks.length, loadAllTasksFromSheet]);
+
+  const refreshCurrentView = useCallback(() => {
+    if (viewMode === 'all') {
+      loadAllTasksFromSheet();
+    } else {
+      loadTasksFromSheet();
+    }
+  }, [viewMode, loadAllTasksFromSheet, loadTasksFromSheet]);
 
   const updateTaskStatus = useCallback(async (taskId: string, newStatus: string) => {
-    if (updatingTaskId) {
-      console.log('⏳ Update already in progress, skipping...');
-      return;
-    }
-    
+    if (updatingTaskId) return;
+
     setUpdatingTaskId(taskId);
     setUpdateError(null);
 
-    const task = tasks.find(t => t.id === taskId);
+    const sourceList = viewMode === 'all' ? allTasks : tasks;
+    const task = sourceList.find(t => t.id === taskId);
     if (!task) {
       setUpdatingTaskId(null);
       setUpdateError('Task not found');
@@ -1056,19 +1325,17 @@ export default function DashboardClient({
 
     const rowIndex = Number(task.rowIndex);
     if (isNaN(rowIndex) || rowIndex < 2) {
-      console.error('❌ Invalid rowIndex:', task.rowIndex);
       setUpdateError(`Invalid row index: ${task.rowIndex}`);
       setUpdatingTaskId(null);
       return;
     }
 
-    console.log(`🔍 UPDATING: Task "${task.task}" at ROW ${rowIndex} from "${task.status}" to "${newStatus}"`);
-
     const previousTasks = [...tasks];
+    const previousAllTasks = [...allTasks];
     const isCompletedOrCancelled = newStatus.toLowerCase() === 'completed' || newStatus.toLowerCase() === 'cancelled';
 
-    setTasks(prevTasks =>
-      prevTasks.map(t =>
+    const applyOptimisticUpdate = (list: Task[]) =>
+      list.map(t =>
         t.id === taskId
           ? {
               ...t,
@@ -1078,8 +1345,10 @@ export default function DashboardClient({
                 : null,
             }
           : t
-      )
-    );
+      );
+
+    setTasks(prev => applyOptimisticUpdate(prev));
+    setAllTasks(prev => applyOptimisticUpdate(prev));
 
     if (showTaskModal) {
       setShowTaskModal(false);
@@ -1095,20 +1364,14 @@ export default function DashboardClient({
         taskName: task.task,
         agentEmail: task.agent || '',
       };
-      
-      console.log(`📤 Sending update to API:`, payload);
-      
+
       const response = await fetch('/api/google-sheets/update-status', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
       const responseText = await response.text();
-      console.log("📥 API Response Status:", response.status);
-      console.log("📥 API Response Body:", responseText);
 
       if (!response.ok) {
         let errorDetail = responseText;
@@ -1121,29 +1384,110 @@ export default function DashboardClient({
         throw new Error(`API Error ${response.status}: ${errorDetail}`);
       }
 
-      let responseData;
-      try {
-        responseData = JSON.parse(responseText);
-      } catch {
-        responseData = { raw: responseText };
-      }
-      
-      console.log('✅ Update successful:', responseData);
-      
       setTimeout(() => {
-        console.log('🔄 Reloading tasks after update...');
-        loadTasksFromSheet();
+        refreshCurrentView();
       }, 1500);
-      
+
     } catch (error) {
       console.error('❌ Failed to update task status:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to update task status';
       setUpdateError(errorMessage);
       setTasks(previousTasks);
+      setAllTasks(previousAllTasks);
     } finally {
       setUpdatingTaskId(null);
     }
-  }, [tasks, showTaskModal, loadTasksFromSheet, updatingTaskId, SPREADSHEET_ID, SHEET_NAME]);
+  }, [tasks, allTasks, viewMode, showTaskModal, refreshCurrentView, updatingTaskId, SPREADSHEET_ID, SHEET_NAME]);
+
+  const saveTaskEdits = useCallback(async (values: TaskFormValues) => {
+  if (!selectedTask) return;
+  setIsSavingTask(true);
+  setTaskFormError(null);
+
+  const finalBrand = values.brand === '__OTHER__' ? values.customBrand.trim() : values.brand;
+
+  try {
+    const response = await fetch('/api/google-sheets/update-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        spreadsheetId: SPREADSHEET_ID,
+        sheetName: SHEET_NAME,
+        requesterEmail: currentUserEmail,
+        rowIndex: selectedTask.rowIndex,
+        updates: {
+          dateRequested: values.dateRequested,
+          type: values.type,
+          task: values.task,
+          brand: finalBrand,
+          agent: values.agent,
+          dueDate: values.dueDate,
+          status: values.status,
+          remarks: values.remarks,
+          bcLinks: values.bcLinks, // Add this
+        },
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || `HTTP error ${response.status}`);
+    }
+
+    setShowEditTaskModal(false);
+    setShowTaskModal(false);
+    setSelectedTask(null);
+    refreshCurrentView();
+  } catch (error) {
+    setTaskFormError(error instanceof Error ? error.message : 'Failed to save changes');
+  } finally {
+    setIsSavingTask(false);
+  }
+}, [selectedTask, currentUserEmail, refreshCurrentView, SPREADSHEET_ID, SHEET_NAME]);
+
+  const addNewTask = useCallback(async (values: TaskFormValues) => {
+  setIsSavingTask(true);
+  setTaskFormError(null);
+
+  const finalBrand = values.brand === '__OTHER__' ? values.customBrand.trim() : values.brand;
+
+  try {
+    const response = await fetch('/api/google-sheets/add-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        spreadsheetId: SPREADSHEET_ID,
+        sheetName: SHEET_NAME,
+        requesterEmail: currentUserEmail,
+        dateRequested: values.dateRequested,
+        type: values.type,
+        task: values.task,
+        brand: finalBrand,
+        agent: values.agent,
+        dueDate: values.dueDate,
+        status: values.status,
+        remarks: values.remarks,
+        bcLinks: values.bcLinks, // Add this
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || `HTTP error ${response.status}`);
+    }
+
+    setShowAddTaskModal(false);
+    refreshCurrentView();
+    if (viewMode === 'mine') {
+      setViewMode('all');
+      loadAllTasksFromSheet();
+    }
+  } catch (error) {
+    setTaskFormError(error instanceof Error ? error.message : 'Failed to add task');
+  } finally {
+    setIsSavingTask(false);
+  }
+}, [currentUserEmail, refreshCurrentView, viewMode, loadAllTasksFromSheet, SPREADSHEET_ID, SHEET_NAME]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -1211,24 +1555,128 @@ export default function DashboardClient({
     return false;
   };
 
+  const activeTaskSource = viewMode === 'all' ? allTasks : tasks;
+
   const uniqueStatuses = useMemo(() => {
     const statusSet = new Set<string>(VALID_TASK_STATUSES);
-    tasks.forEach(task => {
+    activeTaskSource.forEach(task => {
       if (task.status) {
         statusSet.add(task.status);
       }
     });
     return Array.from(statusSet).sort();
-  }, [tasks]);
+  }, [activeTaskSource]);
 
   const taskCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: tasks.length };
-    tasks.forEach(task => {
+    const counts: Record<string, number> = { all: activeTaskSource.length };
+    activeTaskSource.forEach(task => {
       const status = task.status || 'Pending';
       counts[status] = (counts[status] || 0) + 1;
     });
     return counts;
-  }, [tasks]);
+  }, [activeTaskSource]);
+
+  // Parses sheet date strings (e.g. "6/25/2025") into a comparable timestamp.
+  // Falls back to 0 (oldest) for blank/invalid dates so they sink to the bottom.
+  const parseDateValue = (value: string) => {
+    if (!value) return 0;
+    const t = new Date(value).getTime();
+    return isNaN(t) ? 0 : t;
+  };
+
+  // Optimized filtered tasks with debounced search and date filters
+const filteredTasks = useMemo(() => {
+  let filtered = activeTaskSource;
+
+  // Status filter
+  if (filterStatus !== 'all') {
+    filtered = filtered.filter(task => task.status === filterStatus);
+  }
+
+  // Date range filter
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  if (filterDateRange !== 'all') {
+    filtered = filtered.filter(task => {
+      // Check if task is unassigned (no agent)
+      if (filterDateRange === 'unassigned') {
+        return !task.agent || task.agent.trim() === '';
+      }
+      
+      // Parse the due date
+      const dueDateStr = task.due_date;
+      if (!dueDateStr) return false;
+      
+      const dueDate = new Date(dueDateStr);
+      if (isNaN(dueDate.getTime())) return false;
+      
+      const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+      
+      // Check overdue tasks (due date is in the past)
+      if (filterDateRange === 'overdue') {
+        return dueDateOnly < today && task.status !== 'Completed' && task.status !== 'Cancelled';
+      }
+      
+      // Today
+      if (filterDateRange === 'today') {
+        return dueDateOnly.getTime() === today.getTime();
+      }
+      
+      // This week (next 7 days)
+      if (filterDateRange === 'week') {
+        const weekEnd = new Date(today);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        return dueDateOnly >= today && dueDateOnly <= weekEnd;
+      }
+      
+      // This month
+      if (filterDateRange === 'month') {
+        const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        return dueDateOnly >= today && dueDateOnly <= monthEnd;
+      }
+      
+      return true;
+    });
+  }
+
+  // Search term filter
+  if (debouncedSearchTerm.trim()) {
+    const term = debouncedSearchTerm.toLowerCase().trim();
+    filtered = filtered.filter(task => {
+      if (task.task.toLowerCase().includes(term)) return true;
+      if (task.brand.toLowerCase().includes(term)) return true;
+      if (task.status.toLowerCase().includes(term)) return true;
+      return task.type.toLowerCase().includes(term) ||
+        task.segment.toLowerCase().includes(term) ||
+        task.bc_links.toLowerCase().includes(term) ||
+        task.agent.toLowerCase().includes(term) ||
+        task.auditor.toLowerCase().includes(term) ||
+        task.remarks.toLowerCase().includes(term) ||
+        task.reason_for_pending.toLowerCase().includes(term) ||
+        task.reason_for_cancel.toLowerCase().includes(term);
+    });
+  }
+
+  // Sort newest-first by Due Date (falls back to Date Requested when Due Date
+  // is blank), so 2026 tasks appear at the top and older ones sink down.
+  filtered = [...filtered].sort((a, b) => {
+    const dateA = parseDateValue(a.due_date) || parseDateValue(a.date_requested);
+    const dateB = parseDateValue(b.due_date) || parseDateValue(b.date_requested);
+    return dateB - dateA;
+  });
+
+  return filtered;
+}, [activeTaskSource, filterStatus, debouncedSearchTerm, filterDateRange]);
+
+  // Paginated tasks
+  const paginatedTasks = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredTasks.slice(startIndex, endIndex);
+  }, [filteredTasks, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredTasks.length / itemsPerPage);
 
   if (isMaintenanceMode() && !isAdmin) {
     return (
@@ -1377,49 +1825,6 @@ export default function DashboardClient({
 
   const maxRuns = allUsers.length > 0 ? allUsers[0].totalRuns : 1;
 
-  // Parses sheet date strings (e.g. "6/25/2025") into a comparable timestamp.
-  // Falls back to 0 (oldest) for blank/invalid dates so they sink to the bottom.
-  const parseDateValue = (value: string) => {
-    if (!value) return 0;
-    const t = new Date(value).getTime();
-    return isNaN(t) ? 0 : t;
-  };
-
-  const filteredTasks = useMemo(() => {
-    let filtered = tasks;
-
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(task => task.status === filterStatus);
-    }
-
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim();
-      filtered = filtered.filter(task =>
-        task.task.toLowerCase().includes(term) ||
-        task.brand.toLowerCase().includes(term) ||
-        task.type.toLowerCase().includes(term) ||
-        task.segment.toLowerCase().includes(term) ||
-        task.status.toLowerCase().includes(term) ||
-        task.bc_links.toLowerCase().includes(term) ||
-        task.agent.toLowerCase().includes(term) ||
-        task.auditor.toLowerCase().includes(term) ||
-        task.remarks.toLowerCase().includes(term) ||
-        task.reason_for_pending.toLowerCase().includes(term) ||
-        task.reason_for_cancel.toLowerCase().includes(term)
-      );
-    }
-
-    // Sort newest-first by Due Date (falls back to Date Requested when Due Date
-    // is blank), so 2026 tasks appear at the top and older ones sink down.
-    filtered = [...filtered].sort((a, b) => {
-      const dateA = parseDateValue(a.due_date) || parseDateValue(a.date_requested);
-      const dateB = parseDateValue(b.due_date) || parseDateValue(b.date_requested);
-      return dateB - dateA;
-    });
-
-    return filtered;
-  }, [tasks, filterStatus, searchTerm]);
-
   const getStatusColor = (status: string) => {
     const statusLower = status.toLowerCase();
     
@@ -1499,6 +1904,11 @@ export default function DashboardClient({
     setSelectedTask(null);
   };
 
+  // Pagination controls
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(totalPages, page)));
+  };
+
   return (
     <>
       <div className="flex h-[calc(100vh-2rem)] min-h-0 w-full max-w-full flex-col overflow-y-auto overflow-x-hidden">
@@ -1531,52 +1941,77 @@ export default function DashboardClient({
           {updateError && <div className={`rounded-xl border px-4 py-3 text-sm ${isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'}`}>{updateError}</div>}
 
           {/* ─── TASK MANAGEMENT SECTION ─────────────────────────────────────────── */}
-          <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${panelClass}`}>
-            <div className={`border-b px-5 py-4 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-emerald-500/20 p-1.5">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                  </div>
-                  <div>
-                    <h2 className={`text-sm font-semibold ${pageText}`}>My Tasks</h2>
-                    <p className={`text-xs ${mutedText}`}>
-                      {currentUserName || currentUserEmail ? `Tasks assigned to ${currentUserName || currentUserEmail}` : 'No user logged in'}
-                    </p>
-                  </div>
+        <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${panelClass}`}>
+          <div className={`border-b px-5 py-4 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-emerald-500/20 p-1.5">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-400" />
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Search task, brand, status, BC link..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className={`rounded-lg border px-3 py-1.5 text-sm pl-8 ${
-                        isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                      }`}
-                    />
-                    <Filter className={`absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 ${mutedText}`} />
-                  </div>
-                  <button
-                    onClick={loadTasksFromSheet}
-                    disabled={tasksLoading}
-                    className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
-                      tasksLoading ? 'opacity-50 cursor-not-allowed' : ''
-                    } ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}`}
-                  >
-                    {tasksLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-4 w-4" />
-                    )}
-                    {tasksLoading ? 'Loading...' : 'Refresh Tasks'}
-                  </button>
+                <div>
+                  <h2 className={`text-sm font-semibold ${pageText}`}>
+                    {viewMode === 'all' ? 'All Tasks' : 'My Tasks'}
+                  </h2>
+                  <p className={`text-xs ${mutedText}`}>
+                    {viewMode === 'all'
+                      ? 'Every task currently in the tracker'
+                      : (currentUserName || currentUserEmail ? `Tasks assigned to ${currentUserName || currentUserEmail}` : 'No user logged in')}
+                  </p>
                 </div>
               </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search task, brand, status, BC link..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className={`rounded-lg border px-3 py-1.5 text-sm pl-8 ${
+                      isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                    }`}
+                  />
+                  <Filter className={`absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 ${mutedText}`} />
+                </div>
+                <button
+                  onClick={toggleViewMode}
+                  className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
+                    viewMode === 'all'
+                      ? isDark ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' : 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                      : isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Users className="h-4 w-4" />
+                  {viewMode === 'all' ? 'Viewing All Tasks' : 'View All Tasks'}
+                </button>
+                {isTaskAdmin && (
+                  <button
+                    onClick={() => { setTaskFormError(null); setShowAddTaskModal(true); }}
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-emerald-600"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Task
+                  </button>
+                )}
+                <button
+                  onClick={refreshCurrentView}
+                  disabled={viewMode === 'all' ? allTasksLoading : tasksLoading}
+                  className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
+                    (viewMode === 'all' ? allTasksLoading : tasksLoading) ? 'opacity-50 cursor-not-allowed' : ''
+                  } ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}`}
+                >
+                  {(viewMode === 'all' ? allTasksLoading : tasksLoading) ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  {(viewMode === 'all' ? allTasksLoading : tasksLoading) ? 'Loading...' : 'Refresh Tasks'}
+                </button>
+              </div>
+            </div>
 
-              {/* Status filter tabs - dynamic from actual data */}
-              <div className="flex gap-1 mt-3 overflow-x-auto pb-1">
+            {/* Status filter tabs - dynamic from actual data */}
+            <div className="flex flex-col gap-2 mt-3">
+              <div className="flex gap-1 overflow-x-auto pb-1">
                 <button
                   onClick={() => setFilterStatus('all')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
@@ -1614,111 +2049,291 @@ export default function DashboardClient({
                   );
                 })}
               </div>
-            </div>
-
-            {/* Tasks List */}
-            <div className="max-h-[420px] overflow-y-auto overflow-x-auto">
-              {tasksLoading && tasks.length === 0 ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className={`h-8 w-8 animate-spin ${mutedText}`} />
-                </div>
-              ) : filteredTasks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                  <CheckCircle2 className={`h-12 w-12 ${mutedText} opacity-30`} />
-                  <p className={`mt-3 font-medium ${pageText}`}>No tasks found</p>
-                  <p className={`text-sm ${mutedText}`}>
-                    {searchTerm || filterStatus !== 'all'
-                      ? 'Try adjusting your filters'
-                      : 'You have no tasks assigned yet'}
-                  </p>
-                </div>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead className={`sticky top-0 z-10 backdrop-blur ${isDark ? 'bg-slate-800/95' : 'bg-gray-50/95'}`}>
-                    <tr>
-                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Task</th>
-                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Brand</th>
-                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Type</th>
-                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Due Date</th>
-                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Status</th>
-                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className={`divide-y ${isDark ? 'divide-slate-700/50' : 'divide-gray-200'}`}>
-                    {filteredTasks.map((task) => {
-                      const statusColor = getStatusColor(task.status);
-                      const isUpdating = updatingTaskId === task.id;
-                      const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
-
-                      return (
-                        <tr
-                          key={task.id}
-                          className={`transition-colors ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-gray-50'} cursor-pointer`}
-                          onClick={() => openTaskModal(task)}
-                        >
-                          <td className={`px-4 py-3 font-medium ${pageText}`}>
-                            <div className="max-w-[200px] truncate">{task.task}</div>
-                            <div className={`text-xs ${mutedText}`}>{formatDate(task.date_requested)}</div>
-                          </td>
-                          <td className={`px-4 py-3 ${pageText}`}>{task.brand}</td>
-                          <td className={`px-4 py-3 ${pageText}`}>
-                            <span className="text-xs">{task.type}</span>
-                            <div className={`text-xs ${mutedText}`}>{task.segment}</div>
-                          </td>
-                          <td className={`px-4 py-3 ${pageText}`}>
-                            {formatDate(task.due_date)}
-                            {isOverdue && (
-                              <span className="ml-2 inline-block rounded-full bg-red-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-red-400">
-                                Overdue
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${statusColor.bg} ${statusColor.text}`}>
-                              <span className={`h-1.5 w-1.5 rounded-full ${statusColor.dot}`} />
-                              <span>{task.status}</span>
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
-                              {getStatusOptions(task.status).slice(0, 3).map((newStatus) => (
-                                <button
-                                  key={newStatus}
-                                  onClick={() => updateTaskStatus(task.id, newStatus)}
-                                  disabled={isUpdating}
-                                  className={`rounded-lg px-2 py-1 text-[10px] font-medium transition-all ${
-                                    isUpdating ? 'opacity-50 cursor-not-allowed' :
-                                    isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                  }`}
-                                >
-                                  {isUpdating ? <Loader2 className="h-3 w-3 animate-spin" /> : newStatus}
-                                </button>
-                              ))}
-                              {getStatusOptions(task.status).length > 3 && (
-                                <span className={`text-[10px] ${mutedText}`}>+{getStatusOptions(task.status).length - 3}</span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-            {/* Footer with task count */}
-            <div className={`border-t px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
-              <div className="flex items-center justify-between">
-                <span className={`text-xs ${mutedText}`}>
-                  Showing {filteredTasks.length} of {tasks.length} tasks
-                </span>
-                <span className={`text-xs ${mutedText}`}>
-                  {tasksLoading ? 'Refreshing…' : `Last updated: ${new Date().toLocaleTimeString()}`}
-                </span>
+              
+              {/* Date Filter Tabs */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  onClick={() => setFilterDateRange('all')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all whitespace-nowrap ${
+                    filterDateRange === 'all'
+                      ? isDark ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-blue-100 text-blue-700 border border-blue-300'
+                      : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  All Dates
+                </button>
+                <button
+                  onClick={() => setFilterDateRange('unassigned')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all whitespace-nowrap ${
+                    filterDateRange === 'unassigned'
+                      ? isDark ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-purple-100 text-purple-700 border border-purple-300'
+                      : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  👤 Unassigned
+                </button>
+                <button
+                  onClick={() => setFilterDateRange('overdue')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all whitespace-nowrap ${
+                    filterDateRange === 'overdue'
+                      ? isDark ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-red-100 text-red-700 border border-red-300'
+                      : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  🔴 Overdue
+                </button>
+                <button
+                  onClick={() => setFilterDateRange('today')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all whitespace-nowrap ${
+                    filterDateRange === 'today'
+                      ? isDark ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-yellow-100 text-yellow-700 border border-yellow-300'
+                      : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  📅 Today
+                </button>
+                <button
+                  onClick={() => setFilterDateRange('week')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all whitespace-nowrap ${
+                    filterDateRange === 'week'
+                      ? isDark ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-cyan-100 text-cyan-700 border border-cyan-300'
+                      : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  📅 Next 7 Days
+                </button>
+                <button
+                  onClick={() => setFilterDateRange('month')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all whitespace-nowrap ${
+                    filterDateRange === 'month'
+                      ? isDark ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-green-100 text-green-700 border border-green-300'
+                      : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  📅 This Month
+                </button>
+                
+                {/* Clear Date Filter */}
+                {filterDateRange !== 'all' && (
+                  <button
+                    onClick={() => setFilterDateRange('all')}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-medium transition-all whitespace-nowrap ${
+                      isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                    }`}
+                  >
+                    <X className="h-3 w-3 inline" /> Clear
+                  </button>
+                )}
               </div>
             </div>
-          </section>
+          </div>
+
+          {/* Tasks List */}
+          <div className="max-h-[420px] overflow-y-auto overflow-x-auto">
+            {(viewMode === 'all' ? allTasksLoading : tasksLoading) && activeTaskSource.length === 0 ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className={`h-8 w-8 animate-spin ${mutedText}`} />
+              </div>
+            ) : filteredTasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <CheckCircle2 className={`h-12 w-12 ${mutedText} opacity-30`} />
+                <p className={`mt-3 font-medium ${pageText}`}>No tasks found</p>
+                <p className={`text-sm ${mutedText}`}>
+                  {debouncedSearchTerm || filterStatus !== 'all'
+                    ? 'Try adjusting your filters'
+                    : 'You have no tasks assigned yet'}
+                </p>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className={`sticky top-0 z-10 backdrop-blur ${isDark ? 'bg-slate-800/95' : 'bg-gray-50/95'}`}>
+                  <tr>
+                    <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Task</th>
+                    <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Brand</th>
+                    <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Type</th>
+                    {viewMode === 'all' && (
+                      <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Agent</th>
+                    )}
+                    <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Due Date</th>
+                    <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Status</th>
+                    <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${isDark ? 'divide-slate-700/50' : 'divide-gray-200'}`}>
+                  {paginatedTasks.map((task) => {
+                    const statusColor = getStatusColor(task.status);
+                    const isUpdating = updatingTaskId === task.id;
+                    const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
+
+                    return (
+                      <tr
+                        key={task.id}
+                        className={`transition-colors ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-gray-50'} cursor-pointer`}
+                        onClick={() => openTaskModal(task)}
+                      >
+                        <td className={`px-4 py-3 font-medium ${pageText}`}>
+                          <div className="max-w-[200px] truncate">{task.task}</div>
+                          <div className={`text-xs ${mutedText}`}>{formatDate(task.date_requested)}</div>
+                        </td>
+                        <td className={`px-4 py-3 ${pageText}`}>{task.brand}</td>
+                        <td className={`px-4 py-3 ${pageText}`}>
+                          <span className="text-xs">{task.type}</span>
+                          <div className={`text-xs ${mutedText}`}>{task.segment}</div>
+                        </td>
+                        {viewMode === 'all' && (
+                          <td className={`px-4 py-3 ${pageText}`}>{task.agent}</td>
+                        )}
+                        <td className={`px-4 py-3 ${pageText}`}>
+                          {formatDate(task.due_date)}
+                          {isOverdue && (
+                            <span className="ml-2 inline-block rounded-full bg-red-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-red-400">
+                              Overdue
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${statusColor.bg} ${statusColor.text}`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${statusColor.dot}`} />
+                            <span>{task.status}</span>
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                            {getStatusOptions(task.status).slice(0, 3).map((newStatus) => (
+                              <button
+                                key={newStatus}
+                                onClick={() => updateTaskStatus(task.id, newStatus)}
+                                disabled={isUpdating}
+                                className={`rounded-lg px-2 py-1 text-[10px] font-medium transition-all ${
+                                  isUpdating ? 'opacity-50 cursor-not-allowed' :
+                                  isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                }`}
+                              >
+                                {isUpdating ? <Loader2 className="h-3 w-3 animate-spin" /> : newStatus}
+                              </button>
+                            ))}
+                            {getStatusOptions(task.status).length > 3 && (
+                              <span className={`text-[10px] ${mutedText}`}>+{getStatusOptions(task.status).length - 3}</span>
+                            )}
+                            {isTaskAdmin && (
+                              <button
+                                onClick={() => { setSelectedTask(task); setTaskFormError(null); setShowEditTaskModal(true); }}
+                                className={`rounded-lg p-1 transition-all ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                title="Edit task"
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Footer with task count and pagination */}
+          <div className={`border-t px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <span className={`text-xs ${mutedText}`}>
+                Showing {paginatedTasks.length} of {filteredTasks.length} tasks
+                {filteredTasks.length !== activeTaskSource.length && ` (filtered from ${activeTaskSource.length})`}
+                {filterDateRange !== 'all' && (
+                  <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] ${
+                    filterDateRange === 'unassigned' ? isDark ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700' :
+                    filterDateRange === 'overdue' ? isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700' :
+                    isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {filterDateRange === 'unassigned' ? '👤 Unassigned' :
+                    filterDateRange === 'overdue' ? '🔴 Overdue' :
+                    filterDateRange === 'today' ? '📅 Today' :
+                    filterDateRange === 'week' ? '📅 Next 7 Days' :
+                    filterDateRange === 'month' ? '📅 This Month' : ''}
+                  </span>
+                )}
+              </span>
+              
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className={`p-1 rounded transition-colors ${
+                      currentPage === 1 
+                        ? 'opacity-30 cursor-not-allowed' 
+                        : isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-200'
+                    }`}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => goToPage(pageNum)}
+                          className={`px-2.5 py-0.5 rounded text-xs font-medium transition-colors ${
+                            currentPage === pageNum
+                              ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                              : isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-200 text-gray-600'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                    {totalPages > 5 && currentPage < totalPages - 2 && (
+                      <span className={`text-xs ${mutedText}`}>...</span>
+                    )}
+                    {totalPages > 5 && currentPage < totalPages - 2 && (
+                      <button
+                        onClick={() => goToPage(totalPages)}
+                        className={`px-2.5 py-0.5 rounded text-xs font-medium transition-colors ${
+                          currentPage === totalPages
+                            ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                            : isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-200 text-gray-600'
+                        }`}
+                      >
+                        {totalPages}
+                      </button>
+                    )}
+                  </div>
+                  
+                  <button
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className={`p-1 rounded transition-colors ${
+                      currentPage === totalPages 
+                        ? 'opacity-30 cursor-not-allowed' 
+                        : isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-200'
+                    }`}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+              
+              <span className={`text-xs ${mutedText}`}>
+                {(viewMode === 'all' ? allTasksLoading : tasksLoading) ? 'Refreshing…' : `Last updated: ${new Date().toLocaleTimeString()}`}
+              </span>
+            </div>
+          </div>
+        </section>
 
           <section className="space-y-4">
             <div className="flex items-center gap-3">
@@ -1967,9 +2582,19 @@ export default function DashboardClient({
                   <p className={`text-xs ${mutedText}`}>View and manage task information</p>
                 </div>
               </div>
-              <button onClick={closeTaskModal} className={`rounded-lg p-1 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
-                <X className={`h-5 w-5 ${mutedText}`} />
-              </button>
+              <div className="flex items-center gap-2">
+                {isTaskAdmin && (
+                  <button
+                    onClick={() => { setTaskFormError(null); setShowEditTaskModal(true); }}
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                  >
+                    <Edit2 className="h-3.5 w-3.5" /> Edit
+                  </button>
+                )}
+                <button onClick={closeTaskModal} className={`rounded-lg p-1 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
+                  <X className={`h-5 w-5 ${mutedText}`} />
+                </button>
+              </div>
             </div>
 
             {/* Task Content */}
@@ -1990,6 +2615,10 @@ export default function DashboardClient({
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Segment</label>
                   <p className={`text-base ${pageText}`}>{selectedTask.segment}</p>
+                </div>
+                <div>
+                  <label className={`text-xs font-medium ${mutedText}`}>Agent</label>
+                  <p className={`text-base ${pageText}`}>{selectedTask.agent || 'N/A'}</p>
                 </div>
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Date Requested</label>
@@ -2107,6 +2736,40 @@ export default function DashboardClient({
           </div>
         </div>
       )}
+
+      {/* ─── ADD TASK MODAL ─────────────────────────────────────────────────── */}
+      <TaskFormModal
+        isOpen={showAddTaskModal}
+        onClose={() => setShowAddTaskModal(false)}
+        onSubmit={addNewTask}
+        isSubmitting={isSavingTask}
+        theme={theme}
+        mode="add"
+        error={taskFormError}
+      />
+
+      {/* ─── EDIT TASK MODAL (admins only) ─────────────────────────────────── */}
+        <TaskFormModal
+          isOpen={showEditTaskModal}
+          onClose={() => setShowEditTaskModal(false)}
+          onSubmit={saveTaskEdits}
+          isSubmitting={isSavingTask}
+          theme={theme}
+          mode="edit"
+          error={taskFormError}
+          initialValues={selectedTask ? {
+            dateRequested: selectedTask.date_requested ? new Date(selectedTask.date_requested).toISOString().split('T')[0] : '',
+            type: selectedTask.type,
+            task: selectedTask.task,
+            brand: BRAND_OPTIONS.includes(selectedTask.brand) ? selectedTask.brand : '__OTHER__',
+            customBrand: BRAND_OPTIONS.includes(selectedTask.brand) ? '' : selectedTask.brand,
+            agent: selectedTask.agent,
+            dueDate: selectedTask.due_date ? new Date(selectedTask.due_date).toISOString().split('T')[0] : '',
+            status: selectedTask.status,
+            remarks: selectedTask.remarks,
+            bcLinks: selectedTask.bc_links || '', // Add this
+          } : undefined}
+        />
 
       <MemberRouletteModal isOpen={isRouletteOpen} onClose={() => setIsRouletteOpen(false)} theme={theme} />
     </>
