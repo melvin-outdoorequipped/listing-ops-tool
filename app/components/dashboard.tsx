@@ -42,10 +42,14 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  EyeOff,
+  Bell,
+  Calendar,
 } from 'lucide-react';
 import Image from 'next/image';
 
-import { supabase } from '@/lib/supabase/client';
+import { supabase } from '../../lib/supabase/client';
 import {
   ADMIN_EMAILS,
   isTaskAdminEmail,
@@ -55,6 +59,7 @@ import {
   AGENT_OPTIONS,
   VALID_TASK_STATUSES,
 } from '../../lib/task-option';
+import { NotificationBell } from './notification-bell';
 
 // Task interface - status is a string
 interface Task {
@@ -76,6 +81,7 @@ interface Task {
   reason_for_pending: string;
   reason_for_cancel: string;
   rowIndex: number;
+  isNew?: boolean;
 }
 
 interface DashboardClientProps {
@@ -825,7 +831,7 @@ const emptyTaskForm: TaskFormValues = {
   dueDate: '',
   status: 'Pending',
   remarks: '',
-  bcLinks: '', // Add this
+  bcLinks: '',
 };
 
 function TaskFormModal({
@@ -1021,6 +1027,9 @@ export default function DashboardClient({
   const [settings, setSettings] = useState<any>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [previousTaskIds, setPreviousTaskIds] = useState<Set<string>>(new Set());
+  const [newTaskIds, setNewTaskIds] = useState<Set<string>>(new Set());
+  const [showNewTaskNotification, setShowNewTaskNotification] = useState(false);
   const [viewMode, setViewMode] = useState<'mine' | 'all'>('mine');
   const [tasksLoading, setTasksLoading] = useState(false);
   const [allTasksLoading, setAllTasksLoading] = useState(false);
@@ -1035,10 +1044,12 @@ export default function DashboardClient({
   const [showEditTaskModal, setShowEditTaskModal] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState(false);
   const [taskFormError, setTaskFormError] = useState<string | null>(null);
-  const [filterDateRange, setFilterDateRange] = useState<'all' | 'today' | 'week' | 'month' | 'overdue' | 'unassigned'>('all');
+  const [filterDateRange, setFilterDateRange] = useState<'all' | 'today' | 'week' | 'month' | 'overdue' | 'unassigned' | 'custom'>('all');
   const [customDateStart, setCustomDateStart] = useState('');
   const [customDateEnd, setCustomDateEnd] = useState('');
-  const [showDateFilters, setShowDateFilters] = useState(false);
+  const [showDateRangePicker, setShowDateRangePicker] = useState(false);
+  const [showOnlyNew, setShowOnlyNew] = useState(false);
+  const [isNotificationEnabled, setIsNotificationEnabled] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -1055,7 +1066,6 @@ export default function DashboardClient({
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
-      // Reset to page 1 when search changes
       setCurrentPage(1);
     }, 300);
 
@@ -1065,7 +1075,7 @@ export default function DashboardClient({
   // Reset to page 1 when filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterStatus, viewMode]);
+  }, [filterStatus, viewMode, filterDateRange, showOnlyNew]);
 
   // Google Sheets configuration
   const SPREADSHEET_ID = '1aBOYH2ShWyW8ASamH23WAFdoi0NR8bIebsQGuAnU67A';
@@ -1094,11 +1104,6 @@ export default function DashboardClient({
       return [];
     }
 
-    // NOTE: this sheet has duplicate header names (e.g. "Status" appears twice,
-    // "Agent" appears twice — one real column + one helper/lookup column further
-    // right). We only keep the FIRST occurrence of each header so we always read
-    // from the real data column instead of letting a later duplicate silently
-    // overwrite it.
     const columnMap: { [key: string]: number } = {};
     headers.forEach((header: string, index: number) => {
       if (header) {
@@ -1170,11 +1175,71 @@ export default function DashboardClient({
         bc_links: get(row, bcLinksCol),
         reason_for_pending: get(row, reasonPendingCol),
         reason_for_cancel: get(row, reasonCancelCol),
+        isNew: false,
       });
     });
 
     return taskList;
   }, []);
+
+  // Send desktop notification for new tasks
+  const sendDesktopNotification = useCallback(async (taskData: { task: string; agent: string; rowIndex: number }) => {
+    try {
+      await fetch('/api/push/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: '📋 New Task Added!',
+          body: `"${taskData.task}" assigned to ${taskData.agent || 'Unassigned'} (Row ${taskData.rowIndex})`,
+          url: '/',
+          taskId: `task-${taskData.rowIndex}`,
+        }),
+      });
+      console.log('✅ Desktop notification sent for new task');
+    } catch (error) {
+      console.error('❌ Failed to send desktop notification:', error);
+    }
+  }, []);
+
+  // Detect new tasks
+  const detectNewTasks = useCallback((newTasks: Task[]) => {
+    const newIds = new Set<string>();
+    const currentIds = new Set(newTasks.map(t => t.id));
+    
+    newTasks.forEach(task => {
+      if (!previousTaskIds.has(task.id)) {
+        newIds.add(task.id);
+        // Send desktop notification if enabled
+        if (isNotificationEnabled) {
+          sendDesktopNotification({
+            task: task.task,
+            agent: task.agent,
+            rowIndex: task.rowIndex,
+          });
+        }
+      }
+    });
+    
+    if (newIds.size > 0 && previousTaskIds.size > 0) {
+      setNewTaskIds(newIds);
+      setShowNewTaskNotification(true);
+      
+      setAllTasks(prev => prev.map(t => ({
+        ...t,
+        isNew: newIds.has(t.id)
+      })));
+      setTasks(prev => prev.map(t => ({
+        ...t,
+        isNew: newIds.has(t.id)
+      })));
+      
+      setTimeout(() => {
+        setShowNewTaskNotification(false);
+      }, 10000);
+    }
+    
+    setPreviousTaskIds(currentIds);
+  }, [previousTaskIds, isNotificationEnabled, sendDesktopNotification]);
 
   const loadTasksFromSheet = useCallback(async () => {
     if (!currentUserEmail && !currentUserName) {
@@ -1207,13 +1272,15 @@ export default function DashboardClient({
 
       const data = await response.json();
 
+      let newTasks: Task[] = [];
       if (data.rows && data.rows.length > 0) {
-        setTasks(processTasksFromSheet(data));
+        newTasks = processTasksFromSheet(data);
       } else if (data.values && data.values.length > 0) {
-        setTasks(processTasksFromSheet(data.values));
-      } else {
-        setTasks([]);
+        newTasks = processTasksFromSheet(data.values);
       }
+      
+      setTasks(newTasks);
+      detectNewTasks(newTasks);
     } catch (error) {
       console.error('Failed to load tasks:', error);
       setUpdateError(error instanceof Error ? error.message : 'Failed to load tasks');
@@ -1221,7 +1288,7 @@ export default function DashboardClient({
     } finally {
       setTasksLoading(false);
     }
-  }, [currentUserEmail, currentUserName, processTasksFromSheet]);
+  }, [currentUserEmail, currentUserName, processTasksFromSheet, detectNewTasks]);
 
   const loadAllTasksFromSheet = useCallback(async () => {
     if (!currentUserEmail && !currentUserName) return;
@@ -1247,11 +1314,15 @@ export default function DashboardClient({
       }
 
       const data = await response.json();
+      let newTasks: Task[] = [];
       if (data.rows && data.rows.length > 0) {
-        setAllTasks(processTasksFromSheet(data));
+        newTasks = processTasksFromSheet(data);
       } else {
-        setAllTasks([]);
+        newTasks = [];
       }
+      
+      setAllTasks(newTasks);
+      detectNewTasks(newTasks);
     } catch (error) {
       console.error('Failed to load all tasks:', error);
       setUpdateError(error instanceof Error ? error.message : 'Failed to load all tasks');
@@ -1259,23 +1330,30 @@ export default function DashboardClient({
     } finally {
       setAllTasksLoading(false);
     }
-  }, [currentUserEmail, currentUserName, processTasksFromSheet]);
+  }, [currentUserEmail, currentUserName, processTasksFromSheet, detectNewTasks]);
 
   useEffect(() => {
     if (didInitialLoadRef.current) return;
     didInitialLoadRef.current = true;
 
     if (initialTasks && initialTasks.length > 0) {
+      let newTasks: Task[] = [];
       if (typeof initialTasks === 'object' && 'headers' in initialTasks && 'rows' in initialTasks) {
-        setTasks(processTasksFromSheet(initialTasks as { headers: string[], rows: any[] }));
+        newTasks = processTasksFromSheet(initialTasks as { headers: string[], rows: any[] });
       } else {
-        setTasks(processTasksFromSheet(initialTasks));
+        newTasks = processTasksFromSheet(initialTasks);
       }
+      setTasks(newTasks);
+      setAllTasks(newTasks);
+      setPreviousTaskIds(new Set(newTasks.map(t => t.id)));
       setTasksLoading(false);
     } else {
       loadTasksFromSheet();
+      if (viewMode === 'all') {
+        loadAllTasksFromSheet();
+      }
     }
-  }, [initialTasks, processTasksFromSheet, loadTasksFromSheet]);
+  }, [initialTasks, processTasksFromSheet, loadTasksFromSheet, loadAllTasksFromSheet, viewMode]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -1290,24 +1368,47 @@ export default function DashboardClient({
 
   const toggleViewMode = useCallback(() => {
     setFilterStatus('all');
+    setFilterDateRange('all');
     setSearchTerm('');
     setDebouncedSearchTerm('');
     setCurrentPage(1);
+    setShowOnlyNew(false);
     if (viewMode === 'mine') {
       setViewMode('all');
       if (allTasks.length === 0) loadAllTasksFromSheet();
     } else {
       setViewMode('mine');
     }
+    setShowNewTaskNotification(false);
+    setNewTaskIds(new Set());
   }, [viewMode, allTasks.length, loadAllTasksFromSheet]);
 
   const refreshCurrentView = useCallback(() => {
+    setShowNewTaskNotification(false);
+    setNewTaskIds(new Set());
+    
     if (viewMode === 'all') {
       loadAllTasksFromSheet();
     } else {
       loadTasksFromSheet();
     }
   }, [viewMode, loadAllTasksFromSheet, loadTasksFromSheet]);
+
+  const clearCustomDateRange = useCallback(() => {
+    setCustomDateStart('');
+    setCustomDateEnd('');
+    setFilterDateRange('all');
+    setCurrentPage(1);
+    setShowDateRangePicker(false);
+  }, []);
+
+  const applyCustomDateRange = useCallback(() => {
+    if (customDateStart && customDateEnd) {
+      setFilterDateRange('custom');
+      setCurrentPage(1);
+      setShowDateRangePicker(false);
+    }
+  }, [customDateStart, customDateEnd]);
 
   const updateTaskStatus = useCallback(async (taskId: string, newStatus: string) => {
     if (updatingTaskId) return;
@@ -1400,22 +1501,65 @@ export default function DashboardClient({
   }, [tasks, allTasks, viewMode, showTaskModal, refreshCurrentView, updatingTaskId, SPREADSHEET_ID, SHEET_NAME]);
 
   const saveTaskEdits = useCallback(async (values: TaskFormValues) => {
-  if (!selectedTask) return;
-  setIsSavingTask(true);
-  setTaskFormError(null);
+    if (!selectedTask) return;
+    setIsSavingTask(true);
+    setTaskFormError(null);
 
-  const finalBrand = values.brand === '__OTHER__' ? values.customBrand.trim() : values.brand;
+    const finalBrand = values.brand === '__OTHER__' ? values.customBrand.trim() : values.brand;
 
-  try {
-    const response = await fetch('/api/google-sheets/update-task', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        spreadsheetId: SPREADSHEET_ID,
-        sheetName: SHEET_NAME,
-        requesterEmail: currentUserEmail,
-        rowIndex: selectedTask.rowIndex,
-        updates: {
+    try {
+      const response = await fetch('/api/google-sheets/update-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          spreadsheetId: SPREADSHEET_ID,
+          sheetName: SHEET_NAME,
+          requesterEmail: currentUserEmail,
+          rowIndex: selectedTask.rowIndex,
+          updates: {
+            dateRequested: values.dateRequested,
+            type: values.type,
+            task: values.task,
+            brand: finalBrand,
+            agent: values.agent,
+            dueDate: values.dueDate,
+            status: values.status,
+            remarks: values.remarks,
+            bcLinks: values.bcLinks,
+          },
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP error ${response.status}`);
+      }
+
+      setShowEditTaskModal(false);
+      setShowTaskModal(false);
+      setSelectedTask(null);
+      refreshCurrentView();
+    } catch (error) {
+      setTaskFormError(error instanceof Error ? error.message : 'Failed to save changes');
+    } finally {
+      setIsSavingTask(false);
+    }
+  }, [selectedTask, currentUserEmail, refreshCurrentView, SPREADSHEET_ID, SHEET_NAME]);
+
+  const addNewTask = useCallback(async (values: TaskFormValues) => {
+    setIsSavingTask(true);
+    setTaskFormError(null);
+
+    const finalBrand = values.brand === '__OTHER__' ? values.customBrand.trim() : values.brand;
+
+    try {
+      const response = await fetch('/api/google-sheets/add-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          spreadsheetId: SPREADSHEET_ID,
+          sheetName: SHEET_NAME,
+          requesterEmail: currentUserEmail,
           dateRequested: values.dateRequested,
           type: values.type,
           task: values.task,
@@ -1424,70 +1568,27 @@ export default function DashboardClient({
           dueDate: values.dueDate,
           status: values.status,
           remarks: values.remarks,
-          bcLinks: values.bcLinks, // Add this
-        },
-      }),
-    });
+          bcLinks: values.bcLinks,
+        }),
+      });
 
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(data.error || `HTTP error ${response.status}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP error ${response.status}`);
+      }
+
+      setShowAddTaskModal(false);
+      refreshCurrentView();
+      if (viewMode === 'mine') {
+        setViewMode('all');
+        loadAllTasksFromSheet();
+      }
+    } catch (error) {
+      setTaskFormError(error instanceof Error ? error.message : 'Failed to add task');
+    } finally {
+      setIsSavingTask(false);
     }
-
-    setShowEditTaskModal(false);
-    setShowTaskModal(false);
-    setSelectedTask(null);
-    refreshCurrentView();
-  } catch (error) {
-    setTaskFormError(error instanceof Error ? error.message : 'Failed to save changes');
-  } finally {
-    setIsSavingTask(false);
-  }
-}, [selectedTask, currentUserEmail, refreshCurrentView, SPREADSHEET_ID, SHEET_NAME]);
-
-  const addNewTask = useCallback(async (values: TaskFormValues) => {
-  setIsSavingTask(true);
-  setTaskFormError(null);
-
-  const finalBrand = values.brand === '__OTHER__' ? values.customBrand.trim() : values.brand;
-
-  try {
-    const response = await fetch('/api/google-sheets/add-task', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        spreadsheetId: SPREADSHEET_ID,
-        sheetName: SHEET_NAME,
-        requesterEmail: currentUserEmail,
-        dateRequested: values.dateRequested,
-        type: values.type,
-        task: values.task,
-        brand: finalBrand,
-        agent: values.agent,
-        dueDate: values.dueDate,
-        status: values.status,
-        remarks: values.remarks,
-        bcLinks: values.bcLinks, // Add this
-      }),
-    });
-
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(data.error || `HTTP error ${response.status}`);
-    }
-
-    setShowAddTaskModal(false);
-    refreshCurrentView();
-    if (viewMode === 'mine') {
-      setViewMode('all');
-      loadAllTasksFromSheet();
-    }
-  } catch (error) {
-    setTaskFormError(error instanceof Error ? error.message : 'Failed to add task');
-  } finally {
-    setIsSavingTask(false);
-  }
-}, [currentUserEmail, refreshCurrentView, viewMode, loadAllTasksFromSheet, SPREADSHEET_ID, SHEET_NAME]);
+  }, [currentUserEmail, refreshCurrentView, viewMode, loadAllTasksFromSheet, SPREADSHEET_ID, SHEET_NAME]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -1576,17 +1677,20 @@ export default function DashboardClient({
     return counts;
   }, [activeTaskSource]);
 
-  // Parses sheet date strings (e.g. "6/25/2025") into a comparable timestamp.
-  // Falls back to 0 (oldest) for blank/invalid dates so they sink to the bottom.
   const parseDateValue = (value: string) => {
     if (!value) return 0;
     const t = new Date(value).getTime();
     return isNaN(t) ? 0 : t;
   };
 
-  // Optimized filtered tasks with debounced search and date filters
+  // Filtered tasks with date filtering and row number sorting
 const filteredTasks = useMemo(() => {
   let filtered = activeTaskSource;
+
+  // Show only new tasks filter
+  if (showOnlyNew) {
+    filtered = filtered.filter(task => newTaskIds.has(task.id));
+  }
 
   // Status filter
   if (filterStatus !== 'all') {
@@ -1636,6 +1740,22 @@ const filteredTasks = useMemo(() => {
         return dueDateOnly >= today && dueDateOnly <= monthEnd;
       }
       
+      // Custom date range
+      if (filterDateRange === 'custom') {
+        const startDate = customDateStart ? new Date(customDateStart) : null;
+        const endDate = customDateEnd ? new Date(customDateEnd) : null;
+        
+        if (startDate) {
+          const startOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+          if (dueDateOnly < startOnly) return false;
+        }
+        if (endDate) {
+          const endOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+          if (dueDateOnly > endOnly) return false;
+        }
+        return true;
+      }
+      
       return true;
     });
   }
@@ -1658,16 +1778,16 @@ const filteredTasks = useMemo(() => {
     });
   }
 
-  // Sort newest-first by Due Date (falls back to Date Requested when Due Date
-  // is blank), so 2026 tasks appear at the top and older ones sink down.
+  // ============================================================
+  // SORT BY ROW NUMBER (descending) - NEWEST ROW FIRST
+  // ============================================================
   filtered = [...filtered].sort((a, b) => {
-    const dateA = parseDateValue(a.due_date) || parseDateValue(a.date_requested);
-    const dateB = parseDateValue(b.due_date) || parseDateValue(b.date_requested);
-    return dateB - dateA;
+    // Sort by rowIndex descending (larger = newer = first)
+    return b.rowIndex - a.rowIndex;
   });
 
   return filtered;
-}, [activeTaskSource, filterStatus, debouncedSearchTerm, filterDateRange]);
+}, [activeTaskSource, filterStatus, debouncedSearchTerm, filterDateRange, customDateStart, customDateEnd, showOnlyNew, newTaskIds]);
 
   // Paginated tasks
   const paginatedTasks = useMemo(() => {
@@ -1904,13 +2024,51 @@ const filteredTasks = useMemo(() => {
     setSelectedTask(null);
   };
 
-  // Pagination controls
   const goToPage = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(totalPages, page)));
   };
 
+  const newTaskCount = newTaskIds.size;
+
   return (
     <>
+      {/* New Task Notification Banner */}
+      {showNewTaskNotification && newTaskCount > 0 && (
+        <div className={`fixed top-4 right-4 z-50 rounded-xl border shadow-2xl p-4 max-w-sm animate-in slide-in-from-top-4 duration-300 ${
+          isDark ? 'bg-slate-800 border-emerald-500/30' : 'bg-white border-emerald-300'
+        }`}>
+          <div className="flex items-start gap-3">
+            <div className="rounded-full bg-emerald-500/20 p-2">
+              <Bell className="h-5 w-5 text-emerald-400" />
+            </div>
+            <div className="flex-1">
+              <p className={`text-sm font-semibold ${pageText}`}>
+                {newTaskCount} New Task{newTaskCount > 1 ? 's' : ''} Added!
+              </p>
+              <p className={`text-xs ${mutedText}`}>
+                Click refresh to see them in your list
+              </p>
+            </div>
+            <button
+              onClick={() => setShowNewTaskNotification(false)}
+              className={`rounded p-1 transition-colors ${isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-100'}`}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={refreshCurrentView}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+              }`}
+            >
+              <RefreshCw className="h-3 w-3" /> Refresh Now
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex h-[calc(100vh-2rem)] min-h-0 w-full max-w-full flex-col overflow-y-auto overflow-x-hidden">
         <div className="w-full max-w-full space-y-5 sm:space-y-6 pb-6">
           <section className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -1929,12 +2087,30 @@ const filteredTasks = useMemo(() => {
                     Admin
                   </span>
                 )}
+                {newTaskCount > 0 && (
+                  <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400 animate-pulse">
+                    <Bell className="h-3.5 w-3.5" />
+                    {newTaskCount} New
+                  </span>
+                )}
               </div>
               <p className={`mt-1.5 text-sm ${mutedText}`}>Listing Operations · Real-time overview</p>
             </div>
-            <button onClick={fetchDashboardData} disabled={isLoading} className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}`}>
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Refresh
-            </button>
+            <div className="flex items-center gap-2">
+              <NotificationBell 
+                theme={theme} 
+                userEmail={currentUserEmail}
+                onPermissionChange={(granted) => {
+                  setIsNotificationEnabled(granted);
+                  if (granted) {
+                    console.log('✅ Desktop notifications enabled');
+                  }
+                }}
+              />
+              <button onClick={fetchDashboardData} disabled={isLoading} className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}`}>
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Refresh
+              </button>
+            </div>
           </section>
 
           {errorMessage && <div className={`rounded-xl border px-4 py-3 text-sm ${isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'}`}>Dashboard error: {errorMessage}</div>}
@@ -1951,10 +2127,16 @@ const filteredTasks = useMemo(() => {
                 <div>
                   <h2 className={`text-sm font-semibold ${pageText}`}>
                     {viewMode === 'all' ? 'All Tasks' : 'My Tasks'}
+                    {newTaskCount > 0 && viewMode === 'all' && (
+                      <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+                        <Bell className="h-3 w-3" />
+                        {newTaskCount} new
+                      </span>
+                    )}
                   </h2>
                   <p className={`text-xs ${mutedText}`}>
                     {viewMode === 'all'
-                      ? 'Every task currently in the tracker'
+                      ? `All ${activeTaskSource.length} tasks in tracker`
                       : (currentUserName || currentUserEmail ? `Tasks assigned to ${currentUserName || currentUserEmail}` : 'No user logged in')}
                   </p>
                 </div>
@@ -1980,8 +2162,8 @@ const filteredTasks = useMemo(() => {
                       : isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
                   }`}
                 >
-                  <Users className="h-4 w-4" />
-                  {viewMode === 'all' ? 'Viewing All Tasks' : 'View All Tasks'}
+                  {viewMode === 'all' ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  {viewMode === 'all' ? 'Viewing All' : 'View All'}
                 </button>
                 {isTaskAdmin && (
                   <button
@@ -2004,12 +2186,12 @@ const filteredTasks = useMemo(() => {
                   ) : (
                     <RefreshCw className="h-4 w-4" />
                   )}
-                  {(viewMode === 'all' ? allTasksLoading : tasksLoading) ? 'Loading...' : 'Refresh Tasks'}
+                  {(viewMode === 'all' ? allTasksLoading : tasksLoading) ? 'Loading...' : 'Refresh'}
                 </button>
               </div>
             </div>
 
-            {/* Status filter tabs - dynamic from actual data */}
+            {/* Status filter tabs */}
             <div className="flex flex-col gap-2 mt-3">
               <div className="flex gap-1 overflow-x-auto pb-1">
                 <button
@@ -2050,10 +2232,51 @@ const filteredTasks = useMemo(() => {
                 })}
               </div>
               
-              {/* Date Filter Tabs */}
+              {/* New Tasks Toggle */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setShowOnlyNew(!showOnlyNew)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+                    showOnlyNew
+                      ? isDark ? 'bg-emerald-500/30 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                      : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <Bell className="h-3.5 w-3.5" />
+                  {showOnlyNew ? 'Showing New Tasks' : 'Show New Tasks'}
+                  {newTaskCount > 0 && (
+                    <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] ${
+                      showOnlyNew
+                        ? isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800'
+                        : isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                    }`}>
+                      {newTaskCount}
+                    </span>
+                  )}
+                </button>
+                
+                {newTaskCount > 0 && (
+                  <button
+                    onClick={() => {
+                      setNewTaskIds(new Set());
+                      setShowNewTaskNotification(false);
+                      setAllTasks(prev => prev.map(t => ({ ...t, isNew: false })));
+                      setTasks(prev => prev.map(t => ({ ...t, isNew: false })));
+                    }}
+                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+                      isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                    }`}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    Mark All Viewed
+                  </button>
+                )}
+              </div>
+              
+              {/* Date Filter Tabs with Custom Range Picker */}
               <div className="flex flex-wrap items-center gap-1.5">
                 <button
-                  onClick={() => setFilterDateRange('all')}
+                  onClick={() => { setFilterDateRange('all'); setCurrentPage(1); }}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all whitespace-nowrap ${
                     filterDateRange === 'all'
                       ? isDark ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-blue-100 text-blue-700 border border-blue-300'
@@ -2063,7 +2286,7 @@ const filteredTasks = useMemo(() => {
                   All Dates
                 </button>
                 <button
-                  onClick={() => setFilterDateRange('unassigned')}
+                  onClick={() => { setFilterDateRange('unassigned'); setCurrentPage(1); }}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all whitespace-nowrap ${
                     filterDateRange === 'unassigned'
                       ? isDark ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-purple-100 text-purple-700 border border-purple-300'
@@ -2073,7 +2296,7 @@ const filteredTasks = useMemo(() => {
                   👤 Unassigned
                 </button>
                 <button
-                  onClick={() => setFilterDateRange('overdue')}
+                  onClick={() => { setFilterDateRange('overdue'); setCurrentPage(1); }}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all whitespace-nowrap ${
                     filterDateRange === 'overdue'
                       ? isDark ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-red-100 text-red-700 border border-red-300'
@@ -2083,7 +2306,7 @@ const filteredTasks = useMemo(() => {
                   🔴 Overdue
                 </button>
                 <button
-                  onClick={() => setFilterDateRange('today')}
+                  onClick={() => { setFilterDateRange('today'); setCurrentPage(1); }}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all whitespace-nowrap ${
                     filterDateRange === 'today'
                       ? isDark ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-yellow-100 text-yellow-700 border border-yellow-300'
@@ -2093,7 +2316,7 @@ const filteredTasks = useMemo(() => {
                   📅 Today
                 </button>
                 <button
-                  onClick={() => setFilterDateRange('week')}
+                  onClick={() => { setFilterDateRange('week'); setCurrentPage(1); }}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all whitespace-nowrap ${
                     filterDateRange === 'week'
                       ? isDark ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-cyan-100 text-cyan-700 border border-cyan-300'
@@ -2103,7 +2326,7 @@ const filteredTasks = useMemo(() => {
                   📅 Next 7 Days
                 </button>
                 <button
-                  onClick={() => setFilterDateRange('month')}
+                  onClick={() => { setFilterDateRange('month'); setCurrentPage(1); }}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all whitespace-nowrap ${
                     filterDateRange === 'month'
                       ? isDark ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-green-100 text-green-700 border border-green-300'
@@ -2113,10 +2336,28 @@ const filteredTasks = useMemo(() => {
                   📅 This Month
                 </button>
                 
+                {/* Custom Date Range Picker Button */}
+                <button
+                  onClick={() => setShowDateRangePicker(!showDateRangePicker)}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all whitespace-nowrap inline-flex items-center gap-1 ${
+                    filterDateRange === 'custom'
+                      ? isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                      : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <Calendar className="h-3 w-3" />
+                  Custom Range
+                  {filterDateRange === 'custom' && (
+                    <span className="ml-1 text-[8px] opacity-70">
+                      ({customDateStart ? new Date(customDateStart).toLocaleDateString() : '...'} - {customDateEnd ? new Date(customDateEnd).toLocaleDateString() : '...'})
+                    </span>
+                  )}
+                </button>
+                
                 {/* Clear Date Filter */}
                 {filterDateRange !== 'all' && (
                   <button
-                    onClick={() => setFilterDateRange('all')}
+                    onClick={clearCustomDateRange}
                     className={`px-2 py-1 rounded-lg text-[10px] font-medium transition-all whitespace-nowrap ${
                       isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                     }`}
@@ -2125,6 +2366,61 @@ const filteredTasks = useMemo(() => {
                   </button>
                 )}
               </div>
+
+              {/* Custom Date Range Picker Dropdown */}
+              {showDateRangePicker && (
+                <div className={`mt-2 p-3 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'} shadow-lg`}>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <div className="flex-1">
+                      <label className={`text-xs font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'} block mb-1`}>
+                        Start Date
+                      </label>
+                      <input
+                        type="date"
+                        value={customDateStart}
+                        onChange={(e) => setCustomDateStart(e.target.value)}
+                        className={`w-full rounded-lg border px-3 py-1.5 text-sm ${
+                          isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                        }`}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className={`text-xs font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'} block mb-1`}>
+                        End Date
+                      </label>
+                      <input
+                        type="date"
+                        value={customDateEnd}
+                        onChange={(e) => setCustomDateEnd(e.target.value)}
+                        className={`w-full rounded-lg border px-3 py-1.5 text-sm ${
+                          isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                        }`}
+                      />
+                    </div>
+                    <div className="flex gap-2 mt-4 sm:mt-0">
+                      <button
+                        onClick={applyCustomDateRange}
+                        disabled={!customDateStart || !customDateEnd}
+                        className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                          !customDateStart || !customDateEnd
+                            ? 'opacity-50 cursor-not-allowed bg-slate-600 text-slate-400'
+                            : isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                        }`}
+                      >
+                        <Check className="h-3 w-3" /> Apply
+                      </button>
+                      <button
+                        onClick={() => setShowDateRangePicker(false)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                          isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                        }`}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -2139,15 +2435,18 @@ const filteredTasks = useMemo(() => {
                 <CheckCircle2 className={`h-12 w-12 ${mutedText} opacity-30`} />
                 <p className={`mt-3 font-medium ${pageText}`}>No tasks found</p>
                 <p className={`text-sm ${mutedText}`}>
-                  {debouncedSearchTerm || filterStatus !== 'all'
-                    ? 'Try adjusting your filters'
-                    : 'You have no tasks assigned yet'}
+                  {showOnlyNew && newTaskCount === 0 
+                    ? 'All caught up! You\'ve viewed all new tasks.'
+                    : debouncedSearchTerm || filterStatus !== 'all' || filterDateRange !== 'all'
+                      ? 'Try adjusting your filters'
+                      : 'You have no tasks assigned yet'}
                 </p>
               </div>
             ) : (
               <table className="w-full text-sm">
                 <thead className={`sticky top-0 z-10 backdrop-blur ${isDark ? 'bg-slate-800/95' : 'bg-gray-50/95'}`}>
                   <tr>
+                    <th className={`px-2 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText} w-10`}>#</th>
                     <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Task</th>
                     <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Brand</th>
                     <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Type</th>
@@ -2164,13 +2463,23 @@ const filteredTasks = useMemo(() => {
                     const statusColor = getStatusColor(task.status);
                     const isUpdating = updatingTaskId === task.id;
                     const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
+                    const isNew = task.isNew || newTaskIds.has(task.id);
 
                     return (
                       <tr
                         key={task.id}
-                        className={`transition-colors ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-gray-50'} cursor-pointer`}
+                        className={`transition-colors ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-gray-50'} cursor-pointer ${isNew ? (isDark ? 'bg-emerald-500/5 border-l-2 border-emerald-400' : 'bg-emerald-50/50 border-l-2 border-emerald-500') : ''}`}
                         onClick={() => openTaskModal(task)}
                       >
+                        <td className={`px-2 py-3 text-center text-xs font-mono ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                          {task.rowIndex}
+                          {isNew && (
+                            <span className="ml-1 inline-flex items-center gap-0.5">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" title="Newly added" />
+                              <span className={`text-[8px] font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>NEW</span>
+                            </span>
+                          )}
+                        </td>
                         <td className={`px-4 py-3 font-medium ${pageText}`}>
                           <div className="max-w-[200px] truncate">{task.task}</div>
                           <div className={`text-xs ${mutedText}`}>{formatDate(task.date_requested)}</div>
@@ -2240,17 +2549,24 @@ const filteredTasks = useMemo(() => {
               <span className={`text-xs ${mutedText}`}>
                 Showing {paginatedTasks.length} of {filteredTasks.length} tasks
                 {filteredTasks.length !== activeTaskSource.length && ` (filtered from ${activeTaskSource.length})`}
+                {showOnlyNew && (
+                  <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+                    🆕 New Tasks
+                  </span>
+                )}
                 {filterDateRange !== 'all' && (
                   <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] ${
                     filterDateRange === 'unassigned' ? isDark ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700' :
                     filterDateRange === 'overdue' ? isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700' :
+                    filterDateRange === 'custom' ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700' :
                     isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'
                   }`}>
                     {filterDateRange === 'unassigned' ? '👤 Unassigned' :
                     filterDateRange === 'overdue' ? '🔴 Overdue' :
                     filterDateRange === 'today' ? '📅 Today' :
                     filterDateRange === 'week' ? '📅 Next 7 Days' :
-                    filterDateRange === 'month' ? '📅 This Month' : ''}
+                    filterDateRange === 'month' ? '📅 This Month' :
+                    filterDateRange === 'custom' ? `📅 ${customDateStart ? new Date(customDateStart).toLocaleDateString() : '...'} - ${customDateEnd ? new Date(customDateEnd).toLocaleDateString() : '...'}` : ''}
                   </span>
                 )}
               </span>
@@ -2601,6 +2917,10 @@ const filteredTasks = useMemo(() => {
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
+                  <label className={`text-xs font-medium ${mutedText}`}>Row #</label>
+                  <p className={`text-base font-semibold ${pageText}`}>{selectedTask.rowIndex}</p>
+                </div>
+                <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Task</label>
                   <p className={`text-base font-semibold ${pageText}`}>{selectedTask.task}</p>
                 </div>
@@ -2767,7 +3087,7 @@ const filteredTasks = useMemo(() => {
             dueDate: selectedTask.due_date ? new Date(selectedTask.due_date).toISOString().split('T')[0] : '',
             status: selectedTask.status,
             remarks: selectedTask.remarks,
-            bcLinks: selectedTask.bc_links || '', // Add this
+            bcLinks: selectedTask.bc_links || '',
           } : undefined}
         />
 
