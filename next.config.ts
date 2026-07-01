@@ -7,18 +7,21 @@ const nextConfig: NextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
   
+  // Make sure this is at root level
   staticPageGenerationTimeout: 180,
   
+  // If you're using server components with these packages
+  serverExternalPackages: [
+    'xlsx',
+    'google-spreadsheet',
+    'google-auth-library',
+    'googleapis',
+    'exceljs'
+  ],
+  
   experimental: {
-    optimizeCss: true,
-    // External packages for server components (moved here in Next.js 15)
-    serverComponentsExternalPackages: [
-      'xlsx',
-      'google-spreadsheet',
-      'google-auth-library',
-      'googleapis',
-      'exceljs'
-    ],
+    // Remove or comment out optimizeCss first to test
+    // optimizeCss: true,
   },
   
   // Ignore ESLint and TypeScript errors during build

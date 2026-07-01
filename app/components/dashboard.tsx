@@ -302,89 +302,55 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
-function normalizeStatus(statusRaw: string, dateCompleted?: string | null): string {
-  // Handle null, undefined, or empty status
-  const hasStatus = statusRaw && statusRaw !== '' && statusRaw !== 'null' && statusRaw !== 'undefined';
-  
-  // If there's a completion date, check if it should be Completed or Cancelled
-  const hasDateCompleted = dateCompleted && dateCompleted !== '' && dateCompleted !== 'null' && dateCompleted !== 'undefined';
-  
-  if (!hasStatus) {
-    // No status value
-    if (hasDateCompleted) {
-      return 'Completed';
-    }
-    return 'Pending';
+// ─── STATUS NORMALIZATION ──────────────────────────────────────────────────
+const VALID_TASK_STATUSES = [
+  'Assigned',
+  'Completed',
+  'Ongoing',
+  'Pending',
+  'For Audit',
+  'WIP',
+  'For Investigation',
+  'Cancelled',
+  'Hold',
+  'For Correx',
+] as const;
+
+function cleanStatusString(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return value
+    .toString()
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\u00A0/g, ' ')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeStatus(
+  rawStatus: unknown,
+  dateCompleted?: string | null,
+  dateAssigned?: string | null,
+  debugContext?: { rowIndex?: number | string; taskName?: string }
+): string {
+  const cleaned = cleanStatusString(rawStatus);
+  const cleanedLower = cleaned.toLowerCase();
+
+  const isEmpty =
+    cleaned === '' || cleanedLower === 'null' || cleanedLower === 'undefined' || cleanedLower === '-';
+
+  let result: string;
+
+  if (isEmpty) {
+    result = 'Pending';
+  } else {
+    const match = VALID_TASK_STATUSES.find(
+      (valid) => valid.toLowerCase() === cleanedLower
+    );
+    result = match ?? cleaned;
   }
-  
-  const statusStr = statusRaw.toString().trim();
-  const upper = statusStr.toUpperCase();
-  
-  // Check for Cancelled FIRST - this overrides everything
-  if (upper.includes('CANCEL') || upper.includes('CANCELLED')) {
-    return 'Cancelled';
-  }
-  
-  // Check for Completed variations
-  if (upper.includes('COMPLETE') || upper.includes('DONE') || upper.includes('FINISHED')) {
-    if (!upper.includes('INCOMPLETE')) {
-      return 'Completed';
-    }
-  }
-  
-  // Check for Pending
-  if (upper === 'PENDING' || upper === 'PEND') {
-    // If it says "Pending" but has a completion date, it's actually Completed
-    if (hasDateCompleted) {
-      return 'Completed';
-    }
-    return 'Pending';
-  }
-  
-  // Check for Ongoing or In Progress
-  if (upper.includes('ONGOING') || upper.includes('PROGRESS') || upper === 'IN PROGRESS' || upper === 'IN-PROGRESS') {
-    return 'Ongoing';
-  }
-  
-  // Check for WIP
-  if (upper === 'WIP' || upper.includes('WORKING') || upper.includes('WORK IN PROGRESS')) {
-    return 'WIP';
-  }
-  
-  // Check for Assigned
-  if (upper === 'ASSIGNED' || upper.includes('ASSIGN')) {
-    return 'Assigned';
-  }
-  
-  // Check for For Audit
-  if (upper.includes('AUDIT')) {
-    return 'For Audit';
-  }
-  
-  // Check for For Investigation
-  if (upper.includes('INVESTIGATION')) {
-    return 'For Investigation';
-  }
-  
-  // Check for Hold
-  if (upper.includes('HOLD')) {
-    return 'Hold';
-  }
-  
-  // Check for For Correx
-  if (upper.includes('CORREX') || upper.includes('CORRECTION')) {
-    return 'For Correx';
-  }
-  
-  // Unknown status - check if it has a completion date
-  if (hasDateCompleted) {
-    console.log(`⚠️ UNKNOWN STATUS: "${statusStr}" but has completion date, marking as Completed`);
-    return 'Completed';
-  }
-  
-  // Log unknown statuses without completion date
-  console.log(`⚠️ UNKNOWN STATUS: "${statusStr}" - keeping as-is`);
-  return statusStr;
+
+  return result;
 }
 
 // ─── Member Roulette Modal Component ───────────────────────────────────────────
@@ -870,148 +836,130 @@ export default function DashboardClient({
   const SHEET_NAME = 'Copy of Task Masterlist - Operations';
 
   const processTasksFromSheet = useCallback((sheetData: any) => {
-  // Handle both old and new format for backward compatibility
-  let headers: string[];
-  let rowData: { row: any[], rowIndex: number }[];
+    let headers: string[];
+    let rowData: { row: any[], rowIndex: number }[];
 
-  // Check if we got the new format (object with headers and rows)
-  if (sheetData && typeof sheetData === 'object' && sheetData.headers && sheetData.rows) {
-    headers = sheetData.headers;
-    rowData = sheetData.rows;
-    console.log('📊 Using new format with preserved row indices');
-  } 
-  // Check if we got the old format (array of arrays)
-  else if (Array.isArray(sheetData) && sheetData.length > 0) {
-    console.log('📊 Using legacy format, converting...');
-    headers = sheetData[0] || [];
-    const rows = sheetData.slice(1) || [];
-    // Convert legacy format to new format
-    rowData = rows.map((row, index) => ({
-      row,
-      rowIndex: index + 2 // Legacy fallback
-    }));
-  } else {
-    console.warn('⚠️ Unknown sheet data format:', sheetData);
-    setTasks([]);
-    return;
-  }
-
-  if (!headers || headers.length === 0 || rowData.length === 0) {
-    setTasks([]);
-    return;
-  }
-
-  // Normalize headers for column mapping
-  const columnMap: { [key: string]: number } = {};
-  headers.forEach((header: string, index: number) => {
-    if (header) {
-      columnMap[header.toString().trim().toLowerCase()] = index;
-    }
-  });
-
-  const taskCol = columnMap['task'];
-  const statusCol = columnMap['status'];
-  const dateRequestedCol = columnMap['date requested'];
-  const dateAssignedCol = columnMap['date assigned'];
-  const dueDateCol = columnMap['due date'];
-  const dateCompletedCol = columnMap['date completed'];
-  const tatCol = columnMap['tat'];
-  const segmentCol = columnMap['segment'];
-  const typeCol = columnMap['type'];
-  const brandCol = columnMap['brand'];
-  const agentCol = columnMap['agent'];
-  const remarksCol = columnMap['remarks'];
-  const auditorCol = columnMap['auditor'];
-  const bcLinksCol = columnMap['bc links'] ?? columnMap['bc link'];
-  const reasonPendingCol = columnMap['reason for pending'];
-  const reasonCancelCol = columnMap['reason for cancel'];
-
-  if (taskCol === undefined) {
-    console.error('⚠️ "Task" column not found in sheet headers:', headers);
-    setTasks([]);
-    return;
-  }
-
-  const get = (row: any[], idx: number | undefined) =>
-    idx !== undefined && idx < row.length ? (row[idx] ?? '') : '';
-
-  const taskList: Task[] = [];
-  
-  // Debug: Collect unique statuses
-  const uniqueStatuses = new Set<string>();
-
-  rowData.forEach(({ row, rowIndex }: { row: any[], rowIndex: number }) => {
-    const taskName = get(row, taskCol);
-    if (!taskName) return;
-
-    const dateRequested = get(row, dateRequestedCol);
-    const dateAssigned = get(row, dateAssignedCol);
-    const dueDate = get(row, dueDateCol);
-    const dateCompleted = get(row, dateCompletedCol);
-
-    // Only include rows that reference 2025/2026 in any date field
-    const isYearMatch =
-      (dateRequested && /202[56]/.test(dateRequested.toString())) ||
-      (dateAssigned && /202[56]/.test(dateAssigned.toString())) ||
-      (dueDate && /202[56]/.test(dueDate.toString())) ||
-      (dateCompleted && /202[56]/.test(dateCompleted.toString()));
-
-    if (!isYearMatch) return;
-
-    const statusRaw = get(row, statusCol);
-    // ✅ FIX: Pass dateCompleted to normalizeStatus
-    const normalizedStatus = normalizeStatus(statusRaw, dateCompleted);
-    
-    // Collect unique statuses for debugging
-    if (statusRaw) {
-      uniqueStatuses.add(statusRaw);
+    if (sheetData && typeof sheetData === 'object' && sheetData.headers && sheetData.rows) {
+      headers = sheetData.headers;
+      rowData = sheetData.rows;
+      console.log('📊 Using new format with preserved row indices');
+    } else if (Array.isArray(sheetData) && sheetData.length > 0) {
+      console.log('📊 Using legacy format, converting...');
+      headers = sheetData[0] || [];
+      const rows = sheetData.slice(1) || [];
+      rowData = rows.map((row, index) => ({
+        row,
+        rowIndex: index + 2
+      }));
+    } else {
+      console.warn('⚠️ Unknown sheet data format:', sheetData);
+      setTasks([]);
+      return;
     }
 
-    taskList.push({
-      id: `task-${rowIndex}`,
-      rowIndex: rowIndex, // Use the preserved row index
-      date_requested: dateRequested,
-      tat: get(row, tatCol),
-      segment: get(row, segmentCol),
-      type: get(row, typeCol),
-      task: taskName,
-      brand: get(row, brandCol),
-      date_assigned: dateAssigned,
-      agent: get(row, agentCol),
-      due_date: dueDate,
-      date_completed: dateCompleted || null,
-      remarks: get(row, remarksCol),
-      auditor: get(row, auditorCol),
-      status: normalizedStatus,
-      bc_links: get(row, bcLinksCol),
-      reason_for_pending: get(row, reasonPendingCol),
-      reason_for_cancel: get(row, reasonCancelCol),
+    if (!headers || headers.length === 0 || rowData.length === 0) {
+      setTasks([]);
+      return;
+    }
+
+    // NOTE: this sheet has duplicate header names (e.g. "Status" appears twice,
+    // "Agent" appears twice — one real column + one helper/lookup column further
+    // right). We only keep the FIRST occurrence of each header so we always read
+    // from the real data column instead of letting a later duplicate silently
+    // overwrite it.
+    const columnMap: { [key: string]: number } = {};
+    headers.forEach((header: string, index: number) => {
+      if (header) {
+        const key = header.toString().trim().toLowerCase();
+        if (!(key in columnMap)) {
+          columnMap[key] = index;
+        }
+      }
     });
-  });
 
-  console.log('📊 Unique statuses found in sheet:', Array.from(uniqueStatuses));
-  console.log('📊 Total tasks processed:', taskList.length);
-  
-  // Debug: Show final status distribution
-  const statusDistribution: Record<string, number> = {};
-  taskList.forEach(t => {
-    const status = t.status?.toString().trim() || 'Pending';
-    statusDistribution[status] = (statusDistribution[status] || 0) + 1;
-  });
-  console.log('📊 Final Status Distribution:', statusDistribution);
-  
-  // Log first 5 tasks with their row indices for debugging
-  console.log('📊 Sample tasks with row indices:');
-  taskList.slice(0, 5).forEach(t => {
-    console.log(`  Row ${t.rowIndex}: "${t.task}" (${t.status})`);
-  });
-  
-  setTasks(taskList);
-}, []);
+    const taskCol = columnMap['task'];
+    const statusCol = columnMap['status'];
+    const dateRequestedCol = columnMap['date requested'];
+    const dateAssignedCol = columnMap['date assigned'];
+    const dueDateCol = columnMap['due date'];
+    const dateCompletedCol = columnMap['date completed'];
+    const tatCol = columnMap['tat'];
+    const segmentCol = columnMap['segment'];
+    const typeCol = columnMap['type'];
+    const brandCol = columnMap['brand'];
+    const agentCol = columnMap['agent'];
+    const remarksCol = columnMap['remarks'];
+    const auditorCol = columnMap['auditor'];
+    const bcLinksCol = columnMap['bc links'] ?? columnMap['bc link'];
+    const reasonPendingCol = columnMap['reason for pending'];
+    const reasonCancelCol = columnMap['reason for cancel'];
 
-  // Load tasks from Google Sheets
+    if (taskCol === undefined) {
+      console.error('⚠️ "Task" column not found in sheet headers:', headers);
+      setTasks([]);
+      return;
+    }
+
+    const get = (row: any[], idx: number | undefined) =>
+      idx !== undefined && idx < row.length ? (row[idx] ?? '') : '';
+
+    const taskList: Task[] = [];
+    const uniqueRawStatuses = new Set<string>();
+
+    rowData.forEach(({ row, rowIndex }: { row: any[], rowIndex: number }) => {
+      const taskName = get(row, taskCol);
+      if (!taskName) return;
+
+      const dateRequested = get(row, dateRequestedCol);
+      const dateAssigned = get(row, dateAssignedCol);
+      const dueDate = get(row, dueDateCol);
+      const dateCompleted = get(row, dateCompletedCol);
+      const statusRaw = get(row, statusCol);
+
+      const normalizedStatus = normalizeStatus(statusRaw, dateCompleted, dateAssigned, {
+        rowIndex,
+        taskName,
+      });
+
+      if (statusRaw) {
+        uniqueRawStatuses.add(statusRaw.toString());
+      }
+
+      taskList.push({
+        id: `task-${rowIndex}`,
+        rowIndex: rowIndex,
+        date_requested: dateRequested,
+        tat: get(row, tatCol),
+        segment: get(row, segmentCol),
+        type: get(row, typeCol),
+        task: taskName,
+        brand: get(row, brandCol),
+        date_assigned: dateAssigned,
+        agent: get(row, agentCol),
+        due_date: dueDate,
+        date_completed: dateCompleted || null,
+        remarks: get(row, remarksCol),
+        auditor: get(row, auditorCol),
+        status: normalizedStatus,
+        bc_links: get(row, bcLinksCol),
+        reason_for_pending: get(row, reasonPendingCol),
+        reason_for_cancel: get(row, reasonCancelCol),
+      });
+    });
+
+    console.log('📊 Unique raw statuses found in sheet:', Array.from(uniqueRawStatuses));
+    console.log('📊 Total tasks processed:', taskList.length);
+
+    const statusDistribution: Record<string, number> = {};
+    taskList.forEach(t => {
+      statusDistribution[t.status] = (statusDistribution[t.status] || 0) + 1;
+    });
+    console.log('📊 Final Status Distribution:', statusDistribution);
+
+    setTasks(taskList);
+  }, []);
+
   const loadTasksFromSheet = useCallback(async () => {
-    // Check if user is logged in
     if (!currentUserEmail && !currentUserName) {
       setTasks([]);
       setTasksLoading(false);
@@ -1051,12 +999,9 @@ export default function DashboardClient({
         rowCount: data.rows?.length || 0 
       });
 
-      // Check if we got the new format with rows
       if (data.rows && data.rows.length > 0) {
-        // Pass the entire data object to processTasksFromSheet
         processTasksFromSheet(data);
       } else if (data.values && data.values.length > 0) {
-        // Fallback to legacy format
         processTasksFromSheet(data.values);
       } else {
         setTasks([]);
@@ -1070,26 +1015,22 @@ export default function DashboardClient({
     }
   }, [currentUserEmail, currentUserName, processTasksFromSheet]);
 
-  // Single effect handles initial render
   useEffect(() => {
-  if (didInitialLoadRef.current) return;
-  didInitialLoadRef.current = true;
+    if (didInitialLoadRef.current) return;
+    didInitialLoadRef.current = true;
 
-  if (initialTasks && initialTasks.length > 0) {
-    // Check if it's the new format with headers and rows
-    if (typeof initialTasks === 'object' && 'headers' in initialTasks && 'rows' in initialTasks) {
-      processTasksFromSheet(initialTasks as { headers: string[], rows: any[] });
+    if (initialTasks && initialTasks.length > 0) {
+      if (typeof initialTasks === 'object' && 'headers' in initialTasks && 'rows' in initialTasks) {
+        processTasksFromSheet(initialTasks as { headers: string[], rows: any[] });
+      } else {
+        processTasksFromSheet(initialTasks);
+      }
+      setTasksLoading(false);
     } else {
-      // Legacy format - array of arrays
-      processTasksFromSheet(initialTasks);
+      loadTasksFromSheet();
     }
-    setTasksLoading(false);
-  } else {
-    loadTasksFromSheet();
-  }
-}, [initialTasks, processTasksFromSheet, loadTasksFromSheet]);
+  }, [initialTasks, processTasksFromSheet, loadTasksFromSheet]);
 
-  // Optional: Auto-refresh every 90 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       loadTasksFromSheet();
@@ -1113,7 +1054,6 @@ export default function DashboardClient({
       return;
     }
 
-    // Ensure rowIndex is a valid number
     const rowIndex = Number(task.rowIndex);
     if (isNaN(rowIndex) || rowIndex < 2) {
       console.error('❌ Invalid rowIndex:', task.rowIndex);
@@ -1124,13 +1064,9 @@ export default function DashboardClient({
 
     console.log(`🔍 UPDATING: Task "${task.task}" at ROW ${rowIndex} from "${task.status}" to "${newStatus}"`);
 
-    // Save current state for rollback
     const previousTasks = [...tasks];
-
-    // Determine if the new status is Completed or Cancelled
     const isCompletedOrCancelled = newStatus.toLowerCase() === 'completed' || newStatus.toLowerCase() === 'cancelled';
 
-    // Optimistic UI update
     setTasks(prevTasks =>
       prevTasks.map(t =>
         t.id === taskId
@@ -1175,7 +1111,6 @@ export default function DashboardClient({
       console.log("📥 API Response Body:", responseText);
 
       if (!response.ok) {
-        // Try to parse error response
         let errorDetail = responseText;
         try {
           const errorJson = JSON.parse(responseText);
@@ -1195,7 +1130,6 @@ export default function DashboardClient({
       
       console.log('✅ Update successful:', responseData);
       
-      // Reload after a short delay to ensure the sheet has been updated
       setTimeout(() => {
         console.log('🔄 Reloading tasks after update...');
         loadTasksFromSheet();
@@ -1205,15 +1139,12 @@ export default function DashboardClient({
       console.error('❌ Failed to update task status:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to update task status';
       setUpdateError(errorMessage);
-      
-      // Roll back optimistic update
       setTasks(previousTasks);
     } finally {
       setUpdatingTaskId(null);
     }
   }, [tasks, showTaskModal, loadTasksFromSheet, updatingTaskId, SPREADSHEET_ID, SHEET_NAME]);
 
-  // Load settings from Supabase
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -1264,7 +1195,6 @@ export default function DashboardClient({
     };
   }, []);
 
-  // Check if maintenance mode is enabled
   const isMaintenanceMode = (): boolean => {
     if (settings) {
       return settings.maintenance_mode === true;
@@ -1281,33 +1211,25 @@ export default function DashboardClient({
     return false;
   };
 
-  // Get unique statuses from tasks for filter options - FIXED to use normalized statuses
   const uniqueStatuses = useMemo(() => {
-    const statusSet = new Set<string>();
+    const statusSet = new Set<string>(VALID_TASK_STATUSES);
     tasks.forEach(task => {
       if (task.status) {
-        const normalized = normalizeStatus(task.status);
-        statusSet.add(normalized);
+        statusSet.add(task.status);
       }
     });
     return Array.from(statusSet).sort();
   }, [tasks]);
 
-  // Task status counts - FIXED to properly count statuses
   const taskCounts = useMemo(() => {
     const counts: Record<string, number> = { all: tasks.length };
-    
     tasks.forEach(task => {
-      // Trim and normalize the status to ensure consistent counting
-      const status = task.status?.toString().trim() || 'Pending';
-      const normalizedStatus = normalizeStatus(status);
-      counts[normalizedStatus] = (counts[normalizedStatus] || 0) + 1;
+      const status = task.status || 'Pending';
+      counts[status] = (counts[status] || 0) + 1;
     });
-    
     return counts;
   }, [tasks]);
 
-  // If maintenance mode is enabled and user is not admin
   if (isMaintenanceMode() && !isAdmin) {
     return (
       <div className={`flex min-h-[400px] flex-col items-center justify-center rounded-2xl border p-12 text-center ${isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'}`}>
@@ -1455,15 +1377,19 @@ export default function DashboardClient({
 
   const maxRuns = allUsers.length > 0 ? allUsers[0].totalRuns : 1;
 
-  // Update filtered tasks
+  // Parses sheet date strings (e.g. "6/25/2025") into a comparable timestamp.
+  // Falls back to 0 (oldest) for blank/invalid dates so they sink to the bottom.
+  const parseDateValue = (value: string) => {
+    if (!value) return 0;
+    const t = new Date(value).getTime();
+    return isNaN(t) ? 0 : t;
+  };
+
   const filteredTasks = useMemo(() => {
     let filtered = tasks;
 
     if (filterStatus !== 'all') {
-      filtered = filtered.filter(task => {
-        const normalizedStatus = normalizeStatus(task.status);
-        return normalizedStatus === filterStatus;
-      });
+      filtered = filtered.filter(task => task.status === filterStatus);
     }
 
     if (searchTerm.trim()) {
@@ -1472,9 +1398,24 @@ export default function DashboardClient({
         task.task.toLowerCase().includes(term) ||
         task.brand.toLowerCase().includes(term) ||
         task.type.toLowerCase().includes(term) ||
-        task.segment.toLowerCase().includes(term)
+        task.segment.toLowerCase().includes(term) ||
+        task.status.toLowerCase().includes(term) ||
+        task.bc_links.toLowerCase().includes(term) ||
+        task.agent.toLowerCase().includes(term) ||
+        task.auditor.toLowerCase().includes(term) ||
+        task.remarks.toLowerCase().includes(term) ||
+        task.reason_for_pending.toLowerCase().includes(term) ||
+        task.reason_for_cancel.toLowerCase().includes(term)
       );
     }
+
+    // Sort newest-first by Due Date (falls back to Date Requested when Due Date
+    // is blank), so 2026 tasks appear at the top and older ones sink down.
+    filtered = [...filtered].sort((a, b) => {
+      const dateA = parseDateValue(a.due_date) || parseDateValue(a.date_requested);
+      const dateB = parseDateValue(b.due_date) || parseDateValue(b.date_requested);
+      return dateB - dateA;
+    });
 
     return filtered;
   }, [tasks, filterStatus, searchTerm]);
@@ -1482,50 +1423,70 @@ export default function DashboardClient({
   const getStatusColor = (status: string) => {
     const statusLower = status.toLowerCase();
     
-    if (statusLower === 'completed' || statusLower === 'complete' || statusLower === 'done') {
-      return { bg: isDark ? 'bg-emerald-500/20' : 'bg-emerald-100', text: isDark ? 'text-emerald-400' : 'text-emerald-700', dot: 'bg-emerald-400' };
-    }
-    if (statusLower === 'cancelled' || statusLower === 'cancel' || statusLower === 'canceled') {
-      return { bg: isDark ? 'bg-red-500/20' : 'bg-red-100', text: isDark ? 'text-red-400' : 'text-red-700', dot: 'bg-red-400' };
-    }
-    if (statusLower === 'ongoing' || statusLower === 'in progress') {
-      return { bg: isDark ? 'bg-blue-500/20' : 'bg-blue-100', text: isDark ? 'text-blue-400' : 'text-blue-700', dot: 'bg-blue-400' };
-    }
-    if (statusLower === 'wip') {
-      return { bg: isDark ? 'bg-indigo-500/20' : 'bg-indigo-100', text: isDark ? 'text-indigo-400' : 'text-indigo-700', dot: 'bg-indigo-400' };
-    }
-    if (statusLower === 'for audit' || statusLower === 'audit') {
-      return { bg: isDark ? 'bg-purple-500/20' : 'bg-purple-100', text: isDark ? 'text-purple-400' : 'text-purple-700', dot: 'bg-purple-400' };
-    }
-    if (statusLower === 'for investigation' || statusLower === 'investigation') {
-      return { bg: isDark ? 'bg-orange-500/20' : 'bg-orange-100', text: isDark ? 'text-orange-400' : 'text-orange-700', dot: 'bg-orange-400' };
-    }
-    if (statusLower === 'hold' || statusLower === 'on hold') {
-      return { bg: isDark ? 'bg-amber-500/20' : 'bg-amber-100', text: isDark ? 'text-amber-400' : 'text-amber-700', dot: 'bg-amber-400' };
-    }
-    if (statusLower === 'for correx' || statusLower === 'for correction' || statusLower === 'correx') {
-      return { bg: isDark ? 'bg-pink-500/20' : 'bg-pink-100', text: isDark ? 'text-pink-400' : 'text-pink-700', dot: 'bg-pink-400' };
-    }
-    if (statusLower === 'assigned') {
-      return { bg: isDark ? 'bg-cyan-500/20' : 'bg-cyan-100', text: isDark ? 'text-cyan-400' : 'text-cyan-700', dot: 'bg-cyan-400' };
-    }
-    if (statusLower === 'pending') {
-      return { bg: isDark ? 'bg-yellow-500/20' : 'bg-yellow-100', text: isDark ? 'text-yellow-400' : 'text-yellow-700', dot: 'bg-yellow-400' };
-    }
+    const statusMap: Record<string, { bg: string; text: string; dot: string }> = {
+      'completed': { 
+        bg: isDark ? 'bg-emerald-500/20' : 'bg-emerald-100', 
+        text: isDark ? 'text-emerald-400' : 'text-emerald-700', 
+        dot: 'bg-emerald-400' 
+      },
+      'cancelled': { 
+        bg: isDark ? 'bg-red-500/20' : 'bg-red-100', 
+        text: isDark ? 'text-red-400' : 'text-red-700', 
+        dot: 'bg-red-400' 
+      },
+      'ongoing': { 
+        bg: isDark ? 'bg-blue-500/20' : 'bg-blue-100', 
+        text: isDark ? 'text-blue-400' : 'text-blue-700', 
+        dot: 'bg-blue-400' 
+      },
+      'assigned': { 
+        bg: isDark ? 'bg-cyan-500/20' : 'bg-cyan-100', 
+        text: isDark ? 'text-cyan-400' : 'text-cyan-700', 
+        dot: 'bg-cyan-400' 
+      },
+      'pending': { 
+        bg: isDark ? 'bg-yellow-500/20' : 'bg-yellow-100', 
+        text: isDark ? 'text-yellow-400' : 'text-yellow-700', 
+        dot: 'bg-yellow-400' 
+      },
+      'wip': { 
+        bg: isDark ? 'bg-indigo-500/20' : 'bg-indigo-100', 
+        text: isDark ? 'text-indigo-400' : 'text-indigo-700', 
+        dot: 'bg-indigo-400' 
+      },
+      'for audit': { 
+        bg: isDark ? 'bg-purple-500/20' : 'bg-purple-100', 
+        text: isDark ? 'text-purple-400' : 'text-purple-700', 
+        dot: 'bg-purple-400' 
+      },
+      'for investigation': { 
+        bg: isDark ? 'bg-orange-500/20' : 'bg-orange-100', 
+        text: isDark ? 'text-orange-400' : 'text-orange-700', 
+        dot: 'bg-orange-400' 
+      },
+      'hold': { 
+        bg: isDark ? 'bg-amber-500/20' : 'bg-amber-100', 
+        text: isDark ? 'text-amber-400' : 'text-amber-700', 
+        dot: 'bg-amber-400' 
+      },
+      'for correx': { 
+        bg: isDark ? 'bg-pink-500/20' : 'bg-pink-100', 
+        text: isDark ? 'text-pink-400' : 'text-pink-700', 
+        dot: 'bg-pink-400' 
+      }
+    };
     
-    // Default for unknown statuses
-    return { bg: isDark ? 'bg-slate-500/20' : 'bg-gray-100', text: isDark ? 'text-slate-400' : 'text-gray-700', dot: 'bg-slate-400' };
+    return statusMap[statusLower] || { 
+      bg: isDark ? 'bg-slate-500/20' : 'bg-gray-100', 
+      text: isDark ? 'text-slate-400' : 'text-gray-700', 
+      dot: 'bg-slate-400' 
+    };
   };
 
-  // Get status options for dropdown
   const getStatusOptions = (currentStatus: string) => {
-    // All possible statuses from your tracker
-    const allStatuses = [
-      'Pending', 'Assigned', 'Ongoing', 'WIP', 
-      'For Audit', 'For Investigation', 'Hold', 
-      'For Correx', 'Completed', 'Cancelled'
-    ];
-    return allStatuses.filter(s => s.toLowerCase() !== currentStatus.toLowerCase());
+    return VALID_TASK_STATUSES.filter(
+      (s) => s.toLowerCase() !== currentStatus.toLowerCase()
+    );
   };
 
   const openTaskModal = (task: Task) => {
@@ -1540,8 +1501,8 @@ export default function DashboardClient({
 
   return (
     <>
-      <div className="flex h-[calc(100vh-2rem)] w-full max-w-full flex-col overflow-y-auto overflow-x-hidden">
-        <div className="w-full max-w-full space-y-5 overflow-hidden sm:space-y-6 pb-6">
+      <div className="flex h-[calc(100vh-2rem)] min-h-0 w-full max-w-full flex-col overflow-y-auto overflow-x-hidden">
+        <div className="w-full max-w-full space-y-5 sm:space-y-6 pb-6">
           <section className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <div className="flex items-center gap-3">
@@ -1588,7 +1549,7 @@ export default function DashboardClient({
                   <div className="relative">
                     <input
                       type="text"
-                      placeholder="Search tasks..."
+                      placeholder="Search task, brand, status, BC link..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className={`rounded-lg border px-3 py-1.5 text-sm pl-8 ${
@@ -2082,7 +2043,34 @@ export default function DashboardClient({
               {selectedTask.bc_links && (
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>BC Links</label>
-                  <p className={`text-sm text-blue-400 mt-1 break-all`}>{selectedTask.bc_links}</p>
+                  <div className="mt-1">
+                    {selectedTask.bc_links.split(',').map((link, index) => {
+                      const trimmedLink = link.trim();
+                      if (trimmedLink.startsWith('http://') || trimmedLink.startsWith('https://')) {
+                        return (
+                          <a
+                            key={index}
+                            href={trimmedLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`inline-flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300 underline-offset-2 hover:underline transition-colors mr-2 ${
+                              isDark ? 'hover:text-blue-300' : 'hover:text-blue-600'
+                            }`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MessageSquare className="h-3 w-3" />
+                            Basecamp Link {index + 1}
+                            <ArrowRight className="h-3 w-3" />
+                          </a>
+                        );
+                      }
+                      return (
+                        <span key={index} className={`text-sm ${mutedText} mr-2`}>
+                          {trimmedLink}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
@@ -2123,7 +2111,9 @@ export default function DashboardClient({
       <MemberRouletteModal isOpen={isRouletteOpen} onClose={() => setIsRouletteOpen(false)} theme={theme} />
     </>
   );
-}
+} // <-- THIS CLOSES THE DashboardClient COMPONENT
+
+// ─── ToolCard Component (defined OUTSIDE DashboardClient) ─────────────────────
 
 function ToolCard({ tool, theme, runCount, sparkline, onOpen }: any) {
   const isDark = theme === 'dark';
