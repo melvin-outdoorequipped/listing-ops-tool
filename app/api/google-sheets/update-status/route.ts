@@ -2,15 +2,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 
-// Catch unhandled errors to prevent server crashes
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
-});
-
 function getColumnLetter(colIndex: number) {
   let letter = '';
   let temp = colIndex;
@@ -21,39 +12,14 @@ function getColumnLetter(colIndex: number) {
   return letter;
 }
 
-async function getHeaders(sheets: any, spreadsheetId: string, sheetName: string) {
-  try {
-    const headerResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `'${sheetName}'!1:1`,
-    });
-    const headers = headerResponse.data.values?.[0] || [];
-    return headers;
-  } catch (error: any) {
-    console.error('❌ Error fetching headers:', error);
-    throw new Error(`Failed to fetch sheet headers: ${error.message}`);
-  }
-}
-
 export async function POST(request: NextRequest) {
   console.log('🚀 Update status API called');
   
   try {
-    // Parse request body
-    let body;
-    try {
-      body = await request.json();
-    } catch (parseError) {
-      console.error('❌ Failed to parse request body:', parseError);
-      return NextResponse.json(
-        { error: 'Invalid JSON in request body' },
-        { status: 400 }
-      );
-    }
-
+    const body = await request.json();
     console.log('📝 Request body:', JSON.stringify(body, null, 2));
 
-    const { spreadsheetId, sheetName, rowIndex, newStatus, taskName, agentEmail } = body;
+    const { spreadsheetId, sheetName, rowIndex, newStatus, reasonForPending } = body;
 
     // Validate required parameters
     if (!spreadsheetId) {
@@ -68,7 +34,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    if (rowIndex === undefined || rowIndex === null || rowIndex === 0) {
+    if (!rowIndex) {
       return NextResponse.json(
         { error: 'Missing required parameter: rowIndex' },
         { status: 400 }
@@ -81,7 +47,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Ensure rowIndex is a number
     const rowIndexNum = Number(rowIndex);
     if (isNaN(rowIndexNum) || rowIndexNum < 2) {
       return NextResponse.json(
@@ -108,7 +73,6 @@ export async function POST(request: NextRequest) {
 
     console.log('🔐 Initializing Google Auth...');
     
-    // Create a NEW auth instance for each request
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
@@ -122,143 +86,137 @@ export async function POST(request: NextRequest) {
 
     // Get headers to find columns
     console.log(`📊 Fetching headers from sheet: ${sheetName}`);
-    const headers = await getHeaders(sheets, spreadsheetId, sheetName);
+    const headerResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${sheetName}'!1:1`,
+    });
+    const headers = headerResponse.data.values?.[0] || [];
     console.log('📊 Headers found:', headers);
 
-    // Find the Status column
+    // Find columns - IMPORTANT: Find the FIRST occurrence of each column
     let statusColIndex = -1;
+    let dateCompletedColIndex = -1;
+    let reasonPendingColIndex = -1;
+    let reasonCancelColIndex = -1;
+
     for (let i = 0; i < headers.length; i++) {
       const header = headers[i]?.toString().trim().toLowerCase();
-      if (header === 'status') {
+      
+      // Only set if not found yet (take the FIRST occurrence)
+      if (header === 'status' && statusColIndex === -1) {
         statusColIndex = i;
-        break;
+        console.log(`📍 Found FIRST Status column at index ${i}: "${headers[i]}"`);
+      } else if (header === 'date completed' && dateCompletedColIndex === -1) {
+        dateCompletedColIndex = i;
+        console.log(`📍 Found Date Completed column at index ${i}: "${headers[i]}"`);
+      } else if (header === 'reason for pending' && reasonPendingColIndex === -1) {
+        reasonPendingColIndex = i;
+        console.log(`📍 Found Reason for Pending column at index ${i}: "${headers[i]}"`);
+      } else if (header === 'reason for cancel' && reasonCancelColIndex === -1) {
+        reasonCancelColIndex = i;
+        console.log(`📍 Found Reason for Cancel column at index ${i}: "${headers[i]}"`);
       }
     }
 
     if (statusColIndex === -1) {
-      console.error('❌ Status column not found. Available headers:', headers);
+      console.error('❌ Status column not found');
       return NextResponse.json(
-        { error: `Status column not found. Available headers: ${headers.join(', ')}` },
+        { error: 'Status column not found in the sheet' },
         { status: 400 }
       );
     }
 
-    // Find the Date Completed column
-    let dateCompletedColIndex = -1;
-    for (let i = 0; i < headers.length; i++) {
-      const header = headers[i]?.toString().trim().toLowerCase();
-      if (header === 'date completed') {
-        dateCompletedColIndex = i;
-        break;
-      }
-    }
-
     const statusColLetter = getColumnLetter(statusColIndex);
-    const rangeToUpdate = `'${sheetName}'!${statusColLetter}${rowIndexNum}`;
-    console.log(`📤 Updating range: ${rangeToUpdate} to "${newStatus}"`);
+    const statusRange = `'${sheetName}'!${statusColLetter}${rowIndexNum}`;
+    console.log(`📤 Updating FIRST Status range: ${statusRange} to "${newStatus}"`);
 
-    // Build updates array
-    const updates: { range: string; values: any[][] }[] = [
-      { range: rangeToUpdate, values: [[newStatus]] },
-    ];
-
-    // Handle Date Completed column based on status
     const statusLower = newStatus.toLowerCase();
+    const isPending = statusLower === 'pending';
     const isCompletedOrCancelled = statusLower === 'completed' || statusLower === 'cancelled';
 
+    // Build updates array
+    const updates: { range: string; values: any[][] }[] = [];
+
+    // 1. Update the FIRST Status column
+    updates.push({ range: statusRange, values: [[newStatus]] });
+
+    // 2. Handle Date Completed
     if (dateCompletedColIndex !== -1) {
       const dateColLetter = getColumnLetter(dateCompletedColIndex);
       const dateRange = `'${sheetName}'!${dateColLetter}${rowIndexNum}`;
       
       if (isCompletedOrCancelled) {
-        // When marking as Completed or Cancelled, set the date
-        const today = new Date().toISOString().split('T')[0];
-        console.log(`📤 Setting date range: ${dateRange} to "${today}"`);
+        const today = new Date().toLocaleDateString('en-US');
+        console.log(`📤 Setting date: ${dateRange} to "${today}"`);
         updates.push({ range: dateRange, values: [[today]] });
       } else {
-        // When reverting from Completed/Cancelled to something else, clear the date
-        console.log(`📤 Clearing date range: ${dateRange}`);
-        // Use empty string to clear the date
+        console.log(`📤 Clearing date: ${dateRange}`);
         updates.push({ range: dateRange, values: [['']] });
       }
     }
 
-    // Execute the update using batchUpdate
-    try {
-      console.log(`📤 Sending batch update to Google Sheets with ${updates.length} updates...`);
+    // 3. Handle Reason for Pending - CLEAR when not Pending
+    if (reasonPendingColIndex !== -1) {
+      const reasonColLetter = getColumnLetter(reasonPendingColIndex);
+      const reasonRange = `'${sheetName}'!${reasonColLetter}${rowIndexNum}`;
       
-      const result = await sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId,
-        requestBody: {
-          valueInputOption: 'USER_ENTERED',
-          data: updates,
-        },
-      });
-      
-      console.log('✅ Google Sheets update successful');
-      console.log('📊 Total updated cells:', result.data.totalUpdatedCells);
-      
-      return NextResponse.json({ 
-        success: true, 
-        updatedStatus: newStatus,
-        updatedRange: rangeToUpdate,
-        dateUpdated: isCompletedOrCancelled ? new Date().toISOString().split('T')[0] : 'cleared',
-        totalUpdatedCells: result.data.totalUpdatedCells || updates.length
-      });
-      
-    } catch (googleError: any) {
-      console.error('❌ Google Sheets API error:', googleError);
-      console.error('Error details:', googleError.response?.data);
-      
-      // If batch update fails, try updating just the status
-      if (googleError.message && googleError.message.includes('batchUpdate')) {
-        console.log('🔄 Retrying with single status update only...');
-        try {
-          const retryResult = await sheets.spreadsheets.values.update({
-            spreadsheetId,
-            range: rangeToUpdate,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: {
-              values: [[newStatus]],
-            },
-          });
-          
-          return NextResponse.json({ 
-            success: true, 
-            updatedStatus: newStatus,
-            updatedRange: rangeToUpdate,
-            note: 'Status updated, date column not modified',
-            updatedCells: retryResult.data.updatedCells || 1
-          });
-        } catch (retryError) {
-          console.error('❌ Retry also failed:', retryError);
-          return NextResponse.json(
-            { 
-              error: `Failed to update: ${googleError.message || 'Unknown error'}`,
-              details: googleError.response?.data || null
-            },
-            { status: 500 }
-          );
-        }
+      if (isPending) {
+        // If setting to Pending, set the reason
+        const reason = reasonForPending || '';
+        console.log(`📤 Setting reason for pending: "${reason}"`);
+        updates.push({ range: reasonRange, values: [[reason]] });
+      } else {
+        // If changing from Pending to ANY other status, CLEAR the reason
+        console.log(`📤 CLEARING reason for pending (status changed to: ${newStatus})`);
+        updates.push({ range: reasonRange, values: [['']] });
       }
-      
-      return NextResponse.json(
-        { 
-          error: `Google Sheets API error: ${googleError.message || 'Unknown error'}`,
-          details: googleError.response?.data || null
-        },
-        { status: 500 }
-      );
     }
+
+    // 4. Handle Reason for Cancel
+    if (reasonCancelColIndex !== -1) {
+      const cancelColLetter = getColumnLetter(reasonCancelColIndex);
+      const cancelRange = `'${sheetName}'!${cancelColLetter}${rowIndexNum}`;
+      
+      if (statusLower === 'cancelled') {
+        // Keep the cancel reason if it exists
+        console.log(`📤 Keeping reason for cancel`);
+      } else {
+        // Clear cancel reason if not cancelled
+        console.log(`📤 Clearing reason for cancel`);
+        updates.push({ range: cancelRange, values: [['']] });
+      }
+    }
+
+    console.log(`📤 Sending batch update with ${updates.length} updates...`);
+    updates.forEach((u, i) => {
+      console.log(`  Update ${i + 1}: ${u.range} = ${JSON.stringify(u.values[0][0])}`);
+    });
+
+    // Execute all updates in one batch
+    const result = await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        valueInputOption: 'USER_ENTERED',
+        data: updates,
+      },
+    });
+
+    console.log('✅ Google Sheets update successful');
+    console.log('📊 Total updated cells:', result.data.totalUpdatedCells);
+
+    return NextResponse.json({ 
+      success: true, 
+      updatedStatus: newStatus,
+      updatedRange: statusRange,
+      reasonCleared: !isPending && reasonPendingColIndex !== -1,
+      reasonSet: isPending && reasonPendingColIndex !== -1,
+      totalUpdatedCells: result.data.totalUpdatedCells || updates.length
+    });
     
   } catch (error: any) {
-    console.error('❌ Unexpected error:', error);
-    console.error('Stack trace:', error.stack);
+    console.error('❌ Error updating status:', error);
     return NextResponse.json(
-      { 
-        error: `Unexpected error: ${error.message || 'Unknown error'}`,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      },
+      { error: `Failed to update status: ${error.message || 'Unknown error'}` },
       { status: 500 }
     );
   }

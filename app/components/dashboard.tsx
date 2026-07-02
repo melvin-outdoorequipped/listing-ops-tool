@@ -391,6 +391,27 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
     }
   }, [isOpen, task]);
 
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [isOpen, onClose]);
+
+  // Handle click outside to close
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
   if (!isOpen || !task) return null;
 
   const category = findCategoryByTaskName(task.task);
@@ -444,7 +465,10 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
     : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={handleBackdropClick}
+    >
       <div className={`relative w-full max-w-2xl rounded-2xl border shadow-2xl ${modalClass} animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto`}>
         {/* Header */}
         <div className={`flex items-center justify-between border-b p-4 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
@@ -477,6 +501,7 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={`w-full rounded-lg border pl-9 pr-3 py-2 text-sm ${inputClass}`}
+              autoFocus
             />
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -583,7 +608,7 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
         {/* Footer */}
         <div className={`border-t p-4 ${isDark ? 'border-slate-700' : 'border-gray-200'} flex justify-between items-center`}>
           <span className={`text-[10px] ${mutedText}`}>
-            {filteredTemplates.length} template{filteredTemplates.length !== 1 ? 's' : ''} available
+            {filteredTemplates.length} template{filteredTemplates.length !== 1 ? 's' : ''} available · Press ESC to close
           </span>
           <button
             onClick={onClose}
@@ -594,6 +619,158 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
             }`}
           >
             Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── REASON FOR PENDING MODAL ─────────────────────────────────────────────
+
+interface ReasonForPendingModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+  task: Task | null;
+  theme: 'light' | 'dark';
+  isSubmitting: boolean;
+}
+
+function ReasonForPendingModal({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  task, 
+  theme, 
+  isSubmitting 
+}: ReasonForPendingModalProps) {
+  const [reason, setReason] = useState('');
+  const isDark = theme === 'dark';
+
+  useEffect(() => {
+    if (isOpen) {
+      setReason('');
+    }
+  }, [isOpen]);
+
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [isOpen, onClose]);
+
+  // Handle click outside to close
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
+  if (!isOpen || !task) return null;
+
+  const modalClass = isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200';
+  const textClass = isDark ? 'text-white' : 'text-gray-900';
+  const mutedText = isDark ? 'text-slate-400' : 'text-gray-500';
+  const inputClass = isDark
+    ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400'
+    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400';
+
+  const handleSubmit = () => {
+    if (reason.trim()) {
+      onConfirm(reason.trim());
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (reason.trim()) {
+        onConfirm(reason.trim());
+      }
+    }
+    if (e.key === 'Escape') {
+      onClose();
+    }
+  };
+
+  return (
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={handleBackdropClick}
+    >
+      <div className={`relative w-full max-w-md rounded-2xl border shadow-2xl ${modalClass} animate-in zoom-in-95 duration-200`}>
+        {/* Header */}
+        <div className={`flex items-center justify-between border-b p-4 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
+          <div className="flex items-center gap-2">
+            <div className="rounded-lg bg-yellow-500/20 p-1.5">
+              <Clock className="h-5 w-5 text-yellow-400" />
+            </div>
+            <div>
+              <h3 className={`font-semibold ${textClass}`}>Reason for Pending</h3>
+              <p className={`text-xs ${mutedText}`}>
+                {task.task} · {task.brand}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className={`rounded-lg p-1 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}
+          >
+            <X className={`h-5 w-5 ${mutedText}`} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-5 space-y-4">
+          <div>
+            <label className={`mb-1.5 block text-sm font-medium ${textClass}`}>
+              Why is this task being set to Pending?
+            </label>
+            <textarea
+              className={`w-full rounded-lg border px-3 py-2 text-sm ${inputClass}`}
+              rows={4}
+              placeholder="Enter the reason for pending status..."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              onKeyDown={handleKeyDown}
+              autoFocus
+            />
+            <p className={`mt-1 text-xs ${mutedText}`}>
+              Press <kbd className={`rounded border px-1.5 py-0.5 text-[10px] ${isDark ? 'border-slate-600 bg-slate-800' : 'border-gray-300 bg-gray-100'}`}>Enter</kbd> to submit, <kbd className={`rounded border px-1.5 py-0.5 text-[10px] ${isDark ? 'border-slate-600 bg-slate-800' : 'border-gray-300 bg-gray-100'}`}>Esc</kbd> to cancel
+            </p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className={`border-t p-4 ${isDark ? 'border-slate-700' : 'border-gray-200'} flex justify-end gap-2`}>
+          <button
+            onClick={onClose}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+              isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting || !reason.trim()}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-all ${
+              isSubmitting || !reason.trim()
+                ? 'opacity-50 cursor-not-allowed bg-yellow-600'
+                : 'bg-yellow-500 hover:bg-yellow-600'
+            }`}
+          >
+            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clock className="h-4 w-4" />}
+            Set to Pending
           </button>
         </div>
       </div>
@@ -617,6 +794,27 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
   const [flashWinner, setFlashWinner] = useState(false);
 
   const isDark = theme === 'dark';
+
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [isOpen, onClose]);
+
+  // Handle click outside to close
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
 
   useEffect(() => {
     const loadedMembers = loadMembersFromStorage();
@@ -769,7 +967,10 @@ function MemberRouletteModal({ isOpen, onClose, theme }: { isOpen: boolean; onCl
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={handleBackdropClick}
+    >
       {showConfetti && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-50">
           {[...Array(150)].map((_, i) => (
@@ -1100,6 +1301,27 @@ function TaskFormModal({
   const isDark = theme === 'dark';
   const [form, setForm] = useState<TaskFormValues>({ ...emptyTaskForm, ...initialValues });
 
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [isOpen, onClose]);
+
+  // Handle click outside to close
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       setForm({ ...emptyTaskForm, ...initialValues });
@@ -1121,7 +1343,10 @@ function TaskFormModal({
   const usingCustomBrand = form.brand === '__OTHER__';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={handleBackdropClick}
+    >
       <div className={`relative w-full max-w-xl rounded-2xl border shadow-2xl ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'} animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto`}>
         <div className={`flex items-center justify-between border-b p-4 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
           <div className="flex items-center gap-2">
@@ -1296,6 +1521,11 @@ export default function DashboardClient({
   const [isNotificationEnabled, setIsNotificationEnabled] = useState(false);
   const [showTaskGenerator, setShowTaskGenerator] = useState(false);
   const [selectedTaskForGenerator, setSelectedTaskForGenerator] = useState<Task | null>(null);
+  
+  // Reason for Pending states
+  const [showPendingReasonModal, setShowPendingReasonModal] = useState(false);
+  const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
+  const [isSubmittingPending, setIsSubmittingPending] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -1656,95 +1886,125 @@ export default function DashboardClient({
     }
   }, [customDateStart, customDateEnd]);
 
-  const updateTaskStatus = useCallback(async (taskId: string, newStatus: string) => {
-    if (updatingTaskId) return;
+  const updateTaskStatus = useCallback(async (taskId: string, newStatus: string, reason?: string) => {
+  if (updatingTaskId) return;
 
-    setUpdatingTaskId(taskId);
-    setUpdateError(null);
+  // If setting to Pending and no reason provided, show the modal
+  if (newStatus.toLowerCase() === 'pending' && !reason) {
+    setPendingTaskId(taskId);
+    setShowPendingReasonModal(true);
+    return;
+  }
 
-    const sourceList = viewMode === 'all' ? allTasks : tasks;
-    const task = sourceList.find(t => t.id === taskId);
-    if (!task) {
-      setUpdatingTaskId(null);
-      setUpdateError('Task not found');
-      return;
-    }
+  setUpdatingTaskId(taskId);
+  setUpdateError(null);
 
-    const rowIndex = Number(task.rowIndex);
-    if (isNaN(rowIndex) || rowIndex < 2) {
-      setUpdateError(`Invalid row index: ${task.rowIndex}`);
-      setUpdatingTaskId(null);
-      return;
-    }
+  const sourceList = viewMode === 'all' ? allTasks : tasks;
+  const task = sourceList.find(t => t.id === taskId);
+  if (!task) {
+    setUpdatingTaskId(null);
+    setUpdateError('Task not found');
+    return;
+  }
 
-    const previousTasks = [...tasks];
-    const previousAllTasks = [...allTasks];
-    const isCompletedOrCancelled = newStatus.toLowerCase() === 'completed' || newStatus.toLowerCase() === 'cancelled';
+  const rowIndex = Number(task.rowIndex);
+  if (isNaN(rowIndex) || rowIndex < 2) {
+    setUpdateError(`Invalid row index: ${task.rowIndex}`);
+    setUpdatingTaskId(null);
+    return;
+  }
 
-    const applyOptimisticUpdate = (list: Task[]) =>
-      list.map(t =>
-        t.id === taskId
-          ? {
-              ...t,
-              status: newStatus,
-              date_completed: isCompletedOrCancelled
-                ? new Date().toLocaleDateString('en-US')
-                : null,
-            }
-          : t
-      );
+  const previousTasks = [...tasks];
+  const previousAllTasks = [...allTasks];
+  const isCompletedOrCancelled = newStatus.toLowerCase() === 'completed' || newStatus.toLowerCase() === 'cancelled';
+  const isPending = newStatus.toLowerCase() === 'pending';
 
-    setTasks(prev => applyOptimisticUpdate(prev));
-    setAllTasks(prev => applyOptimisticUpdate(prev));
+  // Optimistic update - immediately show the change in UI
+  const applyOptimisticUpdate = (list: Task[]) =>
+    list.map(t =>
+      t.id === taskId
+        ? {
+            ...t,
+            status: newStatus,
+            date_completed: isCompletedOrCancelled
+              ? new Date().toLocaleDateString('en-US')
+              : null,
+            // If setting to Pending, set the reason. Otherwise, CLEAR it
+            reason_for_pending: isPending ? (reason || '') : '',
+            reason_for_cancel: newStatus.toLowerCase() === 'cancelled' ? t.reason_for_cancel : '',
+          }
+        : t
+    );
 
-    if (showTaskModal) {
-      setShowTaskModal(false);
-      setSelectedTask(null);
-    }
+  setTasks(prev => applyOptimisticUpdate(prev));
+  setAllTasks(prev => applyOptimisticUpdate(prev));
 
+  if (showTaskModal) {
+    setShowTaskModal(false);
+    setSelectedTask(null);
+  }
+
+  try {
+    const payload = {
+      spreadsheetId: SPREADSHEET_ID,
+      sheetName: SHEET_NAME,
+      rowIndex: rowIndex,
+      newStatus: newStatus,
+      taskName: task.task,
+      agentEmail: task.agent || '',
+      // Only send reason if status is Pending
+      reasonForPending: isPending ? (reason || '') : '',
+    };
+
+    console.log('📤 Sending update status request:', payload);
+
+    const response = await fetch('/api/google-sheets/update-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const responseText = await response.text();
+    console.log('📥 Response:', responseText);
+
+    let data;
     try {
-      const payload = {
-        spreadsheetId: SPREADSHEET_ID,
-        sheetName: SHEET_NAME,
-        rowIndex: rowIndex,
-        newStatus: newStatus,
-        taskName: task.task,
-        agentEmail: task.agent || '',
-      };
-
-      const response = await fetch('/api/google-sheets/update-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const responseText = await response.text();
-
-      if (!response.ok) {
-        let errorDetail = responseText;
-        try {
-          const errorJson = JSON.parse(responseText);
-          errorDetail = errorJson.error || errorJson.message || responseText;
-        } catch {
-          // Keep as text if not JSON
-        }
-        throw new Error(`API Error ${response.status}: ${errorDetail}`);
-      }
-
-      setTimeout(() => {
-        refreshCurrentView();
-      }, 1500);
-
-    } catch (error) {
-      console.error('❌ Failed to update task status:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update task status';
-      setUpdateError(errorMessage);
-      setTasks(previousTasks);
-      setAllTasks(previousAllTasks);
-    } finally {
-      setUpdatingTaskId(null);
+      data = JSON.parse(responseText);
+    } catch {
+      data = { raw: responseText };
     }
-  }, [tasks, allTasks, viewMode, showTaskModal, refreshCurrentView, updatingTaskId, SPREADSHEET_ID, SHEET_NAME]);
+
+    if (!response.ok) {
+      throw new Error(data.error || data.raw || `HTTP error ${response.status}`);
+    }
+
+    console.log('✅ Status update successful:', data);
+
+    // Refresh the view after a short delay to get the latest data
+    setTimeout(() => {
+      refreshCurrentView();
+    }, 1500);
+
+  } catch (error) {
+    console.error('❌ Failed to update task status:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update task status';
+    setUpdateError(errorMessage);
+    setTasks(previousTasks);
+    setAllTasks(previousAllTasks);
+  } finally {
+    setUpdatingTaskId(null);
+    setPendingTaskId(null);
+  }
+}, [tasks, allTasks, viewMode, showTaskModal, refreshCurrentView, updatingTaskId, SPREADSHEET_ID, SHEET_NAME]);
+
+  const handlePendingConfirm = useCallback(async (reason: string) => {
+    if (!pendingTaskId) return;
+    setIsSubmittingPending(true);
+    await updateTaskStatus(pendingTaskId, 'Pending', reason);
+    setIsSubmittingPending(false);
+    setShowPendingReasonModal(false);
+    setPendingTaskId(null);
+  }, [pendingTaskId, updateTaskStatus]);
 
   const saveTaskEdits = useCallback(async (values: TaskFormValues) => {
     if (!selectedTask) return;
@@ -2005,21 +2265,53 @@ export default function DashboardClient({
       });
     }
 
-    // Search term filter
+    // Search term filter - ENHANCED with due date search
     if (debouncedSearchTerm.trim()) {
       const term = debouncedSearchTerm.toLowerCase().trim();
+      
       filtered = filtered.filter(task => {
+        // Check if search term matches any standard field
         if (task.task.toLowerCase().includes(term)) return true;
         if (task.brand.toLowerCase().includes(term)) return true;
         if (task.status.toLowerCase().includes(term)) return true;
-        return task.type.toLowerCase().includes(term) ||
-          task.segment.toLowerCase().includes(term) ||
-          task.bc_links.toLowerCase().includes(term) ||
-          task.agent.toLowerCase().includes(term) ||
-          task.auditor.toLowerCase().includes(term) ||
-          task.remarks.toLowerCase().includes(term) ||
-          task.reason_for_pending.toLowerCase().includes(term) ||
-          task.reason_for_cancel.toLowerCase().includes(term);
+        if (task.type.toLowerCase().includes(term)) return true;
+        if (task.segment.toLowerCase().includes(term)) return true;
+        if (task.bc_links.toLowerCase().includes(term)) return true;
+        if (task.agent.toLowerCase().includes(term)) return true;
+        if (task.auditor.toLowerCase().includes(term)) return true;
+        if (task.remarks.toLowerCase().includes(term)) return true;
+        if (task.reason_for_pending.toLowerCase().includes(term)) return true;
+        if (task.reason_for_cancel.toLowerCase().includes(term)) return true;
+        
+        // Search by due date
+        if (task.due_date) {
+          try {
+            const dueDate = new Date(task.due_date);
+            if (!isNaN(dueDate.getTime())) {
+              // Format the due date in multiple ways for searching
+              const dateFormats = [
+                task.due_date.toLowerCase(),
+                dueDate.toLocaleDateString('en-US').toLowerCase(),
+                dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase(),
+                dueDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toLowerCase(),
+                dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toLowerCase(),
+                dueDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }).toLowerCase(),
+                dueDate.toISOString().split('T')[0],
+                `${dueDate.getMonth() + 1}/${dueDate.getDate()}/${dueDate.getFullYear()}`,
+                `${dueDate.getMonth() + 1}/${dueDate.getDate()}`,
+                `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-${String(dueDate.getDate()).padStart(2, '0')}`,
+              ];
+              
+              for (const format of dateFormats) {
+                if (format.includes(term)) return true;
+              }
+            }
+          } catch (e) {
+            // If date parsing fails, skip
+          }
+        }
+        
+        return false;
       });
     }
 
@@ -2385,7 +2677,7 @@ export default function DashboardClient({
                   <div className="relative">
                     <input
                       type="text"
-                      placeholder="Search task, brand, status, BC link..."
+                      placeholder="Search task, brand, status, due date, BC link..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className={`rounded-lg border px-3 py-1.5 text-sm pl-8 ${
@@ -2393,6 +2685,18 @@ export default function DashboardClient({
                       }`}
                     />
                     <Filter className={`absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 ${mutedText}`} />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className={`text-[9px] ${mutedText}`}>
+                      💡 Search by due date: 
+                    </span>
+                    <span className={`text-[9px] ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                      <kbd className={`rounded border px-1 py-0.5 text-[8px] ${isDark ? 'border-slate-600 bg-slate-800' : 'border-gray-300 bg-gray-100'}`}>2024-12-25</kbd>
+                      <span className="mx-1">·</span>
+                      <kbd className={`rounded border px-1 py-0.5 text-[8px] ${isDark ? 'border-slate-600 bg-slate-800' : 'border-gray-300 bg-gray-100'}`}>Dec 25</kbd>
+                      <span className="mx-1">·</span>
+                      <kbd className={`rounded border px-1 py-0.5 text-[8px] ${isDark ? 'border-slate-600 bg-slate-800' : 'border-gray-300 bg-gray-100'}`}>12/25</kbd>
+                    </span>
                   </div>
                   <button
                     onClick={toggleViewMode}
@@ -3249,7 +3553,12 @@ export default function DashboardClient({
               {selectedTask.reason_for_pending && (
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Reason for Pending</label>
-                  <p className={`text-sm ${pageText} mt-1`}>{selectedTask.reason_for_pending}</p>
+                  <div className={`mt-1 rounded-lg border p-3 ${isDark ? 'border-yellow-500/30 bg-yellow-500/10' : 'border-yellow-300 bg-yellow-50'}`}>
+                    <div className="flex items-start gap-2">
+                      <Clock className={`h-4 w-4 mt-0.5 ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`} />
+                      <p className={`text-sm ${pageText}`}>{selectedTask.reason_for_pending}</p>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -3376,6 +3685,21 @@ export default function DashboardClient({
         task={selectedTaskForGenerator}
         theme={theme}
       />
+
+      {/* ─── REASON FOR PENDING MODAL ────────────────────────────────────── */}
+      {showPendingReasonModal && pendingTaskId && (
+        <ReasonForPendingModal
+          isOpen={showPendingReasonModal}
+          onClose={() => {
+            setShowPendingReasonModal(false);
+            setPendingTaskId(null);
+          }}
+          onConfirm={handlePendingConfirm}
+          task={tasks.find(t => t.id === pendingTaskId) || allTasks.find(t => t.id === pendingTaskId) || null}
+          theme={theme}
+          isSubmitting={isSubmittingPending}
+        />
+      )}
 
       <MemberRouletteModal isOpen={isRouletteOpen} onClose={() => setIsRouletteOpen(false)} theme={theme} />
     </>
