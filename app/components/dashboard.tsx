@@ -2424,7 +2424,7 @@ const filteredTasks = useMemo(() => {
             </div>
           </div>
 
-          {/* Tasks List */}
+                   {/* Tasks List */}
           <div className="max-h-[420px] overflow-y-auto overflow-x-auto">
             {(viewMode === 'all' ? allTasksLoading : tasksLoading) && activeTaskSource.length === 0 ? (
               <div className="flex items-center justify-center py-12">
@@ -2455,6 +2455,7 @@ const filteredTasks = useMemo(() => {
                     )}
                     <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Due Date</th>
                     <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Status</th>
+                    <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText} min-w-[120px]`}>Remarks</th>
                     <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedText}`}>Actions</th>
                   </tr>
                 </thead>
@@ -2464,6 +2465,7 @@ const filteredTasks = useMemo(() => {
                     const isUpdating = updatingTaskId === task.id;
                     const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
                     const isNew = task.isNew || newTaskIds.has(task.id);
+                    const hasRemarks = task.remarks && task.remarks.trim() !== '';
 
                     return (
                       <tr
@@ -2506,9 +2508,35 @@ const filteredTasks = useMemo(() => {
                             <span>{task.status}</span>
                           </span>
                         </td>
+                        <td className={`px-4 py-3 max-w-[150px] ${pageText}`}>
+                          {hasRemarks ? (
+                            <div className="relative group">
+                              <div className="flex items-start gap-1.5">
+                                {task.remarks.toLowerCase().includes('sbs') && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-yellow-500/20 px-1.5 py-0.5 text-[8px] font-semibold text-yellow-400 flex-shrink-0">
+                                    <Eye className="h-2.5 w-2.5" />
+                                    SBS
+                                  </span>
+                                )}
+                                <span className="text-xs line-clamp-2 break-words">
+                                  {task.remarks}
+                                </span>
+                              </div>
+                              {task.remarks.length > 60 && (
+                                <div className="absolute bottom-full left-0 mb-1 hidden group-hover:block z-20">
+                                  <div className={`rounded-lg border p-2 text-xs max-w-xs shadow-lg ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
+                                    {task.remarks}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className={`text-xs ${mutedText} italic`}>No remarks</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
-                            {getStatusOptions(task.status).slice(0, 3).map((newStatus) => (
+                            {getStatusOptions(task.status).slice(0, 2).map((newStatus) => (
                               <button
                                 key={newStatus}
                                 onClick={() => updateTaskStatus(task.id, newStatus)}
@@ -2521,8 +2549,8 @@ const filteredTasks = useMemo(() => {
                                 {isUpdating ? <Loader2 className="h-3 w-3 animate-spin" /> : newStatus}
                               </button>
                             ))}
-                            {getStatusOptions(task.status).length > 3 && (
-                              <span className={`text-[10px] ${mutedText}`}>+{getStatusOptions(task.status).length - 3}</span>
+                            {getStatusOptions(task.status).length > 2 && (
+                              <span className={`text-[10px] ${mutedText}`}>+{getStatusOptions(task.status).length - 2}</span>
                             )}
                             {isTaskAdmin && (
                               <button
