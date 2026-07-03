@@ -30,9 +30,17 @@ import {
   Check,
   Info,
   ArrowRight,
+  Copy,
 } from 'lucide-react';
 import { Task, TaskViewMode, getStatusColor, formatDate } from '../components/dashboard-utils';
 import { VALID_TASK_STATUSES, isTaskAdminEmail, AGENT_OPTIONS, BRAND_OPTIONS, TYPE_OPTIONS, TASK_OPTIONS } from '../../lib/task-option';
+import {
+  findCategoryByTaskName,
+  generateTaskName,
+  pushRecentTaskName,
+  loadRecentTaskNames,
+  RecentTaskName,
+} from '../../lib/td-task-names';
 
 interface TaskManagementProps {
   theme: 'light' | 'dark';
@@ -43,6 +51,23 @@ interface TaskManagementProps {
 // Move constants outside component
 const SPREADSHEET_ID = '1aBOYH2ShWyW8ASamH23WAFdoi0NR8bIebsQGuAnU67A';
 const SHEET_NAME = 'Copy of Task Masterlist - Operations';
+
+// ─── LOCAL STORAGE KEYS ──────────────────────────────────────────────────
+const STORAGE_KEYS = {
+  viewMode: 'task_management_view_mode',
+  layoutMode: 'task_management_layout_mode',
+  filterStatus: 'task_management_filter_status',
+  filterBrand: 'task_management_filter_brand',
+  filterAgent: 'task_management_filter_agent',
+  filterDateRange: 'task_management_filter_date_range',
+  customDateStart: 'task_management_custom_date_start',
+  customDateEnd: 'task_management_custom_date_end',
+  searchTerm: 'task_management_search_term',
+  sortField: 'task_management_sort_field',
+  sortOrder: 'task_management_sort_order',
+  showOnlyNew: 'task_management_show_only_new',
+  itemsPerPage: 'task_management_items_per_page',
+};
 
 // ─── REASON FOR PENDING MODAL ─────────────────────────────────────────────
 
@@ -82,37 +107,37 @@ function ReasonForPendingModal({
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 p-4"
       onClick={handleBackdropClick}
     >
       <div className={`relative w-full max-w-md rounded-2xl border shadow-2xl ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'} animate-in zoom-in-95 duration-200`}>
-        <div className={`flex items-center justify-between border-b p-5 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
+        <div className={`flex items-center justify-between border-b p-4 sm:p-5 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-yellow-500/20 p-2">
-              <Clock className="h-6 w-6 text-yellow-400" />
+              <Clock className="h-5 w-5 sm:h-6 sm:w-6 text-yellow-400" />
             </div>
             <div>
-              <h3 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Reason for Pending</h3>
-              <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+              <h3 className={`text-base sm:text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Reason for Pending</h3>
+              <p className={`text-xs sm:text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                 {task.task} · {task.brand}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className={`rounded-lg p-2 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}
+            className={`rounded-lg p-1.5 sm:p-2 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}
           >
-            <X className={`h-6 w-6 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
+            <X className={`h-5 w-5 sm:h-6 sm:w-6 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4">
           <div>
-            <label className={`mb-2 block text-base font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            <label className={`mb-2 block text-sm sm:text-base font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
               Why is this task being set to Pending?
             </label>
             <textarea
-              className={`w-full rounded-lg border px-4 py-3 text-base ${
+              className={`w-full rounded-lg border px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base ${
                 isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
               }`}
               rows={4}
@@ -124,10 +149,10 @@ function ReasonForPendingModal({
           </div>
         </div>
 
-        <div className={`border-t p-5 ${isDark ? 'border-slate-700' : 'border-gray-200'} flex justify-end gap-3`}>
+        <div className={`border-t p-4 sm:p-5 ${isDark ? 'border-slate-700' : 'border-gray-200'} flex flex-col sm:flex-row justify-end gap-2 sm:gap-3`}>
           <button
             onClick={onClose}
-            className={`rounded-lg px-5 py-2.5 text-base font-medium transition-all ${
+            className={`rounded-lg px-4 sm:px-5 py-2 sm:py-2.5 text-sm sm:text-base font-medium transition-all ${
               isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
@@ -136,13 +161,13 @@ function ReasonForPendingModal({
           <button
             onClick={() => reason.trim() && onConfirm(reason.trim())}
             disabled={isSubmitting || !reason.trim()}
-            className={`inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-base font-medium text-white transition-all ${
+            className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 sm:px-5 py-2 sm:py-2.5 text-sm sm:text-base font-medium text-white transition-all ${
               isSubmitting || !reason.trim()
                 ? 'opacity-50 cursor-not-allowed bg-yellow-600'
                 : 'bg-yellow-500 hover:bg-yellow-600'
             }`}
           >
-            {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Clock className="h-5 w-5" />}
+            {isSubmitting ? <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" /> : <Clock className="h-4 w-4 sm:h-5 sm:w-5" />}
             Set to Pending
           </button>
         </div>
@@ -215,53 +240,53 @@ function TaskFormModal({
 
   if (!isOpen) return null;
 
-  const inputClass = `w-full rounded-lg border px-4 py-3 text-base ${
+  const inputClass = `w-full rounded-lg border px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base ${
     isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
   }`;
-  const labelClass = `mb-1.5 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-600'}`;
+  const labelClass = `mb-1.5 block text-xs sm:text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-600'}`;
 
   const usingCustomBrand = form.brand === '__OTHER__';
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 p-4"
       onClick={handleBackdropClick}
     >
       <div className={`relative w-full max-w-2xl rounded-2xl border shadow-2xl ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'} animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto`}>
-        <div className={`flex items-center justify-between border-b p-5 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
+        <div className={`flex items-center justify-between border-b p-4 sm:p-5 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
           <div className="flex items-center gap-3">
             <div className={`rounded-lg p-2 ${isDark ? 'bg-emerald-500/20' : 'bg-emerald-100'}`}>
-              {mode === 'add' ? <Plus className={`h-6 w-6 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} /> : <Edit2 className={`h-6 w-6 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />}
+              {mode === 'add' ? <Plus className={`h-5 w-5 sm:h-6 sm:w-6 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} /> : <Edit2 className={`h-5 w-5 sm:h-6 sm:w-6 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />}
             </div>
             <div>
-              <h3 className={`text-xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              <h3 className={`text-lg sm:text-xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                 {mode === 'add' ? 'Add New Task' : 'Edit Task'}
               </h3>
-              <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+              <p className={`text-xs sm:text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                 {mode === 'add'
                   ? 'This will be added as a new row in the tracker'
                   : 'Only admins can edit tasks assigned to others'}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className={`rounded-lg p-2 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
-            <X className={`h-6 w-6 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
+          <button onClick={onClose} className={`rounded-lg p-1.5 sm:p-2 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
+            <X className={`h-5 w-5 sm:h-6 sm:w-6 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
           {error && (
-            <div className={`rounded-lg border px-4 py-3 text-base ${isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'}`}>
+            <div className={`rounded-lg border px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base ${isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'}`}>
               {error}
             </div>
           )}
 
-          <div className={`rounded-lg border px-4 py-3 text-sm ${isDark ? 'border-slate-700 bg-slate-800/50 text-slate-400' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
-            <Info className="inline h-4 w-4 mr-2 -mt-0.5" />
+          <div className={`rounded-lg border px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm ${isDark ? 'border-slate-700 bg-slate-800/50 text-slate-400' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
+            <Info className="inline h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2 -mt-0.5" />
             Segment is auto-filled by the sheet's formula and can't be set here.
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className={labelClass}>Date Requested</label>
               <input type="date" className={inputClass} value={form.dateRequested} onChange={(e) => setForm({ ...form, dateRequested: e.target.value })} />
@@ -328,7 +353,7 @@ function TaskFormModal({
               value={form.bcLinks}
               onChange={(e) => setForm({ ...form, bcLinks: e.target.value })}
             />
-            <p className={`text-sm mt-1.5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+            <p className={`text-xs sm:text-sm mt-1.5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
               Separate multiple links with commas
             </p>
           </div>
@@ -339,19 +364,269 @@ function TaskFormModal({
           </div>
         </div>
 
-        <div className={`border-t p-5 ${isDark ? 'border-slate-700' : 'border-gray-200'} flex justify-end gap-3`}>
-          <button onClick={onClose} className={`rounded-lg px-5 py-2.5 text-base font-medium transition-all ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+        <div className={`border-t p-4 sm:p-5 ${isDark ? 'border-slate-700' : 'border-gray-200'} flex flex-col sm:flex-row justify-end gap-2 sm:gap-3`}>
+          <button onClick={onClose} className={`rounded-lg px-4 sm:px-5 py-2 sm:py-2.5 text-sm sm:text-base font-medium transition-all ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
             Cancel
           </button>
           <button
             onClick={() => onSubmit(form)}
             disabled={isSubmitting || !form.task || !form.agent || (!form.brand || (usingCustomBrand && !form.customBrand.trim()))}
-            className={`inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-base font-medium text-white transition-all ${
+            className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 sm:px-5 py-2 sm:py-2.5 text-sm sm:text-base font-medium text-white transition-all ${
               isSubmitting ? 'opacity-50 cursor-not-allowed bg-emerald-600' : 'bg-emerald-500 hover:bg-emerald-600'
             }`}
           >
-            {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
+            {isSubmitting ? <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" /> : <Check className="h-4 w-4 sm:h-5 sm:w-5" />}
             {mode === 'add' ? 'Add Task' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── TASK NAME GENERATOR MODAL ───────────────────────────────────────────
+
+interface TaskNameGeneratorModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  task: Task | null;
+  theme: 'light' | 'dark';
+}
+
+function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGeneratorModalProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [copiedTemplate, setCopiedTemplate] = useState<string | null>(null);
+  const [copiedText, setCopiedText] = useState<string | null>(null);
+  const [recentTasks, setRecentTasks] = useState<RecentTaskName[]>([]);
+
+  const isDark = theme === 'dark';
+
+  useEffect(() => {
+    if (isOpen && task) {
+      const recents = loadRecentTaskNames(task.agent || 'default');
+      setRecentTasks(recents);
+    }
+  }, [isOpen, task]);
+
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [isOpen, onClose]);
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
+  if (!isOpen || !task) return null;
+
+  const category = findCategoryByTaskName(task.task);
+  const templates = category?.templates || [];
+
+  const filteredTemplates = searchQuery.trim()
+    ? templates.filter(t =>
+        generateTaskName(t, { brand: task.brand, agent: task.agent })
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase())
+      )
+    : templates;
+
+  const handleCopy = (template: string) => {
+    const generated = generateTaskName(template, {
+      brand: task.brand,
+      agent: task.agent,
+    });
+
+    navigator.clipboard.writeText(generated);
+    setCopiedTemplate(template);
+    setCopiedText(generated);
+    setTimeout(() => {
+      setCopiedTemplate(null);
+      setCopiedText(null);
+    }, 2000);
+
+    pushRecentTaskName(task.agent || 'default', {
+      text: generated,
+      category: task.task,
+      timestamp: Date.now(),
+    });
+
+    const recents = loadRecentTaskNames(task.agent || 'default');
+    setRecentTasks(recents);
+  };
+
+  const handleCopyRecent = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedText(text);
+    setTimeout(() => setCopiedText(null), 2000);
+  };
+
+  const modalClass = isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200';
+  const textClass = isDark ? 'text-white' : 'text-gray-900';
+  const mutedText = isDark ? 'text-slate-400' : 'text-gray-500';
+  const inputClass = isDark
+    ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400'
+    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400';
+
+  return (
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 p-4"
+      onClick={handleBackdropClick}
+    >
+      <div className={`relative w-full max-w-2xl rounded-2xl border shadow-2xl ${modalClass} animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto`}>
+        <div className={`flex items-center justify-between border-b p-4 sm:p-5 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 p-1.5 sm:p-2">
+              <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+            </div>
+            <div>
+              <h3 className={`text-lg sm:text-xl font-semibold ${textClass}`}>TD Task Name Generator</h3>
+              <p className={`text-xs sm:text-sm ${mutedText}`}>
+                Generate task names for {task.brand} · {task.task}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className={`rounded-lg p-1.5 sm:p-2 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}
+          >
+            <X className={`h-5 w-5 sm:h-6 sm:w-6 ${mutedText}`} />
+          </button>
+        </div>
+
+        <div className="p-4 sm:p-5 border-b border-slate-700/50">
+          <div className="relative">
+            <Search className={`absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 ${mutedText}`} />
+            <input
+              type="text"
+              placeholder="Search task names..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={`w-full rounded-lg border pl-9 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 text-sm sm:text-base ${inputClass}`}
+              autoFocus
+            />
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5 sm:gap-2">
+            <span className={`text-[8px] sm:text-[10px] ${mutedText}`}>Brand:</span>
+            <span className={`inline-flex items-center rounded-full px-2 sm:px-2.5 py-0.5 text-[8px] sm:text-[10px] font-medium ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+              {task.brand}
+            </span>
+            <span className={`text-[8px] sm:text-[10px] ${mutedText}`}>Agent:</span>
+            <span className={`inline-flex items-center rounded-full px-2 sm:px-2.5 py-0.5 text-[8px] sm:text-[10px] font-medium ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+              {task.agent || 'Unassigned'}
+            </span>
+            <span className={`text-[8px] sm:text-[10px] ${mutedText}`}>Category:</span>
+            <span className={`inline-flex items-center rounded-full px-2 sm:px-2.5 py-0.5 text-[8px] sm:text-[10px] font-medium ${isDark ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>
+              {category?.category || 'Unknown'}
+            </span>
+          </div>
+        </div>
+
+        {recentTasks.length > 0 && (
+          <div className="p-4 sm:p-5 border-b border-slate-700/50">
+            <p className={`text-xs sm:text-sm font-medium ${mutedText} mb-2`}>Recent Task Names</p>
+            <div className="flex flex-wrap gap-2">
+              {recentTasks.slice(0, 4).map((recent, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleCopyRecent(recent.text)}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm transition-all group ${
+                    isDark
+                      ? 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600 hover:bg-slate-700'
+                      : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <span className="truncate max-w-[100px] sm:max-w-[150px]">{recent.text}</span>
+                  {copiedText === recent.text ? (
+                    <Check className="h-3 w-3 sm:h-4 sm:w-4 text-emerald-400" />
+                  ) : (
+                    <Copy className="h-3 w-3 sm:h-4 sm:w-4 opacity-50 group-hover:opacity-100" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="p-4 sm:p-5 max-h-[400px] overflow-y-auto">
+          {filteredTemplates.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center">
+              <Search className={`h-8 w-8 sm:h-12 sm:w-12 ${mutedText} opacity-30`} />
+              <p className={`mt-2 text-sm sm:text-base ${textClass}`}>No templates found</p>
+              <p className={`text-xs sm:text-sm ${mutedText}`}>Try adjusting your search</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-2 sm:gap-3">
+              {filteredTemplates.map((template, idx) => {
+                const generated = generateTaskName(template, {
+                  brand: task.brand,
+                  agent: task.agent,
+                });
+                const isCopied = copiedTemplate === template;
+
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => handleCopy(template)}
+                    className={`group flex flex-col sm:flex-row items-start sm:items-center justify-between rounded-lg border p-3 sm:p-4 text-left transition-all hover:shadow-md ${
+                      isCopied
+                        ? isDark
+                          ? 'border-emerald-500/50 bg-emerald-500/10'
+                          : 'border-emerald-300 bg-emerald-50'
+                        : isDark
+                        ? 'border-slate-700 bg-slate-800/50 hover:border-slate-600 hover:bg-slate-800'
+                        : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm sm:text-base font-medium ${isCopied ? 'text-emerald-400' : textClass}`}>
+                        {generated}
+                      </p>
+                      {template.includes('[specify what file]') && (
+                        <p className={`text-[8px] sm:text-[10px] ${mutedText} mt-0.5`}>
+                          ⚠️ Contains editable placeholder — edit before using
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-2 sm:mt-0 ml-0 sm:ml-3 flex-shrink-0">
+                      {isCopied ? (
+                        <span className={`inline-flex items-center gap-1 text-xs sm:text-sm font-medium text-emerald-400`}>
+                          <Check className="h-4 w-4 sm:h-5 sm:w-5" />
+                          Copied!
+                        </span>
+                      ) : (
+                        <Copy className={`h-4 w-4 sm:h-5 sm:w-5 opacity-0 transition-opacity group-hover:opacity-100 ${mutedText}`} />
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className={`border-t p-4 sm:p-5 ${isDark ? 'border-slate-700' : 'border-gray-200'} flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2`}>
+          <span className={`text-[8px] sm:text-[10px] ${mutedText}`}>
+            {filteredTemplates.length} template{filteredTemplates.length !== 1 ? 's' : ''} available · Press ESC to close
+          </span>
+          <button
+            onClick={onClose}
+            className={`rounded-lg px-4 sm:px-5 py-2 sm:py-2.5 text-sm sm:text-base font-medium transition-all ${
+              isDark
+                ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Close
           </button>
         </div>
       </div>
@@ -365,20 +640,114 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
   const [tasks, setTasks] = useState<Task[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [layoutMode, setLayoutMode] = useState<TaskViewMode>('table');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [filterBrand, setFilterBrand] = useState<string>('all');
-  const [filterAgent, setFilterAgent] = useState<string>('all');
+  
+  // ─── STATE WITH LOCAL STORAGE PERSISTENCE ──────────────────────────────
+  
+  const [layoutMode, setLayoutMode] = useState<TaskViewMode>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEYS.layoutMode);
+      if (saved === 'table' || saved === 'card' || saved === 'list') return saved as TaskViewMode;
+    }
+    return 'table';
+  });
+  
+  const [viewMode, setViewMode] = useState<'mine' | 'all'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEYS.viewMode);
+      if (saved === 'mine' || saved === 'all') return saved;
+    }
+    return 'mine';
+  });
+  
+  const [searchTerm, setSearchTerm] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(STORAGE_KEYS.searchTerm) || '';
+    }
+    return '';
+  });
+  
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
+  
+  const [filterStatus, setFilterStatus] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(STORAGE_KEYS.filterStatus) || 'all';
+    }
+    return 'all';
+  });
+  
+  const [filterBrand, setFilterBrand] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(STORAGE_KEYS.filterBrand) || 'all';
+    }
+    return 'all';
+  });
+  
+  const [filterAgent, setFilterAgent] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(STORAGE_KEYS.filterAgent) || 'all';
+    }
+    return 'all';
+  });
+  
+  const [filterDateRange, setFilterDateRange] = useState<'all' | 'today' | 'week' | 'month' | 'overdue' | 'unassigned' | 'custom'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEYS.filterDateRange);
+      if (saved === 'all' || saved === 'today' || saved === 'week' || saved === 'month' || saved === 'overdue' || saved === 'unassigned' || saved === 'custom') return saved;
+    }
+    return 'all';
+  });
+  
+  const [customDateStart, setCustomDateStart] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(STORAGE_KEYS.customDateStart) || '';
+    }
+    return '';
+  });
+  
+  const [customDateEnd, setCustomDateEnd] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(STORAGE_KEYS.customDateEnd) || '';
+    }
+    return '';
+  });
+  
+  const [sortField, setSortField] = useState<'rowIndex' | 'dueDate' | 'status' | 'brand' | 'agent' | 'dateRequested'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEYS.sortField);
+      if (saved === 'rowIndex' || saved === 'dueDate' || saved === 'status' || saved === 'brand' || saved === 'agent' || saved === 'dateRequested') return saved;
+    }
+    return 'rowIndex';
+  });
+  
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEYS.sortOrder);
+      if (saved === 'asc' || saved === 'desc') return saved;
+    }
+    return 'desc';
+  });
+  
+  const [showOnlyNew, setShowOnlyNew] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(STORAGE_KEYS.showOnlyNew) === 'true';
+    }
+    return false;
+  });
+  
+  const [itemsPerPage] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEYS.itemsPerPage);
+      if (saved) return parseInt(saved, 10);
+    }
+    return 25;
+  });
+
+  // ─── OTHER STATE ──────────────────────────────────────────────────────
+
   const [showFilters, setShowFilters] = useState(false);
-  const [sortField, setSortField] = useState<'rowIndex' | 'dueDate' | 'status' | 'brand' | 'agent' | 'dateRequested'>('rowIndex');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showGenerator, setShowGenerator] = useState(false);
   const [selectedTaskForGenerator, setSelectedTaskForGenerator] = useState<Task | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(25);
-  const [viewMode, setViewMode] = useState<'mine' | 'all'>('mine');
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -391,11 +760,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
   const [showEditTaskModal, setShowEditTaskModal] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState(false);
   const [taskFormError, setTaskFormError] = useState<string | null>(null);
-  const [filterDateRange, setFilterDateRange] = useState<'all' | 'today' | 'week' | 'month' | 'overdue' | 'unassigned' | 'custom'>('all');
-  const [customDateStart, setCustomDateStart] = useState('');
-  const [customDateEnd, setCustomDateEnd] = useState('');
   const [showDateRangePicker, setShowDateRangePicker] = useState(false);
-  const [showOnlyNew, setShowOnlyNew] = useState(false);
   
   // Reason for Pending states
   const [showPendingReasonModal, setShowPendingReasonModal] = useState(false);
@@ -409,6 +774,80 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
 
   const isDark = theme === 'dark';
   const isTaskAdmin = isTaskAdminEmail(currentUserEmail);
+
+  // ─── SAVE TO LOCAL STORAGE ────────────────────────────────────────────
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.layoutMode, layoutMode);
+    }
+  }, [layoutMode]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.viewMode, viewMode);
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.searchTerm, searchTerm);
+    }
+  }, [searchTerm]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.filterStatus, filterStatus);
+    }
+  }, [filterStatus]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.filterBrand, filterBrand);
+    }
+  }, [filterBrand]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.filterAgent, filterAgent);
+    }
+  }, [filterAgent]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.filterDateRange, filterDateRange);
+    }
+  }, [filterDateRange]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.customDateStart, customDateStart);
+    }
+  }, [customDateStart]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.customDateEnd, customDateEnd);
+    }
+  }, [customDateEnd]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.sortField, sortField);
+    }
+  }, [sortField]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.sortOrder, sortOrder);
+    }
+  }, [sortOrder]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.showOnlyNew, String(showOnlyNew));
+    }
+  }, [showOnlyNew]);
 
   // ─── PROCESS TASKS FROM SHEET ──────────────────────────────────────────
 
@@ -503,7 +942,9 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
 
   // ─── LOAD TASKS ────────────────────────────────────────────────────────
 
-  const loadTasksFromSheet = useCallback(async () => {
+  const loadTasksFromSheet = useCallback(async (mode?: 'mine' | 'all') => {
+    const currentMode = mode || viewMode;
+    
     if (isLoadingRef.current) return;
     
     if (!currentUserEmail) {
@@ -530,7 +971,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
           spreadsheetId: SPREADSHEET_ID,
           sheetName: SHEET_NAME,
           userEmail: currentUserEmail || '',
-          viewAll: viewMode === 'all',
+          viewAll: currentMode === 'all',
         }),
         signal: controller.signal,
       });
@@ -551,40 +992,44 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
         newTasks = processTasksFromSheet(data.values);
       }
       
-      if (viewMode === 'all') {
+      if (currentMode === 'all') {
         setAllTasks(newTasks);
       } else {
         setTasks(newTasks);
       }
       
-      // Detect new tasks
-      const newIds = new Set<string>();
-      const currentIds = new Set(newTasks.map(t => t.id));
-      
-      newTasks.forEach(task => {
-        if (!previousTaskIds.has(task.id)) {
-          newIds.add(task.id);
-        }
-      });
-      
-      if (newIds.size > 0 && previousTaskIds.size > 0) {
-        setNewTaskIds(newIds);
-        setShowNewTaskNotification(true);
-        setAllTasks(prev => prev.map(t => ({
-          ...t,
-          isNew: newIds.has(t.id)
-        })));
-        setTasks(prev => prev.map(t => ({
-          ...t,
-          isNew: newIds.has(t.id)
-        })));
+      // Detect new tasks (only for 'mine' mode)
+      if (currentMode === 'mine' && newTasks.length > 0) {
+        const newIds = new Set<string>();
+        const currentIds = new Set(newTasks.map(t => t.id));
         
-        setTimeout(() => {
-          setShowNewTaskNotification(false);
-        }, 10000);
+        newTasks.forEach(task => {
+          if (!previousTaskIds.has(task.id)) {
+            newIds.add(task.id);
+          }
+        });
+        
+        if (newIds.size > 0 && previousTaskIds.size > 0) {
+          setNewTaskIds(newIds);
+          setShowNewTaskNotification(true);
+          setTasks(prev => prev.map(t => ({
+            ...t,
+            isNew: newIds.has(t.id)
+          })));
+          setAllTasks(prev => prev.map(t => ({
+            ...t,
+            isNew: newIds.has(t.id)
+          })));
+          
+          setTimeout(() => {
+            setShowNewTaskNotification(false);
+          }, 10000);
+        }
+        
+        setPreviousTaskIds(currentIds);
       }
       
-      setPreviousTaskIds(currentIds);
+      return newTasks;
       
     } catch (error: any) {
       console.error('Failed to load tasks:', error);
@@ -593,11 +1038,12 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
       } else {
         setUpdateError(error instanceof Error ? error.message : 'Failed to load tasks');
       }
-      if (viewMode === 'all') {
+      if (currentMode === 'all') {
         setAllTasks([]);
       } else {
         setTasks([]);
       }
+      return [];
     } finally {
       setIsLoading(false);
       isLoadingRef.current = false;
@@ -609,7 +1055,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
   useEffect(() => {
     if (!initialLoadDone.current) {
       initialLoadDone.current = true;
-      loadTasksFromSheet();
+      loadTasksFromSheet(viewMode);
     }
   }, []);
 
@@ -617,22 +1063,22 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
 
   useEffect(() => {
     const interval = setInterval(() => {
-      loadTasksFromSheet();
+      loadTasksFromSheet(viewMode);
     }, 90000);
     return () => clearInterval(interval);
-  }, [loadTasksFromSheet]);
+  }, [loadTasksFromSheet, viewMode]);
 
   // ─── REFRESH ───────────────────────────────────────────────────────────
 
   const onRefresh = useCallback(() => {
     setShowNewTaskNotification(false);
     setNewTaskIds(new Set());
-    loadTasksFromSheet();
-  }, [loadTasksFromSheet]);
+    loadTasksFromSheet(viewMode);
+  }, [loadTasksFromSheet, viewMode]);
 
   // ─── TOGGLE VIEW MODE ──────────────────────────────────────────────────
 
-  const onViewModeChange = useCallback((mode: 'mine' | 'all') => {
+  const onViewModeChange = useCallback(async (mode: 'mine' | 'all') => {
     setFilterStatus('all');
     setFilterBrand('all');
     setFilterAgent('all');
@@ -644,7 +1090,9 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     setShowNewTaskNotification(false);
     setNewTaskIds(new Set());
     setShowOnlyNew(false);
-  }, []);
+    
+    await loadTasksFromSheet(mode);
+  }, [loadTasksFromSheet]);
 
   // ─── UPDATE STATUS ────────────────────────────────────────────────────
 
@@ -723,13 +1171,13 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
       }
 
       setTimeout(() => {
-        loadTasksFromSheet();
+        loadTasksFromSheet(viewMode);
       }, 1500);
 
     } catch (error) {
       console.error('Failed to update task status:', error);
       setUpdateError(error instanceof Error ? error.message : 'Failed to update task status');
-      loadTasksFromSheet();
+      loadTasksFromSheet(viewMode);
     } finally {
       setUpdatingTaskId(null);
       setPendingTaskId(null);
@@ -848,13 +1296,13 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
       setShowEditTaskModal(false);
       setShowTaskModal(false);
       setSelectedTask(null);
-      loadTasksFromSheet();
+      loadTasksFromSheet(viewMode);
     } catch (error) {
       setTaskFormError(error instanceof Error ? error.message : 'Failed to save changes');
     } finally {
       setIsSavingTask(false);
     }
-  }, [selectedTask, currentUserEmail, loadTasksFromSheet]);
+  }, [selectedTask, currentUserEmail, loadTasksFromSheet, viewMode]);
 
   // ─── ADD NEW TASK ──────────────────────────────────────────────────────
 
@@ -890,13 +1338,13 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
       }
 
       setShowAddTaskModal(false);
-      loadTasksFromSheet();
+      loadTasksFromSheet(viewMode);
     } catch (error) {
       setTaskFormError(error instanceof Error ? error.message : 'Failed to add task');
     } finally {
       setIsSavingTask(false);
     }
-  }, [currentUserEmail, loadTasksFromSheet]);
+  }, [currentUserEmail, loadTasksFromSheet, viewMode]);
 
   // ─── GET STATUS OPTIONS ───────────────────────────────────────────────
 
@@ -1167,19 +1615,458 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     setCurrentPage(Math.max(1, Math.min(totalPages, page)));
   };
 
-  // ─── RENDER FUNCTIONS ─────────────────────────────────────────────────
+  // ─── RENDER TABLE VIEW ──────────────────────────────────────────────────
+
+  const renderTableView = () => (
+    <div className="overflow-x-auto -mx-4 sm:mx-0">
+      <div className="min-w-[800px] sm:min-w-full">
+        <table className="w-full text-sm sm:text-base">
+          <thead className={`sticky top-0 z-10 backdrop-blur ${isDark ? 'bg-slate-800/95' : 'bg-gray-50/95'}`}>
+            <tr>
+              <th className={`px-2 sm:px-4 py-2 sm:py-4 text-left text-xs sm:text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
+                <button onClick={() => toggleSort('rowIndex')} className="flex items-center gap-1 hover:text-emerald-400">
+                  # <ArrowUpDown className="h-3 w-3 sm:h-4 sm:w-4" />
+                </button>
+              </th>
+              <th className={`px-2 sm:px-4 py-2 sm:py-4 text-left text-xs sm:text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
+                <button onClick={() => toggleSort('dateRequested')} className="flex items-center gap-1 hover:text-emerald-400">
+                  Date <ArrowUpDown className="h-3 w-3 sm:h-4 sm:w-4" />
+                </button>
+              </th>
+              <th className={`px-2 sm:px-4 py-2 sm:py-4 text-left text-xs sm:text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
+                <button onClick={() => toggleSort('brand')} className="flex items-center gap-1 hover:text-emerald-400">
+                  Brand <ArrowUpDown className="h-3 w-3 sm:h-4 sm:w-4" />
+                </button>
+              </th>
+              <th className={`px-2 sm:px-4 py-2 sm:py-4 text-left text-xs sm:text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
+                Task
+              </th>
+              {viewMode === 'all' && (
+                <th className={`px-2 sm:px-4 py-2 sm:py-4 text-left text-xs sm:text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
+                  <button onClick={() => toggleSort('agent')} className="flex items-center gap-1 hover:text-emerald-400">
+                    Agent <ArrowUpDown className="h-3 w-3 sm:h-4 sm:w-4" />
+                  </button>
+                </th>
+              )}
+              <th className={`px-2 sm:px-4 py-2 sm:py-4 text-left text-xs sm:text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
+                <button onClick={() => toggleSort('dueDate')} className="flex items-center gap-1 hover:text-emerald-400">
+                  Due Date <ArrowUpDown className="h-3 w-3 sm:h-4 sm:w-4" />
+                </button>
+              </th>
+              <th className={`px-2 sm:px-4 py-2 sm:py-4 text-left text-xs sm:text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
+                <button onClick={() => toggleSort('status')} className="flex items-center gap-1 hover:text-emerald-400">
+                  Status <ArrowUpDown className="h-3 w-3 sm:h-4 sm:w-4" />
+                </button>
+              </th>
+              <th className={`px-2 sm:px-4 py-2 sm:py-4 text-left text-xs sm:text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
+                Remarks
+              </th>
+              <th className={`px-2 sm:px-4 py-2 sm:py-4 text-left text-xs sm:text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody className={`divide-y ${isDark ? 'divide-slate-700/50' : 'divide-gray-200'}`}>
+            {paginatedTasks.map((task) => {
+              const statusColor = getStatusColor(task.status);
+              const isUpdating = updatingTaskId === task.id;
+              const isNew = newTaskIds.has(task.id);
+              const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
+              const hasRemarks = task.remarks && task.remarks.trim() !== '';
+              const statusOptions = getStatusOptions(task.status);
+              
+              return (
+                <tr
+                  key={task.id}
+                  className={`cursor-pointer transition-colors ${
+                    isDark ? 'hover:bg-slate-800/40' : 'hover:bg-gray-50'
+                  } ${isNew ? (isDark ? 'bg-emerald-500/5 border-l-2 border-emerald-400' : 'bg-emerald-50/50 border-l-2 border-emerald-500') : ''}`}
+                  onClick={() => onTaskClick(task)}
+                >
+                  <td className={`px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base font-mono ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                    {task.rowIndex}
+                    {isNew && (
+                      <span className="ml-1 sm:ml-2 inline-flex items-center gap-0.5 sm:gap-1">
+                        <span className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className={`text-[8px] sm:text-[10px] font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>NEW</span>
+                      </span>
+                    )}
+                  </td>
+                  <td className={`px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                    {formatDate(task.date_requested)}
+                  </td>
+                  <td className={`px-2 sm:px-4 py-2 sm:py-4 font-medium ${isDark ? 'text-white' : 'text-gray-900'} text-sm sm:text-base`}>
+                    {task.brand}
+                  </td>
+                  <td className={`px-2 sm:px-4 py-2 sm:py-4 ${isDark ? 'text-white' : 'text-gray-900'} text-sm sm:text-base`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                      <span className="truncate max-w-[150px] sm:max-w-[250px]">{task.task}</span>
+                      <span className={`text-xs sm:text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                        {task.type}
+                      </span>
+                    </div>
+                  </td>
+                  {viewMode === 'all' && (
+                    <td className={`px-2 sm:px-4 py-2 sm:py-4 ${isDark ? 'text-slate-300' : 'text-gray-700'} text-sm sm:text-base`}>
+                      {task.agent || 'Unassigned'}
+                    </td>
+                  )}
+                  <td className={`px-2 sm:px-4 py-2 sm:py-4 ${isDark ? 'text-slate-300' : 'text-gray-700'} text-sm sm:text-base`}>
+                    <div className="flex items-center gap-1 sm:gap-3 flex-wrap">
+                      <span>{formatDate(task.due_date)}</span>
+                      {isOverdue && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-sm font-semibold text-red-400">
+                          <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                          Overdue
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-2 sm:px-4 py-2 sm:py-4">
+                    <span className={`inline-flex items-center gap-1 sm:gap-2 rounded-full px-2 sm:px-3.5 py-1 sm:py-1.5 text-xs sm:text-sm font-medium ${statusColor.bg} ${statusColor.text}`}>
+                      <span className={`h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full ${statusColor.dot}`} />
+                      {task.status}
+                    </span>
+                  </td>
+                  <td className={`px-2 sm:px-4 py-2 sm:py-4 max-w-[120px] sm:max-w-[200px] ${isDark ? 'text-slate-300' : 'text-gray-700'} text-xs sm:text-sm`}>
+                    {hasRemarks ? (
+                      <div className="relative group">
+                        <div className="flex items-start gap-1 sm:gap-2">
+                          {task.remarks.toLowerCase().includes('sbs') && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-yellow-500/20 px-1.5 sm:px-2.5 py-0.5 text-[8px] sm:text-xs font-semibold text-yellow-400 flex-shrink-0">
+                              <Eye className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" />
+                              SBS
+                            </span>
+                          )}
+                          <span className="line-clamp-2 break-words">
+                            {task.remarks}
+                          </span>
+                        </div>
+                        {task.remarks.length > 60 && (
+                          <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-20">
+                            <div className={`rounded-lg border p-2 sm:p-3 text-xs sm:text-sm max-w-xs shadow-lg ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
+                              {task.remarks}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className={`italic ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>No remarks</span>
+                    )}
+                  </td>
+                  <td className="px-2 sm:px-4 py-2 sm:py-4">
+                    <div className="flex items-center gap-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => handleOpenGenerator(task, e)}
+                        className={`inline-flex items-center gap-1 rounded-lg px-1.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-sm font-medium transition-all ${
+                          isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                        }`}
+                        title="Generate Task Name"
+                      >
+                        <Sparkles className="h-3 w-3 sm:h-4 sm:w-4" />
+                        <span className="hidden sm:inline">Generate</span>
+                      </button>
+                      {statusOptions.slice(0, viewMode === 'all' ? 1 : 2).map((newStatus) => (
+                        <button
+                          key={newStatus}
+                          onClick={() => onUpdateStatus(task.id, newStatus)}
+                          disabled={isUpdating}
+                          className={`rounded-lg px-1.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-sm font-medium transition-all ${
+                            isUpdating ? 'opacity-50 cursor-not-allowed' :
+                            newStatus === 'Completed' ? (isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200') :
+                            newStatus === 'Cancelled' ? (isDark ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-red-100 text-red-700 hover:bg-red-200') :
+                            newStatus === 'Ongoing' ? (isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200') :
+                            isDark ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30' : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                          }`}
+                        >
+                          {isUpdating ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" /> : newStatus}
+                        </button>
+                      ))}
+                      {statusOptions.length > (viewMode === 'all' ? 1 : 2) && (
+                        <span className={`text-[10px] sm:text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>+{statusOptions.length - (viewMode === 'all' ? 1 : 2)}</span>
+                      )}
+                      {isTaskAdmin && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onEditTask(task); }}
+                          className={`rounded-lg p-1 transition-all ${isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-900'}`}
+                          title="Edit Task"
+                        >
+                          <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  // ─── RENDER CARD VIEW ───────────────────────────────────────────────────
+
+  const renderCardView = () => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
+      {paginatedTasks.map((task) => {
+        const statusColor = getStatusColor(task.status);
+        const isNew = newTaskIds.has(task.id);
+        const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
+        const hasRemarks = task.remarks && task.remarks.trim() !== '';
+        const statusOptions = getStatusOptions(task.status);
+        const isUpdating = updatingTaskId === task.id;
+        
+        return (
+          <div
+            key={task.id}
+            className={`rounded-xl border p-3 sm:p-5 cursor-pointer transition-all hover:shadow-lg ${
+              isDark ? 'border-slate-700 bg-slate-800/50 hover:bg-slate-800' : 'border-gray-200 bg-white hover:bg-gray-50'
+            } ${isNew ? (isDark ? 'border-emerald-500/50' : 'border-emerald-400') : ''}`}
+            onClick={() => onTaskClick(task)}
+          >
+            <div className="flex items-start justify-between gap-2 mb-2 sm:mb-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                  <span className={`text-xs sm:text-sm font-mono ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                    #{task.rowIndex}
+                  </span>
+                  <span className={`text-xs sm:text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                    {task.brand}
+                  </span>
+                  {isNew && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs font-semibold text-emerald-400">
+                      <span className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      NEW
+                    </span>
+                  )}
+                </div>
+                <h3 className={`text-sm sm:text-base font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'} mt-0.5 sm:mt-1`}>
+                  {task.task}
+                </h3>
+              </div>
+              <span className={`inline-flex items-center gap-1 rounded-full px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[8px] sm:text-xs font-medium flex-shrink-0 ${statusColor.bg} ${statusColor.text}`}>
+                <span className={`h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full ${statusColor.dot}`} />
+                {task.status}
+              </span>
+            </div>
+            
+            <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
+              <div className={`flex items-center gap-1.5 sm:gap-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                <User className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span>{task.agent || 'Unassigned'}</span>
+              </div>
+              <div className={`flex items-center gap-1.5 sm:gap-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span>Due: {formatDate(task.due_date)}</span>
+                {isOverdue && (
+                  <span className="text-red-400 text-[10px] sm:text-xs font-medium">(Overdue)</span>
+                )}
+              </div>
+              {hasRemarks && (
+                <div className={`flex items-start gap-1.5 sm:gap-2 ${isDark ? 'text-slate-400' : 'text-gray-500'} truncate`}>
+                  <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 mt-0.5" />
+                  <span className="truncate text-xs sm:text-sm">{task.remarks}</span>
+                  {task.remarks.toLowerCase().includes('sbs') && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-yellow-500/20 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs font-semibold text-yellow-400 flex-shrink-0">
+                      <Eye className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                      SBS
+                    </span>
+                  )}
+                </div>
+              )}
+              {task.status === 'Pending' && task.reason_for_pending && (
+                <div className={`flex items-start gap-1.5 sm:gap-2 ${isDark ? 'text-amber-400' : 'text-amber-600'} text-[10px] sm:text-xs`}>
+                  <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 mt-0.5" />
+                  <span className="truncate">Reason: {task.reason_for_pending}</span>
+                </div>
+              )}
+            </div>
+            
+            <div className="mt-3 sm:mt-4 flex items-center justify-between pt-3 sm:pt-4 border-t border-slate-700/50" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-1 flex-wrap">
+                <button
+                  onClick={(e) => handleOpenGenerator(task, e)}
+                  className={`inline-flex items-center gap-1 rounded-lg px-1.5 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-sm font-medium transition-all ${
+                    isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                  }`}
+                  title="Generate Task Name"
+                >
+                  <Sparkles className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline">Generate</span>
+                </button>
+                {statusOptions.slice(0, 1).map((newStatus) => (
+                  <button
+                    key={newStatus}
+                    onClick={() => onUpdateStatus(task.id, newStatus)}
+                    disabled={isUpdating}
+                    className={`rounded-lg px-1.5 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-sm font-medium transition-all ${
+                      isUpdating ? 'opacity-50 cursor-not-allowed' :
+                      newStatus === 'Completed' ? (isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200') :
+                      newStatus === 'Cancelled' ? (isDark ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-red-100 text-red-700 hover:bg-red-200') :
+                      newStatus === 'Ongoing' ? (isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200') :
+                      isDark ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30' : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                    }`}
+                  >
+                    {isUpdating ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" /> : newStatus}
+                  </button>
+                ))}
+                {statusOptions.length > 1 && (
+                  <span className={`text-[10px] sm:text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>+{statusOptions.length - 1}</span>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                {isTaskAdmin && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onEditTask(task); }}
+                    className={`rounded-lg p-1 transition-all ${
+                      isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-900'
+                    }`}
+                    title="Edit Task"
+                  >
+                    <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // ─── RENDER LIST VIEW ───────────────────────────────────────────────────
+
+  const renderListView = () => (
+    <div className="space-y-2 sm:space-y-3">
+      {paginatedTasks.map((task) => {
+        const statusColor = getStatusColor(task.status);
+        const isNew = newTaskIds.has(task.id);
+        const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
+        const hasRemarks = task.remarks && task.remarks.trim() !== '';
+        const statusOptions = getStatusOptions(task.status);
+        const isUpdating = updatingTaskId === task.id;
+        
+        return (
+          <div
+            key={task.id}
+            className={`flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 rounded-xl border p-3 sm:p-4 cursor-pointer transition-all hover:shadow-md ${
+              isDark ? 'border-slate-700 bg-slate-800/50 hover:bg-slate-800' : 'border-gray-200 bg-white hover:bg-gray-50'
+            } ${isNew ? (isDark ? 'border-emerald-500/50' : 'border-emerald-400') : ''}`}
+            onClick={() => onTaskClick(task)}
+          >
+            <div className="flex-1 min-w-0 w-full">
+              <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                <span className={`text-xs sm:text-sm font-mono ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                  #{task.rowIndex}
+                </span>
+                <span className={`text-xs sm:text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                  {task.brand}
+                </span>
+                {isNew && (
+                  <span className="inline-flex h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-emerald-400 animate-pulse" />
+                )}
+              </div>
+              <p className={`text-sm sm:text-base font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'} mt-0.5`}>
+                {task.task}
+              </p>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm mt-1">
+                <span className={isDark ? 'text-slate-400' : 'text-gray-500'}>
+                  <User className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                  {task.agent || 'Unassigned'}
+                </span>
+                <span className={isDark ? 'text-slate-400' : 'text-gray-500'}>
+                  <Calendar className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                  {formatDate(task.due_date)}
+                  {isOverdue && (
+                    <span className="ml-1 text-red-400 font-medium">(Overdue)</span>
+                  )}
+                </span>
+                {hasRemarks && (
+                  <span className={`truncate max-w-[120px] sm:max-w-[200px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                    <MessageSquare className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    {task.remarks}
+                    {task.remarks.toLowerCase().includes('sbs') && (
+                      <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-yellow-500/20 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs font-semibold text-yellow-400">
+                        <Eye className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                        SBS
+                      </span>
+                    )}
+                  </span>
+                )}
+                {task.status === 'Pending' && task.reason_for_pending && (
+                  <span className={`truncate max-w-[120px] sm:max-w-[200px] ${isDark ? 'text-amber-400' : 'text-amber-600'} text-[10px] sm:text-xs`}>
+                    <AlertCircle className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    Reason: {task.reason_for_pending}
+                  </span>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 w-full sm:w-auto justify-end" onClick={(e) => e.stopPropagation()}>
+              <span className={`inline-flex items-center gap-1 rounded-full px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium flex-shrink-0 ${statusColor.bg} ${statusColor.text}`}>
+                <span className={`h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full ${statusColor.dot}`} />
+                {task.status}
+              </span>
+              <button
+                onClick={(e) => handleOpenGenerator(task, e)}
+                className={`inline-flex items-center gap-1 rounded-lg px-1.5 sm:px-2.5 py-1 text-[10px] sm:text-sm font-medium transition-all ${
+                  isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                }`}
+                title="Generate Task Name"
+              >
+                <Sparkles className="h-3 w-3 sm:h-4 sm:w-4" />
+              </button>
+              {statusOptions.slice(0, 1).map((newStatus) => (
+                <button
+                  key={newStatus}
+                  onClick={() => onUpdateStatus(task.id, newStatus)}
+                  disabled={isUpdating}
+                  className={`rounded-lg px-1.5 sm:px-2.5 py-1 text-[10px] sm:text-sm font-medium transition-all ${
+                    isUpdating ? 'opacity-50 cursor-not-allowed' :
+                    newStatus === 'Completed' ? (isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200') :
+                    newStatus === 'Cancelled' ? (isDark ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-red-100 text-red-700 hover:bg-red-200') :
+                    newStatus === 'Ongoing' ? (isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200') :
+                    isDark ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30' : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                  }`}
+                >
+                  {isUpdating ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" /> : newStatus}
+                </button>
+              ))}
+              {statusOptions.length > 1 && (
+                <span className={`text-[10px] sm:text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>+{statusOptions.length - 1}</span>
+              )}
+              {isTaskAdmin && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onEditTask(task); }}
+                  className={`rounded-lg p-1 transition-all ${
+                    isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-900'
+                  }`}
+                  title="Edit Task"
+                >
+                  <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // ─── RENDER TASKS ──────────────────────────────────────────────────────
 
   const renderTasks = () => {
     if (paginatedTasks.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <CheckCircle2 className={`h-16 w-16 ${isDark ? 'text-slate-600' : 'text-gray-300'}`} />
-          <p className={`mt-4 text-xl font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+        <div className="flex flex-col items-center justify-center py-12 sm:py-16 text-center">
+          <CheckCircle2 className={`h-12 w-12 sm:h-16 sm:w-16 ${isDark ? 'text-slate-600' : 'text-gray-300'}`} />
+          <p className={`mt-3 sm:mt-4 text-lg sm:text-xl font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
             {showOnlyNew && newTaskIds.size === 0 
               ? 'All caught up! You\'ve viewed all new tasks.'
               : 'No tasks found'}
           </p>
-          <p className={`mt-2 text-base ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+          <p className={`mt-1.5 sm:mt-2 text-sm sm:text-base ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
             {debouncedSearchTerm || filterStatus !== 'all' || filterBrand !== 'all' || filterAgent !== 'all' || filterDateRange !== 'all'
               ? 'Try adjusting your filters'
               : 'You have no tasks assigned yet'}
@@ -1187,7 +2074,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
           {(filterStatus !== 'all' || filterBrand !== 'all' || filterAgent !== 'all' || filterDateRange !== 'all' || searchTerm || showOnlyNew) && (
             <button
               onClick={clearFilters}
-              className={`mt-4 rounded-lg px-5 py-2.5 text-base font-medium transition-all ${
+              className={`mt-4 rounded-lg px-4 sm:px-5 py-2 sm:py-2.5 text-sm sm:text-base font-medium transition-all ${
                 isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >
@@ -1209,444 +2096,6 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     }
   };
 
-  const renderTableView = () => (
-    <div className="overflow-x-auto">
-      <table className="w-full text-base">
-        <thead className={`sticky top-0 z-10 backdrop-blur ${isDark ? 'bg-slate-800/95' : 'bg-gray-50/95'}`}>
-          <tr>
-            <th className={`px-4 py-4 text-left text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
-              <button onClick={() => toggleSort('rowIndex')} className="flex items-center gap-1.5 hover:text-emerald-400">
-                # <ArrowUpDown className="h-4 w-4" />
-              </button>
-            </th>
-            <th className={`px-4 py-4 text-left text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
-              <button onClick={() => toggleSort('dateRequested')} className="flex items-center gap-1.5 hover:text-emerald-400">
-                Date <ArrowUpDown className="h-4 w-4" />
-              </button>
-            </th>
-            <th className={`px-4 py-4 text-left text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
-              <button onClick={() => toggleSort('brand')} className="flex items-center gap-1.5 hover:text-emerald-400">
-                Brand <ArrowUpDown className="h-4 w-4" />
-              </button>
-            </th>
-            <th className={`px-4 py-4 text-left text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
-              Task
-            </th>
-            {viewMode === 'all' && (
-              <th className={`px-4 py-4 text-left text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
-                <button onClick={() => toggleSort('agent')} className="flex items-center gap-1.5 hover:text-emerald-400">
-                  Agent <ArrowUpDown className="h-4 w-4" />
-                </button>
-              </th>
-            )}
-            <th className={`px-4 py-4 text-left text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
-              <button onClick={() => toggleSort('dueDate')} className="flex items-center gap-1.5 hover:text-emerald-400">
-                Due Date <ArrowUpDown className="h-4 w-4" />
-              </button>
-            </th>
-            <th className={`px-4 py-4 text-left text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
-              <button onClick={() => toggleSort('status')} className="flex items-center gap-1.5 hover:text-emerald-400">
-                Status <ArrowUpDown className="h-4 w-4" />
-              </button>
-            </th>
-            <th className={`px-4 py-4 text-left text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
-              Remarks
-            </th>
-            <th className={`px-4 py-4 text-left text-sm font-medium uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody className={`divide-y ${isDark ? 'divide-slate-700/50' : 'divide-gray-200'}`}>
-          {paginatedTasks.map((task) => {
-            const statusColor = getStatusColor(task.status);
-            const isUpdating = updatingTaskId === task.id;
-            const isNew = newTaskIds.has(task.id);
-            const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
-            const hasRemarks = task.remarks && task.remarks.trim() !== '';
-            const statusOptions = getStatusOptions(task.status);
-            
-            return (
-              <tr
-                key={task.id}
-                className={`cursor-pointer transition-colors ${
-                  isDark ? 'hover:bg-slate-800/40' : 'hover:bg-gray-50'
-                } ${isNew ? (isDark ? 'bg-emerald-500/5 border-l-2 border-emerald-400' : 'bg-emerald-50/50 border-l-2 border-emerald-500') : ''}`}
-                onClick={() => onTaskClick(task)}
-              >
-                <td className={`px-4 py-4 text-base font-mono ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                  {task.rowIndex}
-                  {isNew && (
-                    <span className="ml-2 inline-flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <span className={`text-[10px] font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>NEW</span>
-                    </span>
-                  )}
-                </td>
-                <td className={`px-4 py-4 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                  {formatDate(task.date_requested)}
-                </td>
-                <td className={`px-4 py-4 font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  {task.brand}
-                </td>
-                <td className={`px-4 py-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  <div className="flex items-center gap-3">
-                    <span className="truncate max-w-[250px]">{task.task}</span>
-                    <span className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                      {task.type}
-                    </span>
-                  </div>
-                </td>
-                {viewMode === 'all' && (
-                  <td className={`px-4 py-4 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                    {task.agent || 'Unassigned'}
-                  </td>
-                )}
-                <td className={`px-4 py-4 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                  <div className="flex items-center gap-3">
-                    {formatDate(task.due_date)}
-                    {isOverdue && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/20 px-2.5 py-1 text-sm font-semibold text-red-400">
-                        <AlertCircle className="h-4 w-4" />
-                        Overdue
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-4">
-                  <span className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium ${statusColor.bg} ${statusColor.text}`}>
-                    <span className={`h-2 w-2 rounded-full ${statusColor.dot}`} />
-                    {task.status}
-                    {task.status === 'Pending' && task.reason_for_pending && (
-                      <span className="ml-1 text-xs opacity-70">(pending reason)</span>
-                    )}
-                  </span>
-                </td>
-                <td className={`px-4 py-4 max-w-[200px] ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                  {hasRemarks ? (
-                    <div className="relative group">
-                      <div className="flex items-start gap-2">
-                        {task.remarks.toLowerCase().includes('sbs') && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-yellow-500/20 px-2.5 py-1 text-xs font-semibold text-yellow-400 flex-shrink-0">
-                            <Eye className="h-3.5 w-3.5" />
-                            SBS
-                          </span>
-                        )}
-                        <span className="text-sm line-clamp-2 break-words">
-                          {task.remarks}
-                        </span>
-                      </div>
-                      {task.remarks.length > 60 && (
-                        <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-20">
-                          <div className={`rounded-lg border p-3 text-sm max-w-xs shadow-lg ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
-                            {task.remarks}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <span className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'} italic`}>No remarks</span>
-                  )}
-                </td>
-                <td className="px-4 py-4">
-                  <div className="flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={(e) => handleOpenGenerator(task, e)}
-                      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
-                        isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                      }`}
-                      title="Generate Task Name"
-                    >
-                      <Sparkles className="h-4 w-4" />
-                      Generate
-                    </button>
-                    {statusOptions.slice(0, 2).map((newStatus) => (
-                      <button
-                        key={newStatus}
-                        onClick={() => onUpdateStatus(task.id, newStatus)}
-                        disabled={isUpdating}
-                        className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
-                          isUpdating ? 'opacity-50 cursor-not-allowed' :
-                          newStatus === 'Completed' ? (isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200') :
-                          newStatus === 'Cancelled' ? (isDark ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-red-100 text-red-700 hover:bg-red-200') :
-                          newStatus === 'Ongoing' ? (isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200') :
-                          isDark ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30' : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
-                        }`}
-                      >
-                        {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : newStatus}
-                      </button>
-                    ))}
-                    {statusOptions.length > 2 && (
-                      <span className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>+{statusOptions.length - 2}</span>
-                    )}
-                    {isTaskAdmin && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onEditTask(task); }}
-                        className={`rounded-lg p-1.5 transition-all ${isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-900'}`}
-                        title="Edit Task"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-
-  const renderCardView = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-      {paginatedTasks.map((task) => {
-        const statusColor = getStatusColor(task.status);
-        const isNew = newTaskIds.has(task.id);
-        const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
-        const hasRemarks = task.remarks && task.remarks.trim() !== '';
-        const statusOptions = getStatusOptions(task.status);
-        const isUpdating = updatingTaskId === task.id;
-        
-        return (
-          <div
-            key={task.id}
-            className={`rounded-xl border p-5 cursor-pointer transition-all hover:shadow-lg ${
-              isDark ? 'border-slate-700 bg-slate-800/50 hover:bg-slate-800' : 'border-gray-200 bg-white hover:bg-gray-50'
-            } ${isNew ? (isDark ? 'border-emerald-500/50' : 'border-emerald-400') : ''}`}
-            onClick={() => onTaskClick(task)}
-          >
-            <div className="flex items-start justify-between gap-2 mb-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className={`text-sm font-mono ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                    #{task.rowIndex}
-                  </span>
-                  <span className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                    {task.brand}
-                  </span>
-                  {isNew && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-semibold text-emerald-400">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      NEW
-                    </span>
-                  )}
-                </div>
-                <h3 className={`text-base font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'} mt-1`}>
-                  {task.task}
-                </h3>
-              </div>
-              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium flex-shrink-0 ${statusColor.bg} ${statusColor.text}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${statusColor.dot}`} />
-                {task.status}
-              </span>
-            </div>
-            
-            <div className="space-y-2 text-sm">
-              <div className={`flex items-center gap-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                <User className="h-4 w-4" />
-                <span>{task.agent || 'Unassigned'}</span>
-              </div>
-              <div className={`flex items-center gap-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                <Calendar className="h-4 w-4" />
-                <span>Due: {formatDate(task.due_date)}</span>
-                {isOverdue && (
-                  <span className="text-red-400 text-xs font-medium">(Overdue)</span>
-                )}
-              </div>
-              {hasRemarks && (
-                <div className={`flex items-start gap-2 ${isDark ? 'text-slate-400' : 'text-gray-500'} truncate`}>
-                  <MessageSquare className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  <span className="truncate">{task.remarks}</span>
-                  {task.remarks.toLowerCase().includes('sbs') && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs font-semibold text-yellow-400 flex-shrink-0">
-                      <Eye className="h-3 w-3" />
-                      SBS
-                    </span>
-                  )}
-                </div>
-              )}
-              {task.status === 'Pending' && task.reason_for_pending && (
-                <div className={`flex items-start gap-2 ${isDark ? 'text-amber-400' : 'text-amber-600'} text-xs`}>
-                  <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  <span className="truncate">Reason: {task.reason_for_pending}</span>
-                </div>
-              )}
-            </div>
-            
-            <div className="mt-4 flex items-center justify-between pt-4 border-t border-slate-700/50" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <button
-                  onClick={(e) => handleOpenGenerator(task, e)}
-                  className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all ${
-                    isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                  }`}
-                  title="Generate Task Name"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  Generate
-                </button>
-                {statusOptions.slice(0, 1).map((newStatus) => (
-                  <button
-                    key={newStatus}
-                    onClick={() => onUpdateStatus(task.id, newStatus)}
-                    disabled={isUpdating}
-                    className={`rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all ${
-                      isUpdating ? 'opacity-50 cursor-not-allowed' :
-                      newStatus === 'Completed' ? (isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200') :
-                      newStatus === 'Cancelled' ? (isDark ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-red-100 text-red-700 hover:bg-red-200') :
-                      newStatus === 'Ongoing' ? (isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200') :
-                      isDark ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30' : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
-                    }`}
-                  >
-                    {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : newStatus}
-                  </button>
-                ))}
-                {statusOptions.length > 1 && (
-                  <span className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>+{statusOptions.length - 1}</span>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                {isTaskAdmin && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onEditTask(task); }}
-                    className={`rounded-lg p-1.5 transition-all ${
-                      isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-900'
-                    }`}
-                    title="Edit Task"
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  const renderListView = () => (
-    <div className="space-y-3">
-      {paginatedTasks.map((task) => {
-        const statusColor = getStatusColor(task.status);
-        const isNew = newTaskIds.has(task.id);
-        const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
-        const hasRemarks = task.remarks && task.remarks.trim() !== '';
-        const statusOptions = getStatusOptions(task.status);
-        const isUpdating = updatingTaskId === task.id;
-        
-        return (
-          <div
-            key={task.id}
-            className={`flex items-center gap-4 rounded-xl border p-4 cursor-pointer transition-all hover:shadow-md ${
-              isDark ? 'border-slate-700 bg-slate-800/50 hover:bg-slate-800' : 'border-gray-200 bg-white hover:bg-gray-50'
-            } ${isNew ? (isDark ? 'border-emerald-500/50' : 'border-emerald-400') : ''}`}
-            onClick={() => onTaskClick(task)}
-          >
-            <div className="flex-1 min-w-0 flex items-center gap-4">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className={`text-sm font-mono ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                    #{task.rowIndex}
-                  </span>
-                  <span className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                    {task.brand}
-                  </span>
-                  {isNew && (
-                    <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  )}
-                </div>
-                <p className={`text-base font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'} mt-0.5`}>
-                  {task.task}
-                </p>
-                <div className="flex items-center gap-3 text-sm flex-wrap mt-1">
-                  <span className={isDark ? 'text-slate-400' : 'text-gray-500'}>
-                    <User className="inline h-4 w-4 mr-1.5" />
-                    {task.agent || 'Unassigned'}
-                  </span>
-                  <span className={isDark ? 'text-slate-400' : 'text-gray-500'}>
-                    <Calendar className="inline h-4 w-4 mr-1.5" />
-                    {formatDate(task.due_date)}
-                    {isOverdue && (
-                      <span className="ml-2 text-red-400 font-medium">(Overdue)</span>
-                    )}
-                  </span>
-                  {hasRemarks && (
-                    <span className={`truncate max-w-[200px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                      <MessageSquare className="inline h-4 w-4 mr-1.5" />
-                      {task.remarks}
-                      {task.remarks.toLowerCase().includes('sbs') && (
-                        <span className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs font-semibold text-yellow-400">
-                          <Eye className="h-3 w-3" />
-                          SBS
-                        </span>
-                      )}
-                    </span>
-                  )}
-                  {task.status === 'Pending' && task.reason_for_pending && (
-                    <span className={`truncate max-w-[200px] ${isDark ? 'text-amber-400' : 'text-amber-600'} text-xs`}>
-                      <AlertCircle className="inline h-4 w-4 mr-1.5" />
-                      Reason: {task.reason_for_pending}
-                    </span>
-                  )}
-                </div>
-              </div>
-              
-              <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium flex-shrink-0 ${statusColor.bg} ${statusColor.text}`}>
-                <span className={`h-2 w-2 rounded-full ${statusColor.dot}`} />
-                {task.status}
-              </span>
-            </div>
-            
-            <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-              <button
-                onClick={(e) => handleOpenGenerator(task, e)}
-                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all ${
-                  isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                }`}
-                title="Generate Task Name"
-              >
-                <Sparkles className="h-4 w-4" />
-                Generate
-              </button>
-              {statusOptions.slice(0, 1).map((newStatus) => (
-                <button
-                  key={newStatus}
-                  onClick={() => onUpdateStatus(task.id, newStatus)}
-                  disabled={isUpdating}
-                  className={`rounded-lg px-2.5 py-1.5 text-sm font-medium transition-all ${
-                    isUpdating ? 'opacity-50 cursor-not-allowed' :
-                    newStatus === 'Completed' ? (isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200') :
-                    newStatus === 'Cancelled' ? (isDark ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-red-100 text-red-700 hover:bg-red-200') :
-                    newStatus === 'Ongoing' ? (isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200') :
-                    isDark ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30' : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
-                  }`}
-                >
-                  {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : newStatus}
-                </button>
-              ))}
-              {statusOptions.length > 1 && (
-                <span className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>+{statusOptions.length - 1}</span>
-              )}
-              {isTaskAdmin && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onEditTask(task); }}
-                  className={`rounded-lg p-1.5 transition-all ${
-                    isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-900'
-                  }`}
-                  title="Edit Task"
-                >
-                  <Edit2 className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-
   const activeCount = filteredAndSortedTasks.length;
   const totalCount = activeTasks.length;
 
@@ -1656,59 +2105,59 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     <div className="flex h-full flex-col">
       {/* New Task Notification Banner */}
       {showNewTaskNotification && newTaskIds.size > 0 && (
-        <div className={`fixed top-4 right-4 z-50 rounded-xl border shadow-2xl p-5 max-w-md animate-in slide-in-from-top-4 duration-300 ${
+        <div className={`fixed top-4 right-4 z-50 rounded-xl border shadow-2xl p-4 sm:p-5 max-w-[calc(100vw-2rem)] sm:max-w-md ${
           isDark ? 'bg-slate-800 border-emerald-500/30' : 'bg-white border-emerald-300'
-        }`}>
-          <div className="flex items-start gap-4">
-            <div className="rounded-full bg-emerald-500/20 p-2.5">
-              <Bell className="h-6 w-6 text-emerald-400" />
+        } animate-in slide-in-from-top-4 duration-300`}>
+          <div className="flex items-start gap-3 sm:gap-4">
+            <div className="rounded-full bg-emerald-500/20 p-2 sm:p-2.5 flex-shrink-0">
+              <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-400" />
             </div>
-            <div className="flex-1">
-              <p className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            <div className="flex-1 min-w-0">
+              <p className={`text-base sm:text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                 {newTaskIds.size} New Task{newTaskIds.size > 1 ? 's' : ''} Added!
               </p>
-              <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+              <p className={`text-xs sm:text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                 Click refresh to see them in your list
               </p>
             </div>
             <button
               onClick={() => setShowNewTaskNotification(false)}
-              className={`rounded p-1.5 transition-colors ${isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-100'}`}
+              className={`rounded p-1.5 sm:p-2 transition-colors flex-shrink-0 ${isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-100'}`}
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
           </div>
           <div className="mt-3 flex gap-3">
             <button
               onClick={onRefresh}
-              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+              className={`inline-flex items-center gap-2 rounded-lg px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-all ${
                 isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
               }`}
             >
-              <RefreshCw className="h-4 w-4" /> Refresh Now
+              <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Refresh Now
             </button>
           </div>
         </div>
       )}
 
-      <div className={`border-b p-5 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
-        <div className="flex flex-col gap-4">
+      <div className={`border-b p-3 sm:p-5 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
+        <div className="flex flex-col gap-3 sm:gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-emerald-500/20 p-2">
-                <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="rounded-lg bg-emerald-500/20 p-1.5 sm:p-2 flex-shrink-0">
+                <CheckCircle2 className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-400" />
               </div>
-              <div>
-                <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              <div className="min-w-0">
+                <h2 className={`text-xl sm:text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'} truncate`}>
                   {viewMode === 'all' ? 'All Tasks' : 'My Tasks'}
                   {newTaskIds.size > 0 && viewMode === 'all' && (
-                    <span className="ml-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-3 py-1 text-sm font-semibold text-emerald-400">
-                      <Bell className="h-4 w-4" />
+                    <span className="ml-2 sm:ml-3 inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-sm font-semibold text-emerald-400">
+                      <Bell className="h-3 w-3 sm:h-4 sm:w-4" />
                       {newTaskIds.size} new
                     </span>
                   )}
                 </h2>
-                <p className={`text-base ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-0.5`}>
+                <p className={`text-xs sm:text-base ${isDark ? 'text-slate-400' : 'text-gray-500'} mt-0.5 truncate`}>
                   {viewMode === 'all'
                     ? `All ${totalCount} tasks in tracker`
                     : (currentUserName || currentUserEmail ? `Tasks assigned to ${currentUserName || currentUserEmail}` : 'No user logged in')}
@@ -1716,119 +2165,119 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               </div>
             </div>
             
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
               <button
                 onClick={onRefresh}
                 disabled={isLoading}
-                className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-base font-medium transition-all ${
+                className={`inline-flex items-center gap-1.5 sm:gap-2 rounded-xl border px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base font-medium transition-all ${
                   isLoading ? 'opacity-50 cursor-not-allowed' : ''
                 } ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}`}
               >
-                {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
-                Refresh
+                {isLoading ? <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" /> : <RefreshCw className="h-4 w-4 sm:h-5 sm:w-5" />}
+                <span className="hidden xs:inline">Refresh</span>
               </button>
               
               <button
                 onClick={() => onViewModeChange(viewMode === 'all' ? 'mine' : 'all')}
-                className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-base font-medium transition-all ${
+                className={`inline-flex items-center gap-1.5 sm:gap-2 rounded-xl border px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base font-medium transition-all ${
                   viewMode === 'all'
                     ? isDark ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' : 'border-emerald-300 bg-emerald-50 text-emerald-700'
                     : isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
                 }`}
               >
-                {viewMode === 'all' ? <Eye className="h-5 w-5" /> : <EyeOff className="h-5 w-5" />}
-                {viewMode === 'all' ? 'Viewing All' : 'View All'}
+                {viewMode === 'all' ? <Eye className="h-4 w-4 sm:h-5 sm:w-5" /> : <EyeOff className="h-4 w-4 sm:h-5 sm:w-5" />}
+                <span className="hidden xs:inline">{viewMode === 'all' ? 'Viewing All' : 'View All'}</span>
               </button>
               
               {isTaskAdmin && (
                 <button
                   onClick={onAddTask}
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-base font-medium text-white transition-all hover:bg-emerald-600"
+                  className="inline-flex items-center gap-1.5 sm:gap-2 rounded-xl bg-emerald-500 px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base font-medium text-white transition-all hover:bg-emerald-600"
                 >
-                  <Plus className="h-5 w-5" />
-                  Add Task
+                  <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="hidden xs:inline">Add Task</span>
                 </button>
               )}
             </div>
           </div>
           
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <div className="relative flex-1">
-              <Search className={`absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 ${isDark ? 'text-slate-400' : 'text-gray-400'}`} />
+              <Search className={`absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 ${isDark ? 'text-slate-400' : 'text-gray-400'}`} />
               <input
                 type="text"
                 placeholder="Search tasks, brands, agents, due dates..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className={`w-full rounded-lg border pl-12 pr-4 py-3 text-base ${
+                className={`w-full rounded-lg border pl-9 sm:pl-12 pr-3 sm:pr-4 py-2 sm:py-3 text-sm sm:text-base ${
                   isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                 }`}
               />
-              <span className={`absolute right-4 top-1/2 -translate-y-1/2 text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+              <span className={`absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-[8px] sm:text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'} hidden md:block`}>
                 💡 Search by: Dec 25, 12/25, 2024-12-25
               </span>
             </div>
             
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`inline-flex items-center gap-2 rounded-lg border px-4 py-3 text-base font-medium transition-all ${
+              className={`inline-flex items-center gap-1.5 sm:gap-2 rounded-lg border px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base font-medium transition-all flex-shrink-0 ${
                 showFilters || filterStatus !== 'all' || filterBrand !== 'all' || filterAgent !== 'all'
                   ? isDark ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' : 'border-emerald-300 bg-emerald-50 text-emerald-700'
                   : isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
               }`}
             >
-              <Filter className="h-5 w-5" />
-              Filters
+              <Filter className="h-4 w-4 sm:h-5 sm:w-5" />
+              <span className="hidden xs:inline">Filters</span>
               {(filterStatus !== 'all' || filterBrand !== 'all' || filterAgent !== 'all') && (
-                <span className="ml-2 rounded-full bg-emerald-500 px-2 py-0.5 text-xs text-white">
+                <span className="ml-1 rounded-full bg-emerald-500 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs text-white">
                   {[filterStatus, filterBrand, filterAgent].filter(f => f !== 'all').length}
                 </span>
               )}
             </button>
             
-            <div className="flex rounded-lg border overflow-hidden">
+            <div className="flex rounded-lg border overflow-hidden flex-shrink-0">
               <button
                 onClick={() => setLayoutMode('table')}
-                className={`px-4 py-3 text-base transition-all ${
+                className={`px-2.5 sm:px-4 py-2 sm:py-3 text-sm transition-all ${
                   layoutMode === 'table'
                     ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
                     : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-white text-gray-500 hover:bg-gray-100'
                 }`}
                 title="Table View"
               >
-                <Table className="h-5 w-5" />
+                <Table className="h-4 w-4 sm:h-5 sm:w-5" />
               </button>
               <button
                 onClick={() => setLayoutMode('card')}
-                className={`px-4 py-3 text-base transition-all border-l ${
+                className={`px-2.5 sm:px-4 py-2 sm:py-3 text-sm transition-all border-l ${
                   layoutMode === 'card'
                     ? isDark ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-emerald-100 text-emerald-700 border-emerald-300'
                     : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700 border-slate-700' : 'bg-white text-gray-500 hover:bg-gray-100 border-gray-200'
                 }`}
                 title="Card View"
               >
-                <LayoutGrid className="h-5 w-5" />
+                <LayoutGrid className="h-4 w-4 sm:h-5 sm:w-5" />
               </button>
               <button
                 onClick={() => setLayoutMode('list')}
-                className={`px-4 py-3 text-base transition-all border-l ${
+                className={`px-2.5 sm:px-4 py-2 sm:py-3 text-sm transition-all border-l ${
                   layoutMode === 'list'
                     ? isDark ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-emerald-100 text-emerald-700 border-emerald-300'
                     : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700 border-slate-700' : 'bg-white text-gray-500 hover:bg-gray-100 border-gray-200'
                 }`}
                 title="List View"
               >
-                <List className="h-5 w-5" />
+                <List className="h-4 w-4 sm:h-5 sm:w-5" />
               </button>
             </div>
           </div>
           
           {/* Status filter tabs */}
           <div className="flex flex-col gap-2">
-            <div className="flex gap-2 overflow-x-auto pb-1">
+            <div className="flex gap-1 sm:gap-2 overflow-x-auto pb-1">
               <button
                 onClick={() => { setFilterStatus('all'); setCurrentPage(1); }}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap ${
                   filterStatus === 'all'
                     ? isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
                     : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1845,14 +2294,14 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                   <button
                     key={status}
                     onClick={() => { setFilterStatus(status); setCurrentPage(1); }}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                    className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap ${
                       isActive
                         ? isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
                         : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
                     <span>{status}</span>
-                    <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
+                    <span className={`ml-1 sm:ml-2 rounded-full px-1 sm:px-2 py-0.5 text-[8px] sm:text-xs ${
                       isActive
                         ? isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800'
                         : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
@@ -1865,19 +2314,19 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
             </div>
             
             {/* New Tasks Toggle and Date Filters */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
               <button
                 onClick={() => setShowOnlyNew(!showOnlyNew)}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                className={`inline-flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap ${
                   showOnlyNew
                     ? isDark ? 'bg-emerald-500/30 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
                     : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                <Bell className="h-4 w-4" />
-                {showOnlyNew ? 'Showing New Tasks' : 'Show New Tasks'}
+                <Bell className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">{showOnlyNew ? 'Showing New Tasks' : 'Show New Tasks'}</span>
                 {newTaskIds.size > 0 && (
-                  <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
+                  <span className={`ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs ${
                     showOnlyNew
                       ? isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800'
                       : isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
@@ -1890,19 +2339,19 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               {newTaskIds.size > 0 && (
                 <button
                   onClick={onMarkAllViewed}
-                  className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                  className={`inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap ${
                     isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                   }`}
                 >
-                  <Check className="h-4 w-4" />
-                  Mark All Viewed
+                  <Check className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline">Mark All Viewed</span>
                 </button>
               )}
               
               {/* Date Filter Buttons */}
               <button
                 onClick={() => { setFilterDateRange('all'); setCurrentPage(1); }}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap ${
                   filterDateRange === 'all'
                     ? isDark ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-blue-100 text-blue-700 border border-blue-300'
                     : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1912,7 +2361,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               </button>
               <button
                 onClick={() => { setFilterDateRange('unassigned'); setCurrentPage(1); }}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap ${
                   filterDateRange === 'unassigned'
                     ? isDark ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-purple-100 text-purple-700 border border-purple-300'
                     : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1922,7 +2371,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               </button>
               <button
                 onClick={() => { setFilterDateRange('overdue'); setCurrentPage(1); }}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap ${
                   filterDateRange === 'overdue'
                     ? isDark ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-red-100 text-red-700 border border-red-300'
                     : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1932,7 +2381,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               </button>
               <button
                 onClick={() => { setFilterDateRange('today'); setCurrentPage(1); }}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap ${
                   filterDateRange === 'today'
                     ? isDark ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-yellow-100 text-yellow-700 border border-yellow-300'
                     : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1942,7 +2391,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               </button>
               <button
                 onClick={() => { setFilterDateRange('week'); setCurrentPage(1); }}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap ${
                   filterDateRange === 'week'
                     ? isDark ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-cyan-100 text-cyan-700 border border-cyan-300'
                     : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1952,7 +2401,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               </button>
               <button
                 onClick={() => { setFilterDateRange('month'); setCurrentPage(1); }}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap ${
                   filterDateRange === 'month'
                     ? isDark ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-green-100 text-green-700 border border-green-300'
                     : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1961,19 +2410,18 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                 📅 This Month
               </button>
               
-              {/* Custom Date Range Picker Button */}
               <button
                 onClick={() => setShowDateRangePicker(!showDateRangePicker)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap inline-flex items-center gap-1.5 ${
+                className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap inline-flex items-center gap-1 ${
                   filterDateRange === 'custom'
                     ? isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
                     : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                <Calendar className="h-4 w-4" />
-                Custom Range
+                <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">Custom Range</span>
                 {filterDateRange === 'custom' && (
-                  <span className="ml-1 text-xs opacity-70">
+                  <span className="ml-1 text-[8px] sm:text-xs opacity-70 hidden lg:inline">
                     ({customDateStart ? new Date(customDateStart).toLocaleDateString() : '...'} - {customDateEnd ? new Date(customDateEnd).toLocaleDateString() : '...'})
                   </span>
                 )}
@@ -1982,60 +2430,60 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               {filterDateRange !== 'all' && (
                 <button
                   onClick={clearCustomDateRange}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                  className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap ${
                     isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                   }`}
                 >
-                  <X className="h-4 w-4 inline" /> Clear
+                  <X className="h-3 w-3 sm:h-4 sm:w-4 inline" /> Clear
                 </button>
               )}
             </div>
 
             {/* Custom Date Range Picker Dropdown */}
             {showDateRangePicker && (
-              <div className={`mt-2 p-4 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'} shadow-lg`}>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                  <div className="flex-1">
-                    <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'} block mb-1.5`}>
+              <div className={`mt-1 sm:mt-2 p-3 sm:p-4 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'} shadow-lg`}>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+                  <div className="flex-1 w-full sm:w-auto">
+                    <label className={`text-xs sm:text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'} block mb-1`}>
                       Start Date
                     </label>
                     <input
                       type="date"
                       value={customDateStart}
                       onChange={(e) => setCustomDateStart(e.target.value)}
-                      className={`w-full rounded-lg border px-4 py-2.5 text-base ${
+                      className={`w-full rounded-lg border px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base ${
                         isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                       }`}
                     />
                   </div>
-                  <div className="flex-1">
-                    <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'} block mb-1.5`}>
+                  <div className="flex-1 w-full sm:w-auto">
+                    <label className={`text-xs sm:text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'} block mb-1`}>
                       End Date
                     </label>
                     <input
                       type="date"
                       value={customDateEnd}
                       onChange={(e) => setCustomDateEnd(e.target.value)}
-                      className={`w-full rounded-lg border px-4 py-2.5 text-base ${
+                      className={`w-full rounded-lg border px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base ${
                         isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                       }`}
                     />
                   </div>
-                  <div className="flex gap-3 mt-4 sm:mt-6">
+                  <div className="flex gap-2 sm:gap-3 w-full sm:w-auto mt-2 sm:mt-6">
                     <button
                       onClick={applyCustomDateRange}
                       disabled={!customDateStart || !customDateEnd}
-                      className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-base font-medium transition-all ${
+                      className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-base font-medium transition-all ${
                         !customDateStart || !customDateEnd
                           ? 'opacity-50 cursor-not-allowed bg-slate-600 text-slate-400'
                           : isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
                       }`}
                     >
-                      <Check className="h-4 w-4" /> Apply
+                      <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Apply
                     </button>
                     <button
                       onClick={() => setShowDateRangePicker(false)}
-                      className={`rounded-lg px-4 py-2.5 text-base font-medium transition-all ${
+                      className={`flex-1 sm:flex-none rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-base font-medium transition-all ${
                         isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                       }`}
                     >
@@ -2049,17 +2497,17 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
           
           {/* Advanced Filters */}
           {showFilters && (
-            <div className={`grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-lg border ${
+            <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-4 rounded-lg border ${
               isDark ? 'border-slate-700 bg-slate-800/50' : 'border-gray-200 bg-gray-50'
             }`}>
               <div>
-                <label className={`block text-sm font-medium mb-1.5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                <label className={`block text-xs sm:text-sm font-medium mb-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                   Brand
                 </label>
                 <select
                   value={filterBrand}
                   onChange={(e) => setFilterBrand(e.target.value)}
-                  className={`w-full rounded-lg border px-4 py-2.5 text-base ${
+                  className={`w-full rounded-lg border px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base ${
                     isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                   }`}
                 >
@@ -2070,13 +2518,13 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                 </select>
               </div>
               <div>
-                <label className={`block text-sm font-medium mb-1.5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                <label className={`block text-xs sm:text-sm font-medium mb-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                   Agent
                 </label>
                 <select
                   value={filterAgent}
                   onChange={(e) => setFilterAgent(e.target.value)}
-                  className={`w-full rounded-lg border px-4 py-2.5 text-base ${
+                  className={`w-full rounded-lg border px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base ${
                     isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                   }`}
                 >
@@ -2089,7 +2537,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               <div className="flex items-end">
                 <button
                   onClick={clearFilters}
-                  className={`w-full rounded-lg px-4 py-2.5 text-base font-medium transition-all ${
+                  className={`w-full rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base font-medium transition-all ${
                     isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
                 >
@@ -2101,27 +2549,27 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-5">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-5">
         {isLoading && activeTasks.length === 0 ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className={`h-10 w-10 animate-spin ${isDark ? 'text-slate-400' : 'text-gray-400'}`} />
+          <div className="flex items-center justify-center py-12 sm:py-16">
+            <Loader2 className={`h-8 w-8 sm:h-10 sm:w-10 animate-spin ${isDark ? 'text-slate-400' : 'text-gray-400'}`} />
           </div>
         ) : (
           renderTasks()
         )}
       </div>
       
-      <div className={`border-t p-4 flex-shrink-0 flex items-center justify-between flex-wrap gap-3 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
-        <span className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+      <div className={`border-t p-3 sm:p-4 flex-shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
+        <span className={`text-xs sm:text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} w-full sm:w-auto`}>
           Showing {paginatedTasks.length} of {activeCount} tasks
           {filteredAndSortedTasks.length !== activeTasks.length && ` (filtered from ${activeTasks.length})`}
           {showOnlyNew && (
-            <span className={`ml-3 px-2 py-0.5 rounded text-xs ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+            <span className={`ml-2 px-1.5 sm:px-2 py-0.5 rounded text-[8px] sm:text-xs ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
               🆕 New Tasks
             </span>
           )}
           {filterDateRange !== 'all' && (
-            <span className={`ml-3 px-2 py-0.5 rounded text-xs ${
+            <span className={`ml-2 px-1.5 sm:px-2 py-0.5 rounded text-[8px] sm:text-xs ${
               filterDateRange === 'unassigned' ? isDark ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700' :
               filterDateRange === 'overdue' ? isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700' :
               filterDateRange === 'custom' ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700' :
@@ -2137,11 +2585,11 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
           )}
         </span>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-between sm:justify-end">
           {newTaskIds.size > 0 && (
             <button
               onClick={onMarkAllViewed}
-              className={`text-sm font-medium transition-colors ${
+              className={`text-xs sm:text-sm font-medium transition-colors ${
                 isDark ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-600 hover:text-emerald-700'
               }`}
             >
@@ -2150,38 +2598,38 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
           )}
           
           {totalPages > 1 && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <button
                 onClick={() => goToPage(currentPage - 1)}
                 disabled={currentPage === 1}
-                className={`p-2 rounded transition-colors ${
+                className={`p-1 sm:p-2 rounded transition-colors ${
                   currentPage === 1 
                     ? 'opacity-30 cursor-not-allowed' 
                     : isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-200'
                 }`}
               >
-                <ChevronLeft className="h-5 w-5" />
+                <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
               </button>
               
-              <span className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+              <span className={`text-xs sm:text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                 {currentPage} / {totalPages}
               </span>
               
               <button
                 onClick={() => goToPage(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className={`p-2 rounded transition-colors ${
+                className={`p-1 sm:p-2 rounded transition-colors ${
                   currentPage === totalPages 
                     ? 'opacity-30 cursor-not-allowed' 
                     : isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-200'
                 }`}
               >
-                <ChevronRight className="h-5 w-5" />
+                <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
               </button>
             </div>
           )}
           
-          <span className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+          <span className={`text-[10px] sm:text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
             {isLoading ? 'Refreshing...' : `Updated: ${new Date().toLocaleTimeString()}`}
           </span>
         </div>
@@ -2191,43 +2639,12 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
       
       {/* Task Name Generator Modal */}
       {showGenerator && selectedTaskForGenerator && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className={`relative w-full max-w-2xl rounded-2xl border shadow-2xl ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'} animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto p-6`}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 p-2">
-                  <Sparkles className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h3 className={`text-xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Task Name Generator</h3>
-                  <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                    Generate task names for {selectedTaskForGenerator.brand}
-                  </p>
-                </div>
-              </div>
-              <button onClick={() => setShowGenerator(false)} className={`rounded-lg p-2 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
-                <X className={`h-6 w-6 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
-              </button>
-            </div>
-            <div className="flex flex-col items-center justify-center py-8">
-              <Sparkles className="h-16 w-16 text-blue-400 mb-4" />
-              <p className={`text-base ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
-                Task name generator coming soon!
-              </p>
-              <p className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'} mt-2`}>
-                {selectedTaskForGenerator.task} · {selectedTaskForGenerator.brand}
-              </p>
-              <button
-                onClick={() => setShowGenerator(false)}
-                className={`mt-4 rounded-lg px-5 py-2.5 text-base font-medium transition-all ${
-                  isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+        <TaskNameGeneratorModal
+          isOpen={showGenerator}
+          onClose={() => setShowGenerator(false)}
+          task={selectedTaskForGenerator}
+          theme={theme}
+        />
       )}
 
       {/* Reason for Pending Modal */}
@@ -2248,87 +2665,71 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
 
       {/* Task Detail Modal */}
       {showTaskModal && selectedTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 p-4">
           <div className={`relative w-full max-w-3xl rounded-2xl border shadow-2xl ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'} animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto`}>
-            <div className={`flex items-center justify-between border-b p-5 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-emerald-500/20 p-2">
-                  <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+            <div className={`sticky top-0 z-10 flex items-center justify-between border-b p-4 sm:p-5 ${isDark ? 'bg-slate-900/95 border-slate-700' : 'bg-white/95 border-gray-200'} backdrop-blur`}>
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="rounded-lg bg-emerald-500/20 p-1.5 sm:p-2">
+                  <CheckCircle2 className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-400" />
                 </div>
                 <div>
-                  <h3 className={`text-xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Task Details</h3>
-                  <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>View and manage task information</p>
+                  <h3 className={`text-lg sm:text-xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Task Details</h3>
+                  <p className={`text-xs sm:text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>#{selectedTask.rowIndex} · {selectedTask.task}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 {isTaskAdmin && (
                   <button
                     onClick={() => { setTaskFormError(null); setShowEditTaskModal(true); }}
-                    className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    className={`inline-flex items-center gap-1 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-all ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                   >
-                    <Edit2 className="h-4 w-4" /> Edit
+                    <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Edit
                   </button>
                 )}
-                <button onClick={() => setShowTaskModal(false)} className={`rounded-lg p-2 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
-                  <X className={`h-6 w-6 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
+                <button onClick={() => setShowTaskModal(false)} className={`rounded-lg p-1.5 sm:p-2 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
+                  <X className={`h-5 w-5 sm:h-6 sm:w-6 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
                 </button>
               </div>
             </div>
 
-            <div className="p-6 space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Row #</label>
-                  <p className={`text-xl font-semibold font-mono ${isDark ? 'text-white' : 'text-gray-900'}`}>#{selectedTask.rowIndex}</p>
+                  <label className={`text-xs sm:text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Brand</label>
+                  <p className={`text-base sm:text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{selectedTask.brand}</p>
                 </div>
                 <div>
-                  <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Task</label>
-                  <p className={`text-xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{selectedTask.task}</p>
+                  <label className={`text-xs sm:text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Type</label>
+                  <p className={`text-base sm:text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>{selectedTask.type}</p>
                 </div>
                 <div>
-                  <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Brand</label>
-                  <p className={`text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>{selectedTask.brand}</p>
+                  <label className={`text-xs sm:text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Agent</label>
+                  <p className={`text-base sm:text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>{selectedTask.agent || 'N/A'}</p>
                 </div>
                 <div>
-                  <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Type</label>
-                  <p className={`text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>{selectedTask.type}</p>
+                  <label className={`text-xs sm:text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Date Requested</label>
+                  <p className={`text-base sm:text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>{formatDate(selectedTask.date_requested)}</p>
                 </div>
                 <div>
-                  <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Segment</label>
-                  <p className={`text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>{selectedTask.segment}</p>
+                  <label className={`text-xs sm:text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Due Date</label>
+                  <p className={`text-base sm:text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>{formatDate(selectedTask.due_date)}</p>
                 </div>
                 <div>
-                  <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Agent</label>
-                  <p className={`text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>{selectedTask.agent || 'N/A'}</p>
-                </div>
-                <div>
-                  <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Date Requested</label>
-                  <p className={`text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>{formatDate(selectedTask.date_requested)}</p>
-                </div>
-                <div>
-                  <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Due Date</label>
-                  <p className={`text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>{formatDate(selectedTask.due_date)}</p>
-                </div>
-                <div>
-                  <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Status</label>
-                  <span className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-base font-medium ${getStatusColor(selectedTask.status).bg} ${getStatusColor(selectedTask.status).text}`}>
-                    <span className={`h-2.5 w-2.5 rounded-full ${getStatusColor(selectedTask.status).dot}`} />
-                    <span>{selectedTask.status}</span>
+                  <label className={`text-xs sm:text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Status</label>
+                  <span className={`inline-flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base font-medium ${getStatusColor(selectedTask.status).bg} ${getStatusColor(selectedTask.status).text}`}>
+                    <span className={`h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full ${getStatusColor(selectedTask.status).dot}`} />
+                    {selectedTask.status}
                   </span>
-                </div>
-                <div>
-                  <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Auditor</label>
-                  <p className={`text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>{selectedTask.auditor || 'N/A'}</p>
                 </div>
               </div>
 
               {selectedTask.remarks && (
                 <div>
-                  <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Remarks</label>
-                  <p className={`text-base ${isDark ? 'text-white' : 'text-gray-900'} mt-1`}>{selectedTask.remarks}</p>
+                  <label className={`text-xs sm:text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Remarks</label>
+                  <p className={`text-sm sm:text-base ${isDark ? 'text-white' : 'text-gray-900'} mt-1`}>{selectedTask.remarks}</p>
                   {selectedTask.remarks.toLowerCase().includes('sbs') && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-yellow-500/20 px-3 py-1 text-sm font-semibold text-yellow-400 mt-2">
-                      <Eye className="h-4 w-4" />
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-yellow-500/20 px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold text-yellow-400 mt-2">
+                      <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       SBS - Side by Side Observing
                     </span>
                   )}
@@ -2337,34 +2738,20 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
 
               {selectedTask.reason_for_pending && (
                 <div>
-                  <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Reason for Pending</label>
-                  <div className={`mt-2 rounded-lg border p-4 ${isDark ? 'border-yellow-500/30 bg-yellow-500/10' : 'border-yellow-300 bg-yellow-50'}`}>
-                    <div className="flex items-start gap-3">
-                      <Clock className={`h-5 w-5 mt-0.5 ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`} />
-                      <p className={`text-base ${isDark ? 'text-white' : 'text-gray-900'}`}>{selectedTask.reason_for_pending}</p>
+                  <label className={`text-xs sm:text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Reason for Pending</label>
+                  <div className={`mt-1 sm:mt-2 rounded-lg border p-3 sm:p-4 ${isDark ? 'border-yellow-500/30 bg-yellow-500/10' : 'border-yellow-300 bg-yellow-50'}`}>
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <Clock className={`h-4 w-4 sm:h-5 sm:w-5 mt-0.5 ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`} />
+                      <p className={`text-sm sm:text-base ${isDark ? 'text-white' : 'text-gray-900'}`}>{selectedTask.reason_for_pending}</p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {selectedTask.reason_for_cancel && (
-                <div>
-                  <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Reason for Cancel</label>
-                  <p className={`text-base ${isDark ? 'text-white' : 'text-gray-900'} mt-1`}>{selectedTask.reason_for_cancel}</p>
-                </div>
-              )}
-
-              {selectedTask.date_completed && (
-                <div>
-                  <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Date Completed</label>
-                  <p className={`text-base ${isDark ? 'text-white' : 'text-gray-900'} mt-1`}>{formatDate(selectedTask.date_completed)}</p>
-                </div>
-              )}
-
               {selectedTask.bc_links && (
                 <div>
-                  <label className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>BC Links</label>
-                  <div className="mt-2">
+                  <label className={`text-xs sm:text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>BC Links</label>
+                  <div className="mt-1 sm:mt-2 flex flex-wrap gap-2">
                     {selectedTask.bc_links.split(',').map((link, index) => {
                       const trimmedLink = link.trim();
                       if (trimmedLink.startsWith('http://') || trimmedLink.startsWith('https://')) {
@@ -2374,19 +2761,19 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                             href={trimmedLink}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className={`inline-flex items-center gap-2 text-base text-blue-400 hover:text-blue-300 underline-offset-2 hover:underline transition-colors mr-3 ${
+                            className={`inline-flex items-center gap-1.5 text-sm sm:text-base text-blue-400 hover:text-blue-300 underline-offset-2 hover:underline transition-colors ${
                               isDark ? 'hover:text-blue-300' : 'hover:text-blue-600'
                             }`}
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <MessageSquare className="h-4 w-4" />
+                            <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             Basecamp Link {index + 1}
-                            <ArrowRight className="h-4 w-4" />
+                            <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                           </a>
                         );
                       }
                       return (
-                        <span key={index} className={`text-base ${isDark ? 'text-slate-400' : 'text-gray-500'} mr-3`}>
+                        <span key={index} className={`text-sm sm:text-base ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                           {trimmedLink}
                         </span>
                       );
@@ -2396,33 +2783,63 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               )}
             </div>
 
-            <div className={`border-t p-5 ${isDark ? 'border-slate-700' : 'border-gray-200'} flex flex-wrap gap-3 justify-between`}>
-              <div className="flex gap-3 flex-wrap">
-                {getStatusOptions(selectedTask.status).map((newStatus) => (
-                  <button
-                    key={newStatus}
-                    onClick={() => {
-                      onUpdateStatus(selectedTask.id, newStatus);
-                    }}
-                    disabled={updatingTaskId === selectedTask.id}
-                    className={`rounded-lg px-5 py-2.5 text-base font-medium transition-all ${
-                      updatingTaskId === selectedTask.id ? 'opacity-50 cursor-not-allowed' :
-                      newStatus === 'Completed' ? 'bg-emerald-500 text-white hover:bg-emerald-600' :
-                      newStatus === 'Cancelled' ? 'bg-red-500 text-white hover:bg-red-600' :
-                      newStatus === 'Ongoing' ? 'bg-blue-500 text-white hover:bg-blue-600' :
-                      'bg-yellow-500 text-white hover:bg-yellow-600'
-                    }`}
-                  >
-                    {updatingTaskId === selectedTask.id ? <Loader2 className="h-5 w-5 animate-spin" /> : `Mark as ${newStatus}`}
-                  </button>
-                ))}
+            {/* Optimized Status Buttons */}
+            <div className={`border-t p-4 sm:p-5 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  <span className={`text-xs sm:text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'} w-full sm:w-auto`}>
+                    Change Status:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5 sm:gap-2 w-full sm:w-auto">
+                    {VALID_TASK_STATUSES.map((statusOption) => {
+                      const isCurrent = statusOption === selectedTask.status;
+                      const statusColor = getStatusColor(statusOption);
+                      
+                      if (isCurrent) {
+                        return (
+                          <span
+                            key={statusOption}
+                            className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium ${statusColor.bg} ${statusColor.text} border-2 border-emerald-500/50`}
+                          >
+                            <span className={`h-2 w-2 rounded-full ${statusColor.dot}`} />
+                            {statusOption} ✓
+                          </span>
+                        );
+                      }
+                      
+                      return (
+                        <button
+                          key={statusOption}
+                          onClick={() => onUpdateStatus(selectedTask.id, statusOption)}
+                          disabled={updatingTaskId === selectedTask.id}
+                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium transition-all ${
+                            updatingTaskId === selectedTask.id ? 'opacity-50 cursor-not-allowed' :
+                            statusOption === 'Completed' ? (isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200') :
+                            statusOption === 'Cancelled' ? (isDark ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-red-100 text-red-700 hover:bg-red-200') :
+                            statusOption === 'Ongoing' ? (isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200') :
+                            isDark ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30' : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                          }`}
+                        >
+                          {updatingTaskId === selectedTask.id && statusOption === selectedTask.status ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <span className={`h-1.5 w-1.5 rounded-full ${statusColor.dot}`} />
+                          )}
+                          {statusOption}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowTaskModal(false)}
+                  className={`rounded-lg px-4 sm:px-5 py-2 sm:py-2.5 text-sm sm:text-base font-medium transition-all w-full sm:w-auto ${
+                    isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Close
+                </button>
               </div>
-              <button
-                onClick={() => setShowTaskModal(false)}
-                className={`rounded-lg px-5 py-2.5 text-base font-medium transition-all ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>
