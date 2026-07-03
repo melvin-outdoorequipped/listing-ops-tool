@@ -33,6 +33,7 @@ import {
   UserX,
   Crown,
   AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 
 import SkuProcessor from './components/SkuProcessor';
@@ -41,6 +42,7 @@ import BasecampGenerator from './components/BasecampGenerator';
 import FileGenerator from './components/BulkAnalyzerFileGenerator';
 import GetBrand from './components/GetBrand';
 import Dashboard from './components/dashboard';
+import TaskManagement from './dashboard/TaskManagement';
 import Documentation from './components/documentation';
 import Terms from './components/terms';
 import DownloadPage from './components/download';
@@ -51,7 +53,7 @@ import MaintenanceGuard from './components/MaintenanceGuard';
 
 type Theme = 'light' | 'dark';
 type ToolId = 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer' | 'get-brand';
-type MainMenuId = 'Dashboard' | 'Tools' | 'Downloads' | 'Documentation' | 'Terms' | 'Admin';
+type MainMenuId = 'Dashboard' | 'TaskManagement' | 'Tools' | 'Downloads' | 'Documentation' | 'Terms' | 'Admin';
 
 interface MenuItem {
   id: MainMenuId;
@@ -382,15 +384,15 @@ export default function HomePage() {
   const mainMenuItems = useMemo<MenuItem[]>(() => {
     const items: MenuItem[] = [
       { id: 'Dashboard', label: 'Dashboard', icon: <Home className="h-5 w-5" />, shortcut: '⌘1' },
+      { id: 'TaskManagement', label: 'Task Management', icon: <CheckCircle2 className="h-5 w-5" />, shortcut: '⌘T' },
       { id: 'Tools', label: 'Tools', icon: <Settings className="h-5 w-5" />, shortcut: '⌘2' },
       { id: 'Downloads', label: 'Downloads', icon: <Download className="h-5 w-5" />, shortcut: '⌘3' },
     ];
-    
-    // Only show Admin menu if user is admin (Melvin)
+
     if (isAdmin) {
       items.push({ id: 'Admin', label: 'Admin Panel', icon: <Shield className="h-5 w-5" />, adminOnly: true });
     }
-    
+
     return items;
   }, [isAdmin]);
 
@@ -528,41 +530,57 @@ export default function HomePage() {
   }, [activeMainMenu, activeTool]);
 
   const renderContent = () => {
-    if (!user) return null;
-    
-    if (activeMainMenu === 'Dashboard') return <Dashboard theme={theme} currentUserEmail={user?.email || ''} />;
-    if (activeMainMenu === 'Downloads') return <DownloadPage theme={theme} />;
-    if (activeMainMenu === 'Documentation') return <Documentation theme={theme} />;
-    if (activeMainMenu === 'Terms') return <Terms theme={theme} />;
-    if (activeMainMenu === 'Admin') {
-      if (!isAdmin) {
-        return (
-          <div className={`rounded-xl border border-red-500/30 bg-red-500/10 p-8 text-center`}>
-            <Shield className="mx-auto h-16 w-16 text-red-400 opacity-50" />
-            <h3 className={`mt-4 text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Access Denied</h3>
-            <p className={`mt-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-              Only <span className="font-semibold text-amber-400">{ADMIN_EMAIL}</span> can access the admin panel.
-            </p>
-            <button
-              onClick={() => navigateTo('Dashboard')}
-              className="mt-4 rounded-lg bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500"
-            >
-              Return to Dashboard
-            </button>
-          </div>
-        );
-      }
-      return <AdminDashboard theme={theme} />;
+  if (!user) return null;
+  
+  if (activeMainMenu === 'Dashboard') return <Dashboard theme={theme} currentUserEmail={user?.email || ''} />;
+  
+  if (activeMainMenu === 'TaskManagement') {
+    return (
+      <div className="h-[calc(100vh-8rem)]">
+        <TaskManagement 
+          theme={theme} 
+          currentUserEmail={user?.email || ''}
+          currentUserName={user?.email || ''}
+        />
+      </div>
+    );
+  }
+  
+  if (activeMainMenu === 'Downloads') return <DownloadPage theme={theme} />;
+  if (activeMainMenu === 'Documentation') return <Documentation theme={theme} />;
+  if (activeMainMenu === 'Terms') return <Terms theme={theme} />;
+  
+  if (activeMainMenu === 'Admin') {
+    if (!isAdmin) {
+      return (
+        <div className={`rounded-xl border border-red-500/30 bg-red-500/10 p-8 text-center`}>
+          <Shield className="mx-auto h-16 w-16 text-red-400 opacity-50" />
+          <h3 className={`mt-4 text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Access Denied</h3>
+          <p className={`mt-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+            Only <span className="font-semibold text-amber-400">{ADMIN_EMAIL}</span> can access the admin panel.
+          </p>
+          <button
+            onClick={() => navigateTo('Dashboard')}
+            className="mt-4 rounded-lg bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      );
     }
-    if (activeMainMenu === 'Tools') {
-      if (activeTool === 'sku') return <SkuProcessor theme={theme} />;
-      if (activeTool === 'asin') return <AsinConflictChecker theme={theme} />;
-      if (activeTool === 'basecamp') return <BasecampGenerator theme={theme} />;
-      if (activeTool === 'bulk-analyzer') return <FileGenerator theme={theme} />;
-      if (activeTool === 'get-brand') return <GetBrand theme={theme} />;
-    }
-    return null;
-  };
+    return <AdminDashboard theme={theme} />;
+  }
+  
+  if (activeMainMenu === 'Tools') {
+    if (activeTool === 'sku') return <SkuProcessor theme={theme} />;
+    if (activeTool === 'asin') return <AsinConflictChecker theme={theme} />;
+    if (activeTool === 'basecamp') return <BasecampGenerator theme={theme} />;
+    if (activeTool === 'bulk-analyzer') return <FileGenerator theme={theme} />;
+    if (activeTool === 'get-brand') return <GetBrand theme={theme} />;
+  }
+  
+  return null;
+};
 
   // Show loading state
   if (isAuthLoading) {

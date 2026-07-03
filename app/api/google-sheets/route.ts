@@ -20,31 +20,93 @@ const TEAM_MEMBERS: Record<string, string> = {
   'mpasturan@outdoorequipped.com': 'Mark',
 };
 
+// ─── RAW SHEET CACHE ──────────────────────────────────────────────────
+type CacheEntry = { values: string[][]; timestamp: number };
+const sheetCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 30_000; // 30 seconds cache
+
+// In-flight request de-duplication
+const inFlight = new Map<string, Promise<string[][]>>();
+
+async function fetchWithRetry<T>(
+  fn: () => Promise<T>,
+  retries = 5,
+  baseDelayMs = 1000
+): Promise<T> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const isRateLimit = err?.code === 429 || err?.status === 429;
+      const isLastAttempt = attempt === retries;
+      if (!isRateLimit || isLastAttempt) throw err;
+
+      const delay = baseDelayMs * 2 ** attempt + Math.random() * 500;
+      console.warn(`⏳ Sheets API 429 — retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${retries})`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error('fetchWithRetry: exhausted retries');
+}
+
+async function getSheetValues(
+  sheets: ReturnType<typeof google.sheets>,
+  spreadsheetId: string,
+  sheetName: string
+): Promise<string[][]> {
+  const cacheKey = `${spreadsheetId}::${sheetName}`;
+
+  const cached = sheetCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    console.log(`✅ Cache hit for "${sheetName}"`);
+    return cached.values;
+  }
+
+  const pending = inFlight.get(cacheKey);
+  if (pending) {
+    console.log(`🔁 Joining in-flight request for "${sheetName}"`);
+    return pending;
+  }
+
+  const fetchPromise = (async () => {
+    try {
+      console.log(`📥 Fetching sheet data for "${sheetName}"...`);
+      const response = await fetchWithRetry(() =>
+        sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: `'${sheetName}'!A:Z`,
+          majorDimension: 'ROWS',
+        })
+      );
+
+      const values = (response.data.values || []) as string[][];
+      console.log(`✅ Fetched ${values.length} rows (including header)`);
+      
+      sheetCache.set(cacheKey, { values, timestamp: Date.now() });
+      return values;
+    } finally {
+      inFlight.delete(cacheKey);
+    }
+  })();
+
+  inFlight.set(cacheKey, fetchPromise);
+  return fetchPromise;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log('📝 /api/google-sheets request body:', body);
+    console.log('📝 /api/google-sheets request:', { 
+      viewAll: body.viewAll, 
+      userEmail: body.userEmail?.substring(0, 10) + '...' 
+    });
 
     const { spreadsheetId, sheetName, userEmail, viewAll } = body;
 
     // Validate required parameters
-    if (!spreadsheetId) {
+    if (!spreadsheetId || !sheetName || !userEmail) {
       return NextResponse.json(
-        { error: 'Missing required parameter: spreadsheetId' },
-        { status: 400 }
-      );
-    }
-    if (!sheetName) {
-      return NextResponse.json(
-        { error: 'Missing required parameter: sheetName' },
-        { status: 400 }
-      );
-    }
-    // userEmail is still required (so we know who's asking / for logging),
-    // even when viewAll=true and we're not going to filter by it.
-    if (!userEmail) {
-      return NextResponse.json(
-        { error: 'Missing required parameter: userEmail' },
+        { error: 'Missing required parameters: spreadsheetId, sheetName, and userEmail are required' },
         { status: 400 }
       );
     }
@@ -69,100 +131,116 @@ export async function POST(request: NextRequest) {
 
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Fetch the sheet data
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `'${sheetName}'!A:Z`,
-      majorDimension: 'ROWS',
-    });
+    // Fetch the sheet data (cached + retried)
+    const values = await getSheetValues(sheets, spreadsheetId, sheetName);
 
-    const values = response.data.values || [];
     if (values.length < 2) {
       console.log('📊 No data rows found in sheet');
-      return NextResponse.json({ values: [] });
+      return NextResponse.json({ 
+        headers: [],
+        rows: [],
+        total: 0 
+      });
     }
 
     const headers = values[0];
+    console.log(`📊 Headers: ${headers.length} columns`);
 
     // ─── VIEW ALL MODE ──────────────────────────────────────────────────
-    // Skip the per-agent filter entirely and return every row in the sheet.
-    // Used by the "View All Tasks" button on the dashboard.
     if (viewAll) {
-      const allRows = values.slice(1).map((row, index) => ({
-        row,
-        rowIndex: index + 2,
-      })).filter(({ row }) => row.some((cell) => cell !== undefined && cell !== ''));
+      console.log('👁️ View All mode activated');
+      
+      // Process ALL rows with their actual Google Sheet row numbers
+      const allRows = values
+        .slice(1) // Skip header row
+        .map((row, index) => ({
+          row: row,
+          rowIndex: index + 2, // Actual Google Sheet row number (header is row 1)
+        }))
+        .filter(({ row }) => {
+          // Check if row has any data
+          return row.some((cell) => cell !== undefined && cell !== null && cell.toString().trim() !== '');
+        })
+        .sort((a, b) => b.rowIndex - a.rowIndex); // Sort DESCENDING by row number (newest first)
 
-      console.log(`📊 View-all mode: returning ${allRows.length} tasks (requested by ${userEmail})`);
+      console.log(`✅ View All: Returning ${allRows.length} tasks`);
 
       return NextResponse.json({
-        headers,
+        headers: headers,
         rows: allRows,
         total: allRows.length,
       });
     }
 
+    // ─── FILTER BY AGENT MODE ──────────────────────────────────────────
+    console.log('🔍 Filter by agent mode activated');
+
+    // Find the agent column
     const agentCol = headers.findIndex(
       (h: string) => h?.toString().trim().toLowerCase() === 'agent'
     );
 
     if (agentCol === -1) {
-      console.error('⚠️ Agent column not found in headers:', headers);
-      return NextResponse.json({ values: [] });
+      console.error('⚠️ Agent column not found in headers');
+      return NextResponse.json({ 
+        headers: [],
+        rows: [],
+        total: 0 
+      });
     }
 
     // Get the target agent name from the email
     const emailLower = userEmail.toLowerCase().trim();
     const targetAgent = TEAM_MEMBERS[emailLower] || emailLower.split('@')[0];
     const targetAgentLower = targetAgent.toLowerCase().trim();
-    
-    console.log(`🔍 Filtering for agent: "${targetAgentLower}" (from email: ${emailLower})`);
+
+    console.log(`🎯 Filtering for agent: "${targetAgentLower}"`);
 
     // Filter rows to only those assigned to this user
     const filteredRows = values
-  .slice(1)
-  .map((row, index) => ({
-    row,
-    rowIndex: index + 2, // ORIGINAL Google Sheet row
-  }))
-  .filter(({ row }) => {
-    const agentValue = row[agentCol]?.toString().trim() || "";
-    const agentLower = agentValue.toLowerCase();
+      .slice(1) // Skip header row
+      .map((row, index) => ({
+        row: row,
+        rowIndex: index + 2, // Actual Google Sheet row number
+      }))
+      .filter(({ row }) => {
+        const agentValue = row[agentCol]?.toString().trim() || '';
+        const agentLower = agentValue.toLowerCase();
 
-    if (agentLower === targetAgentLower) return true;
+        if (agentLower === targetAgentLower) return true;
 
-    for (const [email, name] of Object.entries(TEAM_MEMBERS)) {
-      if (email === emailLower && name.toLowerCase() === agentLower) {
-        return true;
-      }
-    }
+        // Check if any email in TEAM_MEMBERS matches the agent name
+        for (const [email, name] of Object.entries(TEAM_MEMBERS)) {
+          if (email === emailLower && name.toLowerCase() === agentLower) {
+            return true;
+          }
+        }
 
-    return false;
-  });
+        return false;
+      })
+      .sort((a, b) => b.rowIndex - a.rowIndex); // Sort DESCENDING by row number
 
-    console.log(`📊 Filtered ${filteredRows.length} tasks for "${targetAgent}"`);
-
-    if (filteredRows.length === 0) {
-      // Log some sample agent names for debugging
-      console.log('⚠️ No tasks found. Sample agent names in sheet:',
-        values.slice(1, 5).map(row => row[agentCol]?.toString().trim())
-      );
-    }
+    console.log(`✅ Filtered: ${filteredRows.length} tasks for "${targetAgent}"`);
 
     return NextResponse.json({
-        headers,
-        rows: filteredRows,
-        total: filteredRows.length,
+      headers: headers,
+      rows: filteredRows,
+      total: filteredRows.length,
     });
-    
+
   } catch (error: any) {
-    console.error('Error in /api/google-sheets:', error);
+    console.error('❌ Error in /api/google-sheets:', error);
+
+    const isRateLimit = error?.code === 429 || error?.status === 429;
+
     return NextResponse.json(
-      { 
-        error: 'Failed to fetch tasks: ' + (error.message || 'Unknown error'),
-        details: error.response?.data || null
+      {
+        error: isRateLimit
+          ? 'Google Sheets is temporarily rate-limited. Please try again in a moment.'
+          : 'Failed to fetch tasks: ' + (error.message || 'Unknown error'),
+        details: error.response?.data || null,
       },
-      { status: 500 }
+      { status: isRateLimit ? 429 : 500 }
     );
   }
 }
