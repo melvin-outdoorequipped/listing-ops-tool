@@ -1409,167 +1409,174 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
 
   // ─── FILTERED AND SORTED TASKS ───────────────────────────────────────
 
-  const filteredAndSortedTasks = useMemo(() => {
-    if (activeTasks.length === 0) return [];
-    
-    let filtered = activeTasks;
+const filteredAndSortedTasks = useMemo(() => {
+  if (activeTasks.length === 0) return [];
+  
+  let filtered = activeTasks;
 
-    if (showOnlyNew) {
-      filtered = filtered.filter(task => newTaskIds.has(task.id));
-    }
-    
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(task => task.status === filterStatus);
-    }
-    
-    if (filterBrand !== 'all') {
-      filtered = filtered.filter(task => task.brand === filterBrand);
-    }
-    
-    if (filterAgent !== 'all') {
-      filtered = filtered.filter(task => task.agent === filterAgent);
-    }
+  if (showOnlyNew) {
+    filtered = filtered.filter(task => newTaskIds.has(task.id));
+  }
+  
+  if (filterStatus !== 'all') {
+    filtered = filtered.filter(task => task.status === filterStatus);
+  }
+  
+  if (filterBrand !== 'all') {
+    filtered = filtered.filter(task => task.brand === filterBrand);
+  }
+  
+  if (filterAgent !== 'all') {
+    filtered = filtered.filter(task => task.agent === filterAgent);
+  }
 
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    if (filterDateRange !== 'all') {
-      filtered = filtered.filter(task => {
-        if (filterDateRange === 'unassigned') {
-          return !task.agent || task.agent.trim() === '';
-        }
-        
-        const dueDateStr = task.due_date;
-        if (!dueDateStr) return false;
-        
-        const dueDate = new Date(dueDateStr);
-        if (isNaN(dueDate.getTime())) return false;
-        
-        const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
-        
-        if (filterDateRange === 'overdue') {
-          return dueDateOnly < today && task.status !== 'Completed' && task.status !== 'Cancelled';
-        }
-        
-        if (filterDateRange === 'today') {
-          return dueDateOnly.getTime() === today.getTime();
-        }
-        
-        if (filterDateRange === 'week') {
-          const weekEnd = new Date(today);
-          weekEnd.setDate(weekEnd.getDate() + 7);
-          return dueDateOnly >= today && dueDateOnly <= weekEnd;
-        }
-        
-        if (filterDateRange === 'month') {
-          const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-          return dueDateOnly >= today && dueDateOnly <= monthEnd;
-        }
-        
-        if (filterDateRange === 'custom') {
-          const startDate = customDateStart ? new Date(customDateStart) : null;
-          const endDate = customDateEnd ? new Date(customDateEnd) : null;
-          
-          if (startDate) {
-            const startOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-            if (dueDateOnly < startOnly) return false;
-          }
-          if (endDate) {
-            const endOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-            if (dueDateOnly > endOnly) return false;
-          }
-          return true;
-        }
-        
-        return true;
-      });
-    }
-    
-    if (debouncedSearchTerm.trim()) {
-      const term = debouncedSearchTerm.toLowerCase().trim();
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  if (filterDateRange !== 'all') {
+    filtered = filtered.filter(task => {
+      if (filterDateRange === 'unassigned') {
+        return !task.agent || task.agent.trim() === '';
+      }
       
-      filtered = filtered.filter(task => {
-        if (task.task.toLowerCase().includes(term)) return true;
-        if (task.brand.toLowerCase().includes(term)) return true;
-        if (task.status.toLowerCase().includes(term)) return true;
-        if (task.type.toLowerCase().includes(term)) return true;
-        if (task.segment.toLowerCase().includes(term)) return true;
-        if (task.bc_links.toLowerCase().includes(term)) return true;
-        if (task.agent.toLowerCase().includes(term)) return true;
-        if (task.auditor.toLowerCase().includes(term)) return true;
-        if (task.remarks.toLowerCase().includes(term)) return true;
-        if (task.reason_for_pending.toLowerCase().includes(term)) return true;
-        if (task.reason_for_cancel.toLowerCase().includes(term)) return true;
+      const dueDateStr = task.due_date;
+      if (!dueDateStr) return false;
+      
+      const dueDate = new Date(dueDateStr);
+      if (isNaN(dueDate.getTime())) return false;
+      
+      const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+      
+      if (filterDateRange === 'overdue') {
+        return dueDateOnly < today && task.status !== 'Completed' && task.status !== 'Cancelled';
+      }
+      
+      if (filterDateRange === 'today') {
+        return dueDateOnly.getTime() === today.getTime();
+      }
+      
+      if (filterDateRange === 'week') {
+        const weekEnd = new Date(today);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        return dueDateOnly >= today && dueDateOnly <= weekEnd;
+      }
+      
+      if (filterDateRange === 'month') {
+        const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        return dueDateOnly >= today && dueDateOnly <= monthEnd;
+      }
+      
+      if (filterDateRange === 'custom') {
+        const startDate = customDateStart ? new Date(customDateStart) : null;
+        const endDate = customDateEnd ? new Date(customDateEnd) : null;
         
-        if (task.due_date) {
-          try {
-            const dueDate = new Date(task.due_date);
-            if (!isNaN(dueDate.getTime())) {
-              const dateFormats = [
-                task.due_date.toLowerCase(),
-                dueDate.toLocaleDateString('en-US').toLowerCase(),
-                dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase(),
-                dueDate.toISOString().split('T')[0],
-                `${dueDate.getMonth() + 1}/${dueDate.getDate()}/${dueDate.getFullYear()}`,
-                `${dueDate.getMonth() + 1}/${dueDate.getDate()}`,
-              ];
-              
-              for (const format of dateFormats) {
-                if (format.includes(term)) return true;
-              }
+        if (startDate) {
+          const startOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+          if (dueDateOnly < startOnly) return false;
+        }
+        if (endDate) {
+          const endOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+          if (dueDateOnly > endOnly) return false;
+        }
+        return true;
+      }
+      
+      return true;
+    });
+  }
+  
+  if (debouncedSearchTerm.trim()) {
+    const term = debouncedSearchTerm.toLowerCase().trim();
+    
+    filtered = filtered.filter(task => {
+      // Search by row number (convert to string for comparison)
+      if (task.rowIndex !== undefined && task.rowIndex !== null) {
+        const rowIndexStr = String(task.rowIndex);
+        if (rowIndexStr.includes(term)) return true;
+        if (term.includes(rowIndexStr)) return true; // Also match if search term contains the row number
+      }
+      
+      if (task.task.toLowerCase().includes(term)) return true;
+      if (task.brand.toLowerCase().includes(term)) return true;
+      if (task.status.toLowerCase().includes(term)) return true;
+      if (task.type.toLowerCase().includes(term)) return true;
+      if (task.segment.toLowerCase().includes(term)) return true;
+      if (task.bc_links.toLowerCase().includes(term)) return true;
+      if (task.agent.toLowerCase().includes(term)) return true;
+      if (task.auditor.toLowerCase().includes(term)) return true;
+      if (task.remarks.toLowerCase().includes(term)) return true;
+      if (task.reason_for_pending.toLowerCase().includes(term)) return true;
+      if (task.reason_for_cancel.toLowerCase().includes(term)) return true;
+      
+      if (task.due_date) {
+        try {
+          const dueDate = new Date(task.due_date);
+          if (!isNaN(dueDate.getTime())) {
+            const dateFormats = [
+              task.due_date.toLowerCase(),
+              dueDate.toLocaleDateString('en-US').toLowerCase(),
+              dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase(),
+              dueDate.toISOString().split('T')[0],
+              `${dueDate.getMonth() + 1}/${dueDate.getDate()}/${dueDate.getFullYear()}`,
+              `${dueDate.getMonth() + 1}/${dueDate.getDate()}`,
+            ];
+            
+            for (const format of dateFormats) {
+              if (format.includes(term)) return true;
             }
-          } catch (e) {
-            // Skip
           }
+        } catch (e) {
+          // Skip
         }
-        
-        return false;
-      });
-    }
-    
-    if (filtered.length > 0) {
-      filtered = [...filtered].sort((a, b) => {
-        let aVal: string | number = '';
-        let bVal: string | number = '';
-        
-        switch (sortField) {
-          case 'rowIndex':
-            aVal = a.rowIndex || 0;
-            bVal = b.rowIndex || 0;
-            break;
-          case 'dueDate':
-            aVal = a.due_date || '';
-            bVal = b.due_date || '';
-            break;
-          case 'status':
-            aVal = a.status;
-            bVal = b.status;
-            break;
-          case 'brand':
-            aVal = a.brand;
-            bVal = b.brand;
-            break;
-          case 'agent':
-            aVal = a.agent;
-            bVal = b.agent;
-            break;
-          case 'dateRequested':
-            aVal = a.date_requested || '';
-            bVal = b.date_requested || '';
-            break;
-          default:
-            aVal = a.task;
-            bVal = b.task;
-        }
-        
-        if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
-        if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
-    
-    return filtered;
-  }, [activeTasks, debouncedSearchTerm, filterStatus, filterBrand, filterAgent, sortField, sortOrder, filterDateRange, customDateStart, customDateEnd, showOnlyNew, newTaskIds]);
+      }
+      
+      return false;
+    });
+  }
+  
+  if (filtered.length > 0) {
+    filtered = [...filtered].sort((a, b) => {
+      let aVal: string | number = '';
+      let bVal: string | number = '';
+      
+      switch (sortField) {
+        case 'rowIndex':
+          aVal = a.rowIndex || 0;
+          bVal = b.rowIndex || 0;
+          break;
+        case 'dueDate':
+          aVal = a.due_date || '';
+          bVal = b.due_date || '';
+          break;
+        case 'status':
+          aVal = a.status;
+          bVal = b.status;
+          break;
+        case 'brand':
+          aVal = a.brand;
+          bVal = b.brand;
+          break;
+        case 'agent':
+          aVal = a.agent;
+          bVal = b.agent;
+          break;
+        case 'dateRequested':
+          aVal = a.date_requested || '';
+          bVal = b.date_requested || '';
+          break;
+        default:
+          aVal = a.task;
+          bVal = b.task;
+      }
+      
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+  
+  return filtered;
+}, [activeTasks, debouncedSearchTerm, filterStatus, filterBrand, filterAgent, sortField, sortOrder, filterDateRange, customDateStart, customDateEnd, showOnlyNew, newTaskIds]);
 
   // ─── PAGINATION ────────────────────────────────────────────────────────
 
@@ -2272,7 +2279,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                   <Search className={`absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 ${isDark ? 'text-slate-400' : 'text-gray-400'}`} />
                   <input
                     type="text"
-                    placeholder="Search tasks, brands, agents, due dates..."
+                    placeholder="Search by row#, task, brand, agent, due date..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className={`w-full rounded-lg border pl-9 sm:pl-12 pr-3 sm:pr-4 py-2 sm:py-3 text-sm sm:text-base ${
