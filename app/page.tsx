@@ -130,6 +130,7 @@ const toolsSubItems: ToolItem[] = [
 
 const ALL_COMMANDS = [
   { label: 'Go to Dashboard', menuId: 'Dashboard' as MainMenuId, toolId: null },
+  { label: 'Go to Task Management', menuId: 'TaskManagement' as MainMenuId, toolId: null },
   { label: 'Go to Downloads', menuId: 'Downloads' as MainMenuId, toolId: null },
   { label: 'Go to Documentation', menuId: 'Documentation' as MainMenuId, toolId: null },
   { label: 'Go to Terms & Conditions', menuId: 'Terms' as MainMenuId, toolId: null },
@@ -505,82 +506,108 @@ export default function HomePage() {
 
   const selectedTool = toolsSubItems.find(t => t.id === activeTool);
 
+  // FIXED: Page meta with Task Management title
   const pageMeta = useMemo(() => {
     if (activeMainMenu === 'Dashboard') return {
-      title: 'Dashboard', breadcrumb: 'Overview / Dashboard',
+      title: 'Dashboard', 
+      breadcrumb: 'Overview / Dashboard',
       description: 'Monitor operation tools and launch listing workflows.',
     };
+    if (activeMainMenu === 'TaskManagement') {
+      return {
+        title: 'Task Management',
+        breadcrumb: 'Tasks / Management',
+        description: 'Manage and track your tasks efficiently.',
+      };
+    }
     if (activeMainMenu === 'Tools') {
       const t = toolsSubItems.find(t => t.id === activeTool);
-      return { title: t?.name ?? 'Tools', breadcrumb: `Tools / ${t?.name ?? 'Selected Tool'}`, description: t?.description ?? '' };
+      return { 
+        title: t?.name ?? 'Tools', 
+        breadcrumb: `Tools / ${t?.name ?? 'Selected Tool'}`, 
+        description: t?.description ?? '' 
+      };
     }
     if (activeMainMenu === 'Downloads') return {
-      title: 'Downloads', breadcrumb: 'Files / Downloads',
+      title: 'Downloads', 
+      breadcrumb: 'Files / Downloads',
       description: 'Download generated files from completed tool runs.',
     };
     if (activeMainMenu === 'Documentation') return {
-      title: 'Documentation', breadcrumb: 'Resources / Documentation',
+      title: 'Documentation', 
+      breadcrumb: 'Resources / Documentation',
       description: 'Simple guide for using LOT tools.',
     };
     if (activeMainMenu === 'Admin') return {
-      title: 'Admin Panel', breadcrumb: 'Admin / Panel',
+      title: 'Admin Panel', 
+      breadcrumb: 'Admin / Panel',
       description: 'Manage users and system settings.',
     };
-    return { title: 'Terms & Conditions', breadcrumb: 'Resources / Terms & Conditions', description: 'Simple usage terms and reminders.' };
+    if (activeMainMenu === 'Terms') return {
+      title: 'Terms & Conditions', 
+      breadcrumb: 'Resources / Terms & Conditions', 
+      description: 'Simple usage terms and reminders.',
+    };
+    // Fallback
+    return { 
+      title: 'Dashboard', 
+      breadcrumb: 'Overview / Dashboard', 
+      description: 'Listing Operations Tools' 
+    };
   }, [activeMainMenu, activeTool]);
 
   const renderContent = () => {
-  if (!user) return null;
-  
-  if (activeMainMenu === 'Dashboard') return <Dashboard theme={theme} currentUserEmail={user?.email || ''} />;
-  
-  if (activeMainMenu === 'TaskManagement') {
-    return (
-      <div className="h-[calc(100vh-8rem)]">
-        <TaskManagement 
-          theme={theme} 
-          currentUserEmail={user?.email || ''}
-          currentUserName={user?.email || ''}
-        />
-      </div>
-    );
-  }
-  
-  if (activeMainMenu === 'Downloads') return <DownloadPage theme={theme} />;
-  if (activeMainMenu === 'Documentation') return <Documentation theme={theme} />;
-  if (activeMainMenu === 'Terms') return <Terms theme={theme} />;
-  
-  if (activeMainMenu === 'Admin') {
-    if (!isAdmin) {
+    if (!user) return null;
+    
+    if (activeMainMenu === 'Dashboard') return <Dashboard theme={theme} currentUserEmail={user?.email || ''} />;
+    
+    if (activeMainMenu === 'TaskManagement') {
       return (
-        <div className={`rounded-xl border border-red-500/30 bg-red-500/10 p-8 text-center`}>
-          <Shield className="mx-auto h-16 w-16 text-red-400 opacity-50" />
-          <h3 className={`mt-4 text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Access Denied</h3>
-          <p className={`mt-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-            Only admins can access the admin panel.
-          </p>
-          <button
-            onClick={() => navigateTo('Dashboard')}
-            className="mt-4 rounded-lg bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500"
-          >
-            Return to Dashboard
-          </button>
+        <div className="h-[calc(100vh-8rem)]">
+          <TaskManagement 
+            theme={theme} 
+            currentUserEmail={user?.email || ''}
+            currentUserName={user?.email || ''}
+          />
         </div>
       );
     }
-    return <AdminDashboard theme={theme} />;
-  }
-  
-  if (activeMainMenu === 'Tools') {
-    if (activeTool === 'sku') return <SkuProcessor theme={theme} />;
-    if (activeTool === 'asin') return <AsinConflictChecker theme={theme} />;
-    if (activeTool === 'basecamp') return <BasecampGenerator theme={theme} />;
-    if (activeTool === 'bulk-analyzer') return <FileGenerator theme={theme} />;
-    if (activeTool === 'get-brand') return <GetBrand theme={theme} />;
-  }
-  
-  return null;
-};
+    
+    if (activeMainMenu === 'Downloads') return <DownloadPage theme={theme} />;
+    if (activeMainMenu === 'Documentation') return <Documentation theme={theme} />;
+    if (activeMainMenu === 'Terms') return <Terms theme={theme} />;
+    
+    if (activeMainMenu === 'Admin') {
+      if (!isAdmin) {
+        return (
+          <div className={`rounded-xl border border-red-500/30 bg-red-500/10 p-8 text-center`}>
+            <Shield className="mx-auto h-16 w-16 text-red-400 opacity-50" />
+            <h3 className={`mt-4 text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Access Denied</h3>
+            <p className={`mt-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+              Only admins can access the admin panel.
+            </p>
+            <button
+              onClick={() => navigateTo('Dashboard')}
+              className="mt-4 rounded-lg bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500"
+            >
+              Return to Dashboard
+            </button>
+          </div>
+        );
+      }
+      return <AdminDashboard theme={theme} />;
+    }
+    
+    if (activeMainMenu === 'Tools') {
+      if (activeTool === 'sku') return <SkuProcessor theme={theme} />;
+      if (activeTool === 'asin') return <AsinConflictChecker theme={theme} />;
+      if (activeTool === 'basecamp') return <BasecampGenerator theme={theme} />;
+      if (activeTool === 'bulk-analyzer') return <FileGenerator theme={theme} />;
+      if (activeTool === 'get-brand') return <GetBrand theme={theme} />;
+    }
+    
+    return null;
+  };
 
   // Show loading state
   if (isAuthLoading) {
