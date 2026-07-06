@@ -116,7 +116,8 @@ interface Announcement {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const ADMIN_EMAIL = 'melvin@outdoorequipped.com';
+// Updated: Multiple admin emails
+const ADMIN_EMAILS = ['melvin@outdoorequipped.com', 'jonisa@outdoorequipped.com', 'arlie@outdoorequipped.com'];
 
 const ALL_KNOWN_USERS = [
   { email: 'arlie@outdoorequipped.com', name: 'Arlie' },
@@ -483,8 +484,9 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         setError('Please sign in to access admin panel.'); 
         return false; 
       }
-      if (user.email !== ADMIN_EMAIL) { 
-        setError(`Access denied. Only ${ADMIN_EMAIL} can access the admin panel.`); 
+      // Updated: Check against multiple admin emails
+      if (!ADMIN_EMAILS.includes(user.email || '')) { 
+        setError(`Access denied. Only admins can access the admin panel.`); 
         return false; 
       }
       console.log('Admin verified:', user.email);
@@ -599,7 +601,8 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
               created_at: user.created_at || null,
               last_sign_in_at: user.last_sign_in_at || null,
               confirmed_at: user.email_confirmed_at || null,
-              role: email === ADMIN_EMAIL ? 'admin' : 'user',
+              // Updated: Check against multiple admin emails
+              role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
               isFromAuth: true,
             });
           }
@@ -613,7 +616,8 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             totalRuns: 0, completedRuns: 0, failedRuns: 0,
             lastRun: null, firstRun: null,
             created_at: null, last_sign_in_at: null, confirmed_at: null,
-            role: email === ADMIN_EMAIL ? 'admin' : 'user',
+            // Updated: Check against multiple admin emails
+            role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
             isFromAuth: false,
           });
         });
@@ -953,7 +957,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
 
   const filteredUsers = userStats.filter(user => {
     const matchesSearch = user.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const isAdm = user.email === ADMIN_EMAIL;
+    const isAdm = ADMIN_EMAILS.includes(user.email);
     const isTeam = TEAM_MEMBERS.includes(user.email);
     let matchesRole = true;
     if (filterRole === 'admin') matchesRole = isAdm;
@@ -1626,7 +1630,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                 <tbody className={`divide-y ${borderClass}`}>
                   {filteredUsers.map(user => {
                     const successRate = user.totalRuns > 0 ? Math.round((user.completedRuns / user.totalRuns) * 100) : 0;
-                    const isAdm = user.email === ADMIN_EMAIL;
+                    const isAdm = ADMIN_EMAILS.includes(user.email);
                     const isTeam = TEAM_MEMBERS.includes(user.email);
                     const hasRuns = user.totalRuns > 0;
                     const isFromAuth = user.isFromAuth && isValidUUID(user.id);
@@ -1681,7 +1685,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                               </button>
                             )}
 
-                            {user.email !== ADMIN_EMAIL && isFromAuth ? (
+                            {!isAdm && isFromAuth ? (
                               <>
                                 <button onClick={() => { setEditingUser(user); setEditFormData({ email: user.email, role: user.role }); setShowUserModal(true); }} title="Edit" className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-gray-200 text-gray-400 hover:text-gray-700'}`}>
                                   <Edit2 className="h-4 w-4" />
@@ -1707,7 +1711,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                                   </button>
                                 )}
                               </>
-                            ) : user.email === ADMIN_EMAIL ? (
+                            ) : isAdm ? (
                               <span className={`text-xs px-2 ${mutedTextClass}`}>Protected</span>
                             ) : (
                               <span className={`text-xs ${mutedTextClass}`}><Info className="h-4 w-4" /></span>
@@ -1865,7 +1869,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
               <div><label className={`block text-sm font-medium mb-1 ${mutedTextClass}`}>Email</label><p className={`text-sm ${textClass}`}>{editingUser.email}</p></div>
               <div>
                 <label className={`block text-sm font-medium mb-1 ${mutedTextClass}`}>Role</label>
-                <select value={editFormData.role || 'user'} onChange={e => setEditFormData({ ...editFormData, role: e.target.value as 'admin' | 'user' })} disabled={editingUser.email === ADMIN_EMAIL} className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass} ${editingUser.email === ADMIN_EMAIL ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <select value={editFormData.role || 'user'} onChange={e => setEditFormData({ ...editFormData, role: e.target.value as 'admin' | 'user' })} disabled={ADMIN_EMAILS.includes(editingUser.email)} className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass} ${ADMIN_EMAILS.includes(editingUser.email) ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
                 </select>

@@ -87,8 +87,8 @@ interface User {
 
 const STORAGE_THEME_KEY = 'theme';
 
-// Admin email - only this user can access admin panel
-const ADMIN_EMAIL = 'melvin@outdoorequipped.com';
+// Admin emails - these users can access the admin panel
+const ADMIN_EMAILS = ['melvin@outdoorequipped.com', 'jonisa@outdoorequipped.com', 'arlie@outdoorequipped.com'];
 
 const toolsSubItems: ToolItem[] = [
   {
@@ -343,8 +343,8 @@ export default function HomePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUser({ id: user.id, email: user.email || '' });
-        // Check if user is admin (Melvin)
-        setIsAdmin(user.email === ADMIN_EMAIL);
+        // Check if user is an admin
+        setIsAdmin(ADMIN_EMAILS.includes(user.email || ''));
       } else {
         setShowAuthModal(true);
       }
@@ -357,7 +357,7 @@ export default function HomePage() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser({ id: session.user.id, email: session.user.email || '' });
-        setIsAdmin(session.user.email === ADMIN_EMAIL);
+        setIsAdmin(ADMIN_EMAILS.includes(session.user.email || ''));
         setShowAuthModal(false);
       } else {
         setUser(null);
@@ -471,7 +471,7 @@ export default function HomePage() {
   const handleMainMenuClick = (id: MainMenuId) => {
     // Check if trying to access admin without being admin
     if (id === 'Admin' && !isAdmin) {
-      alert('Access denied. Only Melvin can access the admin panel.');
+      alert('Access denied. Only admins can access the admin panel.');
       return;
     }
     navigateTo(id);
@@ -557,7 +557,7 @@ export default function HomePage() {
           <Shield className="mx-auto h-16 w-16 text-red-400 opacity-50" />
           <h3 className={`mt-4 text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Access Denied</h3>
           <p className={`mt-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-            Only <span className="font-semibold text-amber-400">{ADMIN_EMAIL}</span> can access the admin panel.
+            Only admins can access the admin panel.
           </p>
           <button
             onClick={() => navigateTo('Dashboard')}
@@ -646,7 +646,7 @@ export default function HomePage() {
                   type="button"
                   onClick={() => {
                     if (cmd.adminOnly && !isAdmin) {
-                      alert('Access denied. Only Melvin can access the admin panel.');
+                      alert('Access denied. Only admins can access the admin panel.');
                       setCmdOpen(false);
                       return;
                     }
@@ -793,7 +793,7 @@ export default function HomePage() {
                   isAdmin={item.adminOnly}
                   onClick={() => {
                     if (item.adminOnly && !isAdmin) {
-                      alert('Access denied. Only Melvin can access the admin panel.');
+                      alert('Access denied. Only admins can access the admin panel.');
                       return;
                     }
                     handleMainMenuClick(item.id);
