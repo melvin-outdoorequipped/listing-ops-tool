@@ -128,33 +128,39 @@ export const createNotification = async (
     basecampGenerationId?: string;
   }
 ): Promise<Notification | null> => {
-  const { data: notification, error } = await supabase
-    .from('notifications')
-    .insert({
-      user_id: userId,
-      title,
-      message,
-      type,
-      data,
-      read: false,
-      agent_id: agentInfo?.id || null,
-      agent_name: agentInfo?.name || 'System',
-      agent_email: agentInfo?.email || null,
-      tool_name: toolContext?.toolName || null,
-      tool_run_id: toolContext?.toolRunId || null,
-      sku_batch_id: toolContext?.skuBatchId || null,
-      asin_check_id: toolContext?.asinCheckId || null,
-      basecamp_generation_id: toolContext?.basecampGenerationId || null,
-    })
-    .select()
-    .single();
+  try {
+    const { data: notification, error } = await supabase
+      .from('notifications')
+      .insert({
+        user_id: userId,
+        title,
+        message,
+        type,
+        data,
+        read: false,
+        agent_id: agentInfo?.id || null,
+        agent_name: agentInfo?.name || 'System',
+        agent_email: agentInfo?.email || null,
+        tool_name: toolContext?.toolName || null,
+        tool_run_id: toolContext?.toolRunId || null,
+        sku_batch_id: toolContext?.skuBatchId || null,
+        asin_check_id: toolContext?.asinCheckId || null,
+        basecamp_generation_id: toolContext?.basecampGenerationId || null,
+      })
+      .select()
+      .single();
 
-  if (error) {
-    console.error('Error creating notification:', error);
+    if (error) {
+      console.error('Error creating notification:', error);
+      return null;
+    }
+
+    console.log('✅ Notification created:', notification);
+    return notification;
+  } catch (error) {
+    console.error('Error in createNotification:', error);
     return null;
   }
-
-  return notification;
 };
 
 // Subscribe to real-time notifications
@@ -163,8 +169,13 @@ export const subscribeToNotifications = (
   onNotification: (notification: Notification) => void,
   onError?: (error: Error) => void
 ) => {
+  console.log('📡 Setting up real-time subscription for user:', userId);
+  
+  // Create a unique channel name for this user
+  const channelName = `notifications-${userId}`;
+  
   const subscription = supabase
-    .channel(`notifications-${userId}`)
+    .channel(channelName)
     .on(
       'postgres_changes',
       {
@@ -174,16 +185,19 @@ export const subscribeToNotifications = (
         filter: `user_id=eq.${userId}`,
       },
       (payload) => {
+        console.log('📨 Real-time notification received:', payload);
         const notification = payload.new as Notification;
         onNotification(notification);
       }
     )
     .subscribe((status) => {
+      console.log(`📡 Subscription status for ${channelName}:`, status);
       if (status === 'SUBSCRIBED') {
-        console.log('✅ Subscribed to notifications');
+        console.log('✅ Successfully subscribed to notifications');
       }
-      if (status === 'CHANNEL_ERROR' && onError) {
-        onError(new Error('Failed to subscribe to notifications'));
+      if (status === 'CHANNEL_ERROR') {
+        console.error('❌ Error subscribing to notifications');
+        if (onError) onError(new Error('Failed to subscribe to notifications'));
       }
     });
 
@@ -192,62 +206,56 @@ export const subscribeToNotifications = (
 
 // Fetch unread notifications
 export const fetchUnreadNotifications = async (userId: string): Promise<Notification[]> => {
-  const { data, error } = await supabase
-    .from('notifications')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('read', false)
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('read', false)
+      .order('created_at', { ascending: false })
+      .limit(50);
 
-  if (error) {
-    console.error('Error fetching notifications:', error);
+    if (error) {
+      console.error('Error fetching notifications:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error in fetchUnreadNotifications:', error);
     return [];
   }
-
-  return data || [];
 };
 
 // Mark notification as read
 export const markNotificationAsRead = async (notificationId: string): Promise<void> => {
-  const { error } = await supabase
-    .from('notifications')
-    .update({ read: true, updated_at: new Date().toISOString() })
-    .eq('id', notificationId);
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true, updated_at: new Date().toISOString() })
+      .eq('id', notificationId);
 
-  if (error) {
-    console.error('Error marking notification as read:', error);
+    if (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  } catch (error) {
+    console.error('Error in markNotificationAsRead:', error);
   }
 };
 
 // Mark all notifications as read
 export const markAllNotificationsAsRead = async (userId: string): Promise<void> => {
-  const { error } = await supabase
-    .from('notifications')
-    .update({ read: true, updated_at: new Date().toISOString() })
-    .eq('user_id', userId)
-    .eq('read', false);
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('read', false);
 
-  if (error) {
-    console.error('Error marking all notifications as read:', error);
+    if (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
+  } catch (error) {
+    console.error('Error in markAllNotificationsAsRead:', error);
   }
-};
-
-// Get notification preferences
-export const getNotificationPreferences = async (userId: string) => {
-  const { data, error } = await supabase
-    .from('notification_preferences')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
-
-  if (error && error.code !== 'PGRST116') {
-    console.error('Error fetching notification preferences:', error);
-  }
-
-  return data || { 
-    desktop_enabled: true, 
-    email_enabled: false, 
-    sound_enabled: true,
-    preferences: { success: true, warning: true, error: true, info: true }
-  };
 };

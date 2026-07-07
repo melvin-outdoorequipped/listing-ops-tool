@@ -1,7 +1,7 @@
 // contexts/NotificationContext.tsx
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import {
   Notification,
   fetchUnreadNotifications,
@@ -56,6 +56,10 @@ export function NotificationProvider({
   const [loading, setLoading] = useState(true);
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [isSupported, setIsSupported] = useState(false);
+  
+  // Use refs to prevent infinite loops
+  const subscriptionRef = useRef<any>(null);
+  const isMountedRef = useRef(true);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -66,8 +70,10 @@ export function NotificationProvider({
     const loadNotifications = async () => {
       setLoading(true);
       const unread = await fetchUnreadNotifications(userId);
-      setNotifications(unread);
-      setLoading(false);
+      if (isMountedRef.current) {
+        setNotifications(unread);
+        setLoading(false);
+      }
     };
 
     loadNotifications();
@@ -77,40 +83,73 @@ export function NotificationProvider({
     if (supported) {
       setPermission(getNotificationPermission());
     }
-  }, [userId]);
+
+    // Cleanup
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [userId]); // Only run when userId changes
 
   // Subscribe to real-time notifications
   useEffect(() => {
     if (!userId) return;
 
+    console.log('🔄 Subscribing to notifications for user:', userId);
+
+    // Unsubscribe from previous subscription if exists
+    if (subscriptionRef.current) {
+      subscriptionRef.current.unsubscribe();
+      subscriptionRef.current = null;
+    }
+
     const subscription = subscribeToNotifications(
       userId,
       (notification) => {
-        setNotifications(prev => [notification, ...prev]);
+        console.log('📨 New notification received:', notification);
+        
+        setNotifications(prev => {
+          // Check if notification already exists (prevent duplicates)
+          if (prev.some(n => n.id === notification.id)) {
+            return prev;
+          }
+          return [notification, ...prev];
+        });
 
+        // Show desktop notification if enabled
         if (isSupported && permission === 'granted') {
-          showDesktopNotification(notification.title, {
-            body: notification.message,
-            icon: '/favicon.ico',
-            tag: notification.id,
-            data: {
-              url: notification.data?.url || '/',
-              notificationId: notification.id,
+          showDesktopNotification(
+            notification.title, 
+            {
+              body: notification.message,
+              icon: '/favicon.ico',
+              tag: notification.id,
+              data: {
+                url: notification.data?.url || '/',
+                notificationId: notification.id,
+              },
             },
-          }, notification.agent_name);
+            notification.agent_name
+          );
         }
 
+        // Play sound
         playNotificationSound();
       },
       (error) => {
-        console.error('Notification subscription error:', error);
+        console.error('❌ Notification subscription error:', error);
       }
     );
 
+    subscriptionRef.current = subscription;
+
     return () => {
-      subscription.unsubscribe();
+      console.log('🔌 Unsubscribing from notifications');
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe();
+        subscriptionRef.current = null;
+      }
     };
-  }, [userId, isSupported, permission]);
+  }, [userId, isSupported, permission]); // Removed isSubscribed to prevent infinite loop
 
   const markAsRead = useCallback(async (id: string) => {
     await markNotificationAsRead(id);
@@ -125,7 +164,12 @@ export function NotificationProvider({
   }, [userId]);
 
   const addNotification = useCallback((notification: Notification) => {
-    setNotifications(prev => [notification, ...prev]);
+    setNotifications(prev => {
+      if (prev.some(n => n.id === notification.id)) {
+        return prev;
+      }
+      return [notification, ...prev];
+    });
     
     if (isSupported && permission === 'granted') {
       showDesktopNotification(notification.title, {
@@ -163,8 +207,15 @@ export function NotificationProvider({
     );
 
     if (notification) {
-      setNotifications(prev => [notification, ...prev]);
+      // Add to local state
+      setNotifications(prev => {
+        if (prev.some(n => n.id === notification.id)) {
+          return prev;
+        }
+        return [notification, ...prev];
+      });
 
+      // Show desktop notification
       if (isSupported && permission === 'granted') {
         showDesktopNotification(title, {
           body: message,

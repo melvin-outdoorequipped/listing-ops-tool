@@ -1,4 +1,4 @@
-// app/page.tsx (Complete updated file)
+// app/page.tsx (Complete fixed file)
 'use client';
 
 import React, { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -17,26 +17,15 @@ import {
   MessageSquare,
   Search,
   Settings,
-  User,
+  User as UserIcon,
   X,
   GitBranch,
   LogOut,
   FileSpreadsheet,
   Building2,
   Shield,
-  Users as UsersIcon,
-  Trash2,
-  Edit2,
-  Check,
-  XCircle,
-  RefreshCw,
-  Loader2,
-  UserPlus,
-  Mail,
-  UserX,
-  Crown,
-  AlertTriangle,
   CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 
 import SkuProcessor from './components/SkuProcessor';
@@ -50,7 +39,6 @@ import Documentation from './components/documentation';
 import Terms from './components/terms';
 import DownloadPage from './components/download';
 import AdminDashboard from './components/AdminDashboard';
-import { supabase } from '@/lib/supabase/client';
 import { MaintenanceProvider } from '../contexts/MaintenanceContext';
 import MaintenanceGuard from './components/MaintenanceGuard';
 import { NotificationProvider, useNotifications } from '@/contexts/NotificationContext';
@@ -76,15 +64,12 @@ interface ToolItem {
   comingSoon?: boolean;
 }
 
-interface User {
+interface AppUser {
   id: string;
   email: string;
 }
 
 const STORAGE_THEME_KEY = 'theme';
-
-// Admin emails
-const ADMIN_EMAILS = ['melvin@outdoorequipped.com', 'jonisa@outdoorequipped.com', 'arlie@outdoorequipped.com'];
 
 const toolsSubItems: ToolItem[] = [
   {
@@ -150,184 +135,20 @@ function applyTheme(theme: Theme) {
   }
 }
 
-// Auth Modal Component (same as before)
-function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
-  const [imageError, setImageError] = useState(false);
-  const isDark = theme === 'dark';
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      if (mode === 'signin') {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (error) throw error;
-        alert('Check your email for verification link!');
-      }
-      onSuccess();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const backgroundImageUrl = "/login.png";
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {!imageError && (
-        <div 
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: `url(${backgroundImageUrl})` }}
-        >
-          <div className={`absolute inset-0 ${isDark ? 'bg-black/70' : 'bg-white/30'}`} />
-        </div>
-      )}
-      
-      {imageError && (
-        <div className={`absolute inset-0 ${
-          isDark ? 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900' : 'bg-gradient-to-br from-gray-100 via-gray-200 to-gray-100'
-        }`} />
-      )}
-      
-      <div className={`relative w-full max-w-md rounded-2xl border p-8 shadow-2xl backdrop-blur-md ${
-        isDark ? 'border-slate-700 bg-slate-900/95' : 'border-gray-200 bg-white/95'
-      }`}>
-        <div className="text-center mb-8">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500">
-            <span className="text-2xl font-bold text-white">LOT</span>
-          </div>
-          <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            Welcome to LOT
-          </h2>
-          <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
-            {mode === 'signin' ? 'Sign in to access tools' : 'Create an account to get started'}
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className={`w-full rounded-lg border px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                isDark ? 'border-slate-700 bg-slate-800/90 text-white' : 'border-gray-300 bg-white/90 text-gray-900'
-              }`}
-            />
-          </div>
-
-          <div>
-            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className={`w-full rounded-lg border px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                isDark ? 'border-slate-700 bg-slate-800/90 text-white' : 'border-gray-300 bg-white/90 text-gray-900'
-              }`}
-            />
-          </div>
-
-          {error && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
-              {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-emerald-600 py-2.5 font-semibold text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
-          >
-            {loading ? 'Loading...' : mode === 'signin' ? 'Sign In' : 'Sign Up'}
-          </button>
-        </form>
-
-        <div className="mt-4 text-center">
-          <button
-            type="button"
-            onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
-            className={`text-sm ${isDark ? 'text-slate-400 hover:text-slate-300' : 'text-gray-600 hover:text-gray-900'}`}
-          >
-            {mode === 'signin' ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
+// ============================================================
 // Main HomePage Component
+// ============================================================
+// NOTE: This component NO LONGER performs its own Supabase auth
+// check. That responsibility belongs solely to <MaintenanceGuard>.
+// Previously, both this component AND MaintenanceGuard called
+// supabase.auth.getUser() / onAuthStateChange independently, which
+// created two competing GoTrueClient listeners on the same storage
+// key ("Multiple GoTrueClient instances detected"). That race could
+// leave the app stuck on its loading spinner even after auth had
+// already resolved. Now there is a single source of truth.
+// ============================================================
 export default function HomePage() {
   const [theme, setTheme] = useState<Theme>('dark');
-  const [user, setUser] = useState<User | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [userName, setUserName] = useState('');
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      setIsAuthLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUser({ id: user.id, email: user.email || '' });
-        setIsAdmin(ADMIN_EMAILS.includes(user.email || ''));
-        // Fetch user name
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('name')
-          .eq('id', user.id)
-          .single();
-        setUserName(profile?.name || user.email?.split('@')[0] || 'User');
-      } else {
-        setShowAuthModal(true);
-      }
-      setIsAuthLoading(false);
-    };
-    
-    checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUser({ id: session.user.id, email: session.user.email || '' });
-        setIsAdmin(ADMIN_EMAILS.includes(session.user.email || ''));
-        setShowAuthModal(false);
-      } else {
-        setUser(null);
-        setIsAdmin(false);
-        setShowAuthModal(true);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_THEME_KEY) as Theme | null;
@@ -337,54 +158,43 @@ export default function HomePage() {
     applyTheme(init);
   }, []);
 
-  const handleAuthSuccess = () => {
-    setShowAuthModal(false);
-  };
-
-  if (isAuthLoading) {
-    return (
-      <div className={`flex h-screen items-center justify-center ${theme === 'dark' ? 'bg-[#0F172A]' : 'bg-gray-100'}`}>
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <AuthModal theme={theme} onSuccess={handleAuthSuccess} />;
-  }
-
   return (
-    <NotificationProvider 
-      userId={user.id}
-      currentUserName={userName}
-      currentUserEmail={user.email}
-      currentUserId={user.id}
-    >
-      <MaintenanceProvider>
-        <MaintenanceGuard theme={theme}>
-          <HomePageContent 
-            theme={theme} 
-            user={user} 
-            isAdmin={isAdmin}
-            setTheme={setTheme}
-            userName={userName}
-          />
-        </MaintenanceGuard>
-      </MaintenanceProvider>
-    </NotificationProvider>
+    <MaintenanceProvider>
+      <MaintenanceGuard theme={theme}>
+        {(user: AppUser, isAdmin: boolean) => {
+          const userName = user.email?.split('@')[0] || 'User';
+          return (
+            <NotificationProvider
+              userId={user.id}
+              currentUserName={userName}
+              currentUserEmail={user.email}
+              currentUserId={user.id}
+            >
+              <HomePageContent
+                theme={theme}
+                user={user}
+                isAdmin={isAdmin}
+                setTheme={setTheme}
+                userName={userName}
+              />
+            </NotificationProvider>
+          );
+        }}
+      </MaintenanceGuard>
+    </MaintenanceProvider>
   );
 }
 
 // Main content component with notifications
-function HomePageContent({ 
-  theme, 
-  user, 
+function HomePageContent({
+  theme,
+  user,
   isAdmin,
   setTheme,
-  userName
-}: { 
-  theme: Theme; 
-  user: User; 
+  userName,
+}: {
+  theme: Theme;
+  user: AppUser;
   isAdmin: boolean;
   setTheme: (theme: Theme) => void;
   userName: string;
@@ -402,10 +212,10 @@ function HomePageContent({
   const prevMenuRef = useRef<MainMenuId>('Dashboard');
 
   // Use notification context
-  const { 
-    notifications, 
-    unreadCount, 
-    markAsRead, 
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
     markAllAsRead,
     permission,
     requestPermission,
@@ -446,6 +256,7 @@ function HomePageContent({
     };
     window.addEventListener('navigateToTool', handler);
     return () => window.removeEventListener('navigateToTool', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -466,6 +277,7 @@ function HomePageContent({
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -529,7 +341,7 @@ function HomePageContent({
 
   const pageMeta = useMemo(() => {
     if (activeMainMenu === 'Dashboard') return {
-      title: 'Dashboard', 
+      title: 'Dashboard',
       breadcrumb: 'Overview / Dashboard',
       description: 'Monitor operation tools and launch listing workflows.',
     };
@@ -542,58 +354,58 @@ function HomePageContent({
     }
     if (activeMainMenu === 'Tools') {
       const t = toolsSubItems.find(t => t.id === activeTool);
-      return { 
-        title: t?.name ?? 'Tools', 
-        breadcrumb: `Tools / ${t?.name ?? 'Selected Tool'}`, 
-        description: t?.description ?? '' 
+      return {
+        title: t?.name ?? 'Tools',
+        breadcrumb: `Tools / ${t?.name ?? 'Selected Tool'}`,
+        description: t?.description ?? ''
       };
     }
     if (activeMainMenu === 'Downloads') return {
-      title: 'Downloads', 
+      title: 'Downloads',
       breadcrumb: 'Files / Downloads',
       description: 'Download generated files from completed tool runs.',
     };
     if (activeMainMenu === 'Documentation') return {
-      title: 'Documentation', 
+      title: 'Documentation',
       breadcrumb: 'Resources / Documentation',
       description: 'Simple guide for using LOT tools.',
     };
     if (activeMainMenu === 'Admin') return {
-      title: 'Admin Panel', 
+      title: 'Admin Panel',
       breadcrumb: 'Admin / Panel',
       description: 'Manage users and system settings.',
     };
     if (activeMainMenu === 'Terms') return {
-      title: 'Terms & Conditions', 
-      breadcrumb: 'Resources / Terms & Conditions', 
+      title: 'Terms & Conditions',
+      breadcrumb: 'Resources / Terms & Conditions',
       description: 'Simple usage terms and reminders.',
     };
-    return { 
-      title: 'Dashboard', 
-      breadcrumb: 'Overview / Dashboard', 
-      description: 'Listing Operations Tools' 
+    return {
+      title: 'Dashboard',
+      breadcrumb: 'Overview / Dashboard',
+      description: 'Listing Operations Tools'
     };
   }, [activeMainMenu, activeTool]);
 
   const renderContent = () => {
     if (activeMainMenu === 'Dashboard') return <Dashboard theme={theme} currentUserEmail={user?.email || ''} />;
-    
+
     if (activeMainMenu === 'TaskManagement') {
       return (
         <div className="h-[calc(100vh-8rem)]">
-          <TaskManagement 
-            theme={theme} 
+          <TaskManagement
+            theme={theme}
             currentUserEmail={user?.email || ''}
             currentUserName={user?.email || ''}
           />
         </div>
       );
     }
-    
+
     if (activeMainMenu === 'Downloads') return <DownloadPage theme={theme} />;
     if (activeMainMenu === 'Documentation') return <Documentation theme={theme} />;
     if (activeMainMenu === 'Terms') return <Terms theme={theme} />;
-    
+
     if (activeMainMenu === 'Admin') {
       if (!isAdmin) {
         return (
@@ -614,7 +426,7 @@ function HomePageContent({
       }
       return <AdminDashboard theme={theme} />;
     }
-    
+
     if (activeMainMenu === 'Tools') {
       if (activeTool === 'sku') return <SkuProcessor theme={theme} />;
       if (activeTool === 'asin') return <AsinConflictChecker theme={theme} />;
@@ -622,7 +434,7 @@ function HomePageContent({
       if (activeTool === 'bulk-analyzer') return <FileGenerator theme={theme} />;
       if (activeTool === 'get-brand') return <GetBrand theme={theme} />;
     }
-    
+
     return null;
   };
 
@@ -973,8 +785,8 @@ function HomePageContent({
                   className={`relative rounded-lg border p-2 transition-colors ${
                     isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
                   }`}
-                  title={isSupported && permission === 'granted' ? 'Desktop notifications enabled' : 
-                         isSupported && permission === 'denied' ? 'Desktop notifications blocked' : 
+                  title={isSupported && permission === 'granted' ? 'Desktop notifications enabled' :
+                         isSupported && permission === 'denied' ? 'Desktop notifications blocked' :
                          'Notifications'}
                 >
                   {isSupported && permission === 'granted' ? (
@@ -1017,9 +829,9 @@ function HomePageContent({
                           </button>
                         )}
                         {unreadCount > 0 && (
-                          <button 
-                            type="button" 
-                            onClick={markAllAsRead} 
+                          <button
+                            type="button"
+                            onClick={markAllAsRead}
                             className="text-xs text-emerald-400 hover:underline"
                           >
                             Mark all read
@@ -1046,17 +858,17 @@ function HomePageContent({
                         </div>
                       ) : (
                         notifications.map(n => (
-                          <div 
-                            key={n.id} 
+                          <div
+                            key={n.id}
                             className={`flex items-start gap-3 px-4 py-3 transition-colors cursor-pointer hover:bg-opacity-50 ${
                               !n.read ? (isDark ? 'bg-slate-800/40' : 'bg-blue-50/40') : ''
                             } ${isDark ? 'hover:bg-slate-800/30' : 'hover:bg-gray-50'}`}
                             onClick={() => markAsRead(n.id)}
                           >
                             <span className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${
-                              n.type === 'success' ? 'bg-emerald-400' 
-                              : n.type === 'warning' ? 'bg-yellow-400' 
-                              : n.type === 'error' ? 'bg-red-400' 
+                              n.type === 'success' ? 'bg-emerald-400'
+                              : n.type === 'warning' ? 'bg-yellow-400'
+                              : n.type === 'error' ? 'bg-red-400'
                               : 'bg-blue-400'
                             }`} />
                             <div className="min-w-0 flex-1">
@@ -1113,7 +925,7 @@ function HomePageContent({
                     isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
                   }`}
                 >
-                  <User className="h-4 w-4" />
+                  <UserIcon className="h-4 w-4" />
                 </button>
 
                 {userOpen && (
@@ -1141,6 +953,7 @@ function HomePageContent({
                       <button
                         type="button"
                         onClick={async () => {
+                          const { supabase } = await import('@/lib/supabase/client');
                           await supabase.auth.signOut();
                           window.location.reload();
                         }}
@@ -1207,8 +1020,8 @@ function SidebarButton({
       }`}
     >
       <span className={`flex-shrink-0 transition-colors ${
-        active 
-          ? isAdmin ? 'text-amber-400' : 'text-emerald-400' 
+        active
+          ? isAdmin ? 'text-amber-400' : 'text-emerald-400'
           : 'group-hover:text-emerald-400'
       }`}>
         {icon}
@@ -1297,7 +1110,7 @@ function ToolSidebarButton({
         </div>
         {active && (
           <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${
-            tool.accent === 'violet' ? 'bg-violet-400' 
+            tool.accent === 'violet' ? 'bg-violet-400'
             : tool.accent === 'cyan' ? 'bg-cyan-400'
             : tool.accent === 'orange' ? 'bg-orange-400'
             : tool.accent === 'blue' ? 'bg-blue-400'
