@@ -18,6 +18,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { logToolRun } from '@/lib/tara/logActivity';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { notifyAllUsers } from '@/lib/notification-helper';
 
 interface AsinConflictCheckerProps {
   theme?: 'light' | 'dark';
@@ -147,6 +148,7 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
   const [scrollPct, setScrollPct] = useState(0);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>('User');
 
   // Get notification context
   const { createNotificationWithAgent } = useNotifications();
@@ -169,6 +171,13 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
       if (user) {
         setUserId(user.id);
         setUserEmail(user.email || null);
+        // Get user name from profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', user.id)
+          .single();
+        setUserName(profile?.name || user.email?.split('@')[0] || 'User');
       }
     };
     getUser();
@@ -217,6 +226,7 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
     
     let currentUserEmail = userEmail;
     let currentUserId = userId;
+    let currentUserName = userName;
     
     if (!currentUserEmail || !currentUserId) {
       const { data: { user } } = await supabase.auth.getUser();
@@ -225,9 +235,18 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         currentUserId = user.id;
         setUserEmail(currentUserEmail);
         setUserId(currentUserId);
+        // Get user name
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', user.id)
+          .single();
+        currentUserName = profile?.name || user.email?.split('@')[0] || 'User';
+        setUserName(currentUserName);
       } else {
         currentUserEmail = 'System';
         currentUserId = null;
+        currentUserName = 'System';
       }
     }
     
@@ -257,6 +276,7 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
       });
 
       // Save to asin_checks table
+      let savedCheck = null;
       try {
         const insertData: any = {
           total_rows: totalRows,
@@ -271,23 +291,46 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         if (currentUserId) insertData.user_id = currentUserId;
         if (currentUserEmail) insertData.user_email = currentUserEmail;
         
-        const { data: savedCheck } = await supabase.from('asin_checks').insert(insertData).select().single();
-        
-        // 👇 Create notification
-        await createNotificationWithAgent(
-          conflictCount > 0 ? '⚠️ ASIN Conflicts Found' : '✅ ASIN Check Complete',
-          conflictCount > 0 
-            ? `Detected ${conflictCount} style${conflictCount === 1 ? '' : 's'} with multiple parent ASINs`
-            : 'No conflicts detected - all styles have unique parent ASINs',
-          conflictCount > 0 ? 'warning' : 'success',
-          { url: '/tools/asin', conflictCount },
-          currentUserEmail?.split('@')[0] || 'System',
-          currentUserEmail || '',
-          currentUserId || '',
-          { toolName: 'asin_checker', asinCheckId: savedCheck?.id }
-        );
+        const { data } = await supabase.from('asin_checks').insert(insertData).select().single();
+        savedCheck = data;
       } catch (err) {
         console.error('Failed to save to asin_checks:', err);
+      }
+
+      // 👇 Create notification for current user
+      await createNotificationWithAgent(
+        conflictCount > 0 ? '⚠️ ASIN Conflicts Found' : '✅ ASIN Check Complete',
+        conflictCount > 0 
+          ? `Detected ${conflictCount} style${conflictCount === 1 ? '' : 's'} with multiple parent ASINs`
+          : 'No conflicts detected - all styles have unique parent ASINs',
+        conflictCount > 0 ? 'warning' : 'success',
+        { url: '/tools/asin', conflictCount },
+        currentUserName || currentUserEmail?.split('@')[0] || 'System',
+        currentUserEmail || '',
+        currentUserId || '',
+        { toolName: 'asin_checker', asinCheckId: savedCheck?.id }
+      );
+
+      // 👇 Notify ALL users if critical conflicts found (3+)
+      if (conflictCount >= 3) {
+        await notifyAllUsers(
+          `🚨 Critical: ${conflictCount} ASIN Conflicts Detected!`,
+          `${currentUserName || currentUserEmail} found ${conflictCount} styles with multiple parent ASINs. Please review immediately.`,
+          'error',
+          { 
+            url: '/tools/asin', 
+            conflictCount, 
+            detectedBy: currentUserEmail || currentUserName,
+            severity: 'critical'
+          },
+          {
+            id: currentUserId || '',
+            name: currentUserName || currentUserEmail?.split('@')[0] || 'System',
+            email: currentUserEmail || '',
+          },
+          { toolName: 'asin_checker' },
+          currentUserId || undefined
+        );
       }
 
       await logToolRun({
@@ -340,16 +383,35 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         
         await supabase.from('asin_checks').insert(insertData);
         
-        // 👇 Create error notification
+        // 👇 Create error notification for current user
         await createNotificationWithAgent(
           '❌ ASIN Check Failed',
           `Error: ${message}`,
           'error',
           undefined,
-          currentUserEmail?.split('@')[0] || 'System',
+          currentUserName || currentUserEmail?.split('@')[0] || 'System',
           currentUserEmail || '',
           currentUserId || '',
           { toolName: 'asin_checker' }
+        );
+
+        // 👇 Notify ALL users about the error
+        await notifyAllUsers(
+          '❌ ASIN Check Failed',
+          `${currentUserName || currentUserEmail} encountered an error: ${message}`,
+          'error',
+          { 
+            url: '/tools/asin', 
+            error: message,
+            user: currentUserEmail || currentUserName
+          },
+          {
+            id: currentUserId || '',
+            name: currentUserName || currentUserEmail?.split('@')[0] || 'System',
+            email: currentUserEmail || '',
+          },
+          { toolName: 'asin_checker' },
+          currentUserId || undefined
         );
       } catch (err) {
         console.error('Failed to save failed run:', err);

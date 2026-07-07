@@ -18,6 +18,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { logToolRun } from '@/lib/tara/logActivity';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { notifyAllUsers } from '@/lib/notification-helper';
 
 interface SkuProcessorProps {
   theme?: 'light' | 'dark';
@@ -212,9 +213,18 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
 
     // Get current user email if not already set
     let currentUserEmail = userEmail;
+    let currentUserName = userName;
     if (!currentUserEmail) {
       const { data: { user } } = await supabase.auth.getUser();
       currentUserEmail = user?.email || null;
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', user.id)
+          .single();
+        currentUserName = profile?.name || user.email?.split('@')[0] || 'User';
+      }
     }
 
     const batchId = `SC-${Math.floor(100000 + Math.random() * 899999)}`;
@@ -363,7 +373,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
         },
       });
 
-      // 👇 Create notification
+      // 👇 Create notification for current user
       await createNotificationWithAgent(
         matchedCount > 0 ? '✅ SKU Processing Complete' : '⚠️ SKU Processing Warning',
         matchedCount > 0 
@@ -371,11 +381,33 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
           : `No matching SKUs found out of ${totalRequested} total SKUs`,
         matchedCount > 0 ? 'success' : 'warning',
         { url: '/downloads', batchId, matchedCount, totalRequested },
-        userName || currentUserEmail?.split('@')[0] || 'System',
+        currentUserName || currentUserEmail?.split('@')[0] || 'System',
         currentUserEmail || '',
         userId || '',
         { toolName: 'sku_processor', skuBatchId: insertedBatch?.id }
       );
+
+      // 👇 If there are duplicates, notify ALL users
+      if (parsed.duplicateCount > 0) {
+        await notifyAllUsers(
+          '⚠️ SKU Processing Completed with Duplicates',
+          `${currentUserName || currentUserEmail} processed SKUs with ${parsed.duplicateCount} duplicates detected. Please review the batch.`,
+          'warning',
+          { 
+            url: '/downloads', 
+            batchId, 
+            duplicates: parsed.duplicateCount,
+            matched: matchedCount
+          },
+          {
+            id: userId || '',
+            name: currentUserName || currentUserEmail?.split('@')[0] || 'System',
+            email: currentUserEmail || '',
+          },
+          { toolName: 'sku_processor' },
+          userId || undefined
+        );
+      }
 
       setBatches((previous) => [
         insertedBatch as SkuBatchRow,
@@ -433,16 +465,35 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
         },
       });
 
-      // 👇 Create error notification
+      // 👇 Create error notification for current user
       await createNotificationWithAgent(
         '❌ SKU Processing Failed',
         `Error: ${message}`,
         'error',
         undefined,
-        userName || currentUserEmail?.split('@')[0] || 'System',
+        currentUserName || currentUserEmail?.split('@')[0] || 'System',
         currentUserEmail || '',
         userId || '',
         { toolName: 'sku_processor' }
+      );
+
+      // 👇 Notify ALL users about the error
+      await notifyAllUsers(
+        '❌ SKU Processing Failed',
+        `${currentUserName || currentUserEmail} encountered an error while processing SKUs: ${message}`,
+        'error',
+        { 
+          url: '/tools/sku', 
+          error: message,
+          user: currentUserName || currentUserEmail
+        },
+        {
+          id: userId || '',
+          name: currentUserName || currentUserEmail?.split('@')[0] || 'System',
+          email: currentUserEmail || '',
+        },
+        { toolName: 'sku_processor' },
+        userId || undefined
       );
 
       if (failedBatch && !insertError) {

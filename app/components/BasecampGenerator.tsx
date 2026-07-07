@@ -18,6 +18,7 @@ import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabase/client';
 import { logToolRun } from '@/lib/tara/logActivity';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { notifyAllUsers } from '@/lib/notification-helper';
 
 interface BasecampGeneratorProps {
   theme?: 'light' | 'dark';
@@ -218,19 +219,15 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
         .limit(1);
       
       if (error) {
-        // If error mentions the column doesn't exist, return false
         if (error.message?.includes('column') && error.message?.includes('does not exist')) {
           return false;
         }
-        // If error is about the table not existing, return false
         if (error.message?.includes('relation') && error.message?.includes('does not exist')) {
           return false;
         }
-        // For other errors, check if it's a column error
         return false;
       }
       
-      // If we got data, the column exists
       return true;
     } catch (err) {
       console.warn(`Error checking if column ${columnName} exists:`, err);
@@ -246,7 +243,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
         .select('id')
         .limit(1);
       
-      // If the table doesn't exist, skip saving
       if (tableCheckError && tableCheckError.message?.includes('relation') && tableCheckError.message?.includes('does not exist')) {
         console.warn('basecamp_generations table does not exist, skipping save');
         return null;
@@ -262,17 +258,14 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
         created_at: new Date().toISOString(),
       };
 
-      // Only add optional fields if they have values
       if (poNumber.trim()) insertData.po_number = poNumber.trim();
       if (message) insertData.message = message;
       if (errorMessage) insertData.error = errorMessage;
       
-      // Add file names if they exist
       if (uploadedFiles.preApproval?.filename) insertData.pre_approval_filename = uploadedFiles.preApproval.filename;
       if (uploadedFiles.listingData?.filename) insertData.listing_data_filename = uploadedFiles.listingData.filename;
       if (uploadedFiles.excluded?.filename) insertData.excluded_filename = uploadedFiles.excluded.filename;
       
-      // Add checkbox values
       insertData.shipping_plan_error = shippingPlanError;
       insertData.suggest_3pl = suggest3PL;
       insertData.done_tracker = doneTracker;
@@ -300,40 +293,12 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
       
       if (insertError) {
         console.error('Insert error details:', insertError);
-        // If it's a column error, we can try without the problematic columns
-        if (insertError.message?.includes('column')) {
-          // Try a minimal insert
-          const minimalData: any = {
-            analysis_type: analysisType,
-            total_skus: stats.totalSkus,
-            total_qty: stats.totalQty,
-            issue_count: stats.issueCount,
-            status: status,
-            created_at: new Date().toISOString(),
-          };
-          if (message) minimalData.message = message;
-          
-          console.log('Trying minimal insert:', minimalData);
-          const { data: minimalResult, error: minimalError } = await supabase
-            .from('basecamp_generations')
-            .insert(minimalData)
-            .select()
-            .single();
-          
-          if (minimalError) {
-            console.error('Minimal insert also failed:', minimalError);
-            return null;
-          }
-          
-          return minimalResult;
-        }
         return null;
       }
       
       return data;
     } catch (error) {
       console.error('Save error:', error);
-      // Don't throw - just return null
       return null;
     }
   };
@@ -457,10 +422,9 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
         console.log('Saved to database successfully:', savedGeneration);
       } catch (dbError) {
         console.error('Database save failed (continuing):', dbError);
-        // Don't throw - continue to show the message even if DB save fails
       }
       
-      // Create notification - this is the important part
+      // 👇 Create notification for current user
       try {
         await createNotificationWithAgent(
           `📝 ${typeConfig.label} Generated`,
@@ -474,6 +438,29 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
         );
       } catch (notifError) {
         console.error('Notification creation failed:', notifError);
+      }
+
+      // 👇 Notify ALL users about final analysis
+      if (analysisType === 'final') {
+        await notifyAllUsers(
+          `📋 New Basecamp Message Generated`,
+          `${userName} generated a Final Analysis Basecamp message for PO #${poNumber || 'N/A'} with ${stats.totalSkus} SKUs`,
+          'info',
+          { 
+            url: '/tools/basecamp', 
+            poNumber: poNumber.trim() || null,
+            generatedBy: userName,
+            type: analysisType,
+            skuCount: stats.totalSkus
+          },
+          {
+            id: userId || '',
+            name: userName,
+            email: userEmail || '',
+          },
+          { toolName: 'basecamp_generator' },
+          userId || undefined
+        );
       }
       
       try {
@@ -493,14 +480,13 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
       const msg = err instanceof Error ? err.message : 'Failed to generate Basecamp message.';
       setError(msg);
       
-      // Try to save error to database
       try {
         await saveBasecampGeneration({ message: null, stats: { totalSkus: 0, totalQty: 0, issueCount: 1 }, status: 'failed', errorMessage: msg });
       } catch (dbError) {
         console.error('Failed to save error to database:', dbError);
       }
       
-      // Create error notification
+      // 👇 Create error notification for current user
       try {
         await createNotificationWithAgent(
           '❌ Basecamp Generation Failed',
@@ -515,6 +501,26 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
       } catch (notifError) {
         console.error('Error notification creation failed:', notifError);
       }
+
+      // 👇 Notify ALL users about the error
+      await notifyAllUsers(
+        '❌ Basecamp Generation Failed',
+        `${userName} encountered an error while generating Basecamp message: ${msg}`,
+        'error',
+        { 
+          url: '/tools/basecamp', 
+          error: msg,
+          user: userName,
+          type: analysisType
+        },
+        {
+          id: userId || '',
+          name: userName,
+          email: userEmail || '',
+        },
+          { toolName: 'basecamp_generator' },
+        userId || undefined
+      );
       
       await logToolRun({ 
         toolType: 'basecamp', status: 'failed', title: 'Basecamp message generation failed', 
