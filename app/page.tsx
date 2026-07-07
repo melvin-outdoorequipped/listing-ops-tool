@@ -1,8 +1,11 @@
+// app/page.tsx (Complete updated file)
 'use client';
 
 import React, { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bell,
+  BellOff,
+  AlertCircle,
   BookOpen,
   ChevronLeft,
   ChevronRight,
@@ -50,6 +53,7 @@ import AdminDashboard from './components/AdminDashboard';
 import { supabase } from '@/lib/supabase/client';
 import { MaintenanceProvider } from '../contexts/MaintenanceContext';
 import MaintenanceGuard from './components/MaintenanceGuard';
+import { NotificationProvider, useNotifications } from '@/contexts/NotificationContext';
 
 type Theme = 'light' | 'dark';
 type ToolId = 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer' | 'get-brand';
@@ -72,14 +76,6 @@ interface ToolItem {
   comingSoon?: boolean;
 }
 
-interface Notification {
-  id: string;
-  message: string;
-  time: string;
-  read: boolean;
-  type: 'info' | 'success' | 'warning';
-}
-
 interface User {
   id: string;
   email: string;
@@ -87,7 +83,7 @@ interface User {
 
 const STORAGE_THEME_KEY = 'theme';
 
-// Admin emails - these users can access the admin panel
+// Admin emails
 const ADMIN_EMAILS = ['melvin@outdoorequipped.com', 'jonisa@outdoorequipped.com', 'arlie@outdoorequipped.com'];
 
 const toolsSubItems: ToolItem[] = [
@@ -142,12 +138,6 @@ const ALL_COMMANDS = [
   { label: 'Open Get Brand Tool', menuId: 'Tools' as MainMenuId, toolId: 'get-brand' as ToolId },
 ];
 
-const DEMO_NOTIFICATIONS: Notification[] = [
-  { id: '1', message: 'Shopkeep run completed successfully.', time: '2m ago', read: false, type: 'success' },
-  { id: '2', message: 'ASIN Checker flagged 3 conflicts.', time: '18m ago', read: false, type: 'warning' },
-  { id: '3', message: 'Basecamp Generator is now active.', time: '1h ago', read: true, type: 'info' },
-];
-
 function applyTheme(theme: Theme) {
   if (theme === 'light') {
     document.documentElement.classList.add('light-mode');
@@ -160,7 +150,7 @@ function applyTheme(theme: Theme) {
   }
 }
 
-// Auth Component with Background Image
+// Auth Modal Component (same as before)
 function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -205,21 +195,15 @@ function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }
       {!imageError && (
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{
-            backgroundImage: `url(${backgroundImageUrl})`,
-          }}
+          style={{ backgroundImage: `url(${backgroundImageUrl})` }}
         >
-          <div className={`absolute inset-0 ${
-            isDark ? 'bg-black/70' : 'bg-white/30'
-          }`} />
+          <div className={`absolute inset-0 ${isDark ? 'bg-black/70' : 'bg-white/30'}`} />
         </div>
       )}
       
       {imageError && (
         <div className={`absolute inset-0 ${
-          isDark 
-            ? 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900' 
-            : 'bg-gradient-to-br from-gray-100 via-gray-200 to-gray-100'
+          isDark ? 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900' : 'bg-gradient-to-br from-gray-100 via-gray-200 to-gray-100'
         }`} />
       )}
       
@@ -249,9 +233,7 @@ function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }
               onChange={(e) => setEmail(e.target.value)}
               required
               className={`w-full rounded-lg border px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                isDark 
-                  ? 'border-slate-700 bg-slate-800/90 text-white' 
-                  : 'border-gray-300 bg-white/90 text-gray-900'
+                isDark ? 'border-slate-700 bg-slate-800/90 text-white' : 'border-gray-300 bg-white/90 text-gray-900'
               }`}
             />
           </div>
@@ -267,9 +249,7 @@ function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }
               required
               minLength={6}
               className={`w-full rounded-lg border px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                isDark 
-                  ? 'border-slate-700 bg-slate-800/90 text-white' 
-                  : 'border-gray-300 bg-white/90 text-gray-900'
+                isDark ? 'border-slate-700 bg-slate-800/90 text-white' : 'border-gray-300 bg-white/90 text-gray-900'
               }`}
             />
           </div>
@@ -299,53 +279,33 @@ function AuthModal({ theme, onSuccess }: { theme: Theme; onSuccess: () => void }
           </button>
         </div>
       </div>
-      
-      <img 
-        src={backgroundImageUrl}
-        alt=""
-        className="hidden"
-        onError={() => setImageError(true)}
-        onLoad={() => setImageError(false)}
-      />
     </div>
   );
 }
 
+// Main HomePage Component
 export default function HomePage() {
-  const [activeTool, setActiveTool] = useState<ToolId>('sku');
-  const [activeMainMenu, setActiveMainMenu] = useState<MainMenuId>('Dashboard');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>('dark');
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [userName, setUserName] = useState('');
 
-  const [cmdOpen, setCmdOpen] = useState(false);
-  const [cmdQuery, setCmdQuery] = useState('');
-  const cmdInputRef = useRef<HTMLInputElement>(null);
-
-  const [notifOpen, setNotifOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>(DEMO_NOTIFICATIONS);
-
-  const [userOpen, setUserOpen] = useState(false);
-
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const prevMenuRef = useRef<MainMenuId>('Dashboard');
-
-  const isDark = theme === 'dark';
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  // Check authentication on mount
   useEffect(() => {
     const checkAuth = async () => {
       setIsAuthLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUser({ id: user.id, email: user.email || '' });
-        // Check if user is an admin
         setIsAdmin(ADMIN_EMAILS.includes(user.email || ''));
+        // Fetch user name
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', user.id)
+          .single();
+        setUserName(profile?.name || user.email?.split('@')[0] || 'User');
       } else {
         setShowAuthModal(true);
       }
@@ -354,7 +314,6 @@ export default function HomePage() {
     
     checkAuth();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser({ id: session.user.id, email: session.user.email || '' });
@@ -370,17 +329,90 @@ export default function HomePage() {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_THEME_KEY) as Theme | null;
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const init: Theme = saved === 'light' || saved === 'dark' ? saved : prefersDark ? 'dark' : 'light';
+    setTheme(init);
+    applyTheme(init);
+  }, []);
+
   const handleAuthSuccess = () => {
     setShowAuthModal(false);
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setIsAdmin(false);
-    setShowAuthModal(true);
-    setUserOpen(false);
-  };
+  if (isAuthLoading) {
+    return (
+      <div className={`flex h-screen items-center justify-center ${theme === 'dark' ? 'bg-[#0F172A]' : 'bg-gray-100'}`}>
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthModal theme={theme} onSuccess={handleAuthSuccess} />;
+  }
+
+  return (
+    <NotificationProvider 
+      userId={user.id}
+      currentUserName={userName}
+      currentUserEmail={user.email}
+      currentUserId={user.id}
+    >
+      <MaintenanceProvider>
+        <MaintenanceGuard theme={theme}>
+          <HomePageContent 
+            theme={theme} 
+            user={user} 
+            isAdmin={isAdmin}
+            setTheme={setTheme}
+            userName={userName}
+          />
+        </MaintenanceGuard>
+      </MaintenanceProvider>
+    </NotificationProvider>
+  );
+}
+
+// Main content component with notifications
+function HomePageContent({ 
+  theme, 
+  user, 
+  isAdmin,
+  setTheme,
+  userName
+}: { 
+  theme: Theme; 
+  user: User; 
+  isAdmin: boolean;
+  setTheme: (theme: Theme) => void;
+  userName: string;
+}) {
+  const [activeTool, setActiveTool] = useState<ToolId>('sku');
+  const [activeMainMenu, setActiveMainMenu] = useState<MainMenuId>('Dashboard');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [cmdQuery, setCmdQuery] = useState('');
+  const cmdInputRef = useRef<HTMLInputElement>(null);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const prevMenuRef = useRef<MainMenuId>('Dashboard');
+
+  // Use notification context
+  const { 
+    notifications, 
+    unreadCount, 
+    markAsRead, 
+    markAllAsRead,
+    permission,
+    requestPermission,
+    isSupported,
+  } = useNotifications();
+
+  const isDark = theme === 'dark';
 
   const mainMenuItems = useMemo<MenuItem[]>(() => {
     const items: MenuItem[] = [
@@ -401,14 +433,6 @@ export default function HomePage() {
     { id: 'Documentation', label: 'Documentation', icon: <BookOpen className="h-5 w-5" /> },
     { id: 'Terms', label: 'Terms & Conditions', icon: <FileText className="h-5 w-5" /> },
   ], []);
-
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_THEME_KEY) as Theme | null;
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const init: Theme = saved === 'light' || saved === 'dark' ? saved : prefersDark ? 'dark' : 'light';
-    setTheme(init);
-    applyTheme(init);
-  }, []);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -467,10 +491,9 @@ export default function HomePage() {
       applyTheme(next);
       return next;
     });
-  }, []);
+  }, [setTheme]);
 
   const handleMainMenuClick = (id: MainMenuId) => {
-    // Check if trying to access admin without being admin
     if (id === 'Admin' && !isAdmin) {
       alert('Access denied. Only admins can access the admin panel.');
       return;
@@ -497,8 +520,6 @@ export default function HomePage() {
     setIsMobileSidebarOpen(false);
   };
 
-  const markAllRead = () => setNotifications(ns => ns.map(n => ({ ...n, read: true })));
-
   const filteredCmds = ALL_COMMANDS.filter(c => {
     if (c.adminOnly && !isAdmin) return false;
     return c.label.toLowerCase().includes(cmdQuery.toLowerCase());
@@ -506,7 +527,6 @@ export default function HomePage() {
 
   const selectedTool = toolsSubItems.find(t => t.id === activeTool);
 
-  // FIXED: Page meta with Task Management title
   const pageMeta = useMemo(() => {
     if (activeMainMenu === 'Dashboard') return {
       title: 'Dashboard', 
@@ -548,7 +568,6 @@ export default function HomePage() {
       breadcrumb: 'Resources / Terms & Conditions', 
       description: 'Simple usage terms and reminders.',
     };
-    // Fallback
     return { 
       title: 'Dashboard', 
       breadcrumb: 'Overview / Dashboard', 
@@ -557,8 +576,6 @@ export default function HomePage() {
   }, [activeMainMenu, activeTool]);
 
   const renderContent = () => {
-    if (!user) return null;
-    
     if (activeMainMenu === 'Dashboard') return <Dashboard theme={theme} currentUserEmail={user?.email || ''} />;
     
     if (activeMainMenu === 'TaskManagement') {
@@ -609,37 +626,15 @@ export default function HomePage() {
     return null;
   };
 
-  // Show loading state
-  if (isAuthLoading) {
-    return (
-      <div className={`flex h-screen items-center justify-center ${isDark ? 'bg-[#0F172A]' : 'bg-gray-100'}`}>
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-      </div>
-    );
-  }
-
-  // Show auth modal and hide main content when not authenticated
-  if (!user) {
-    return <AuthModal theme={theme} onSuccess={handleAuthSuccess} />;
-  }
-
   return (
-     <MaintenanceProvider>
-      <MaintenanceGuard theme={theme}>
     <div className={`relative flex h-screen overflow-hidden transition-colors duration-200 ${
       isDark ? 'bg-[#0F172A] text-slate-100' : 'bg-gray-100 text-gray-900'
     }`}>
-      {/* Auth Modal Overlay - Show if not authenticated */}
-      {showAuthModal && (
-        <AuthModal theme={theme} onSuccess={handleAuthSuccess} />
-      )}
-
       {/* Command Palette */}
       {cmdOpen && (
         <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]">
           <button
             type="button"
-            aria-label="Close command palette"
             onClick={() => setCmdOpen(false)}
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
           />
@@ -710,7 +705,6 @@ export default function HomePage() {
       {/* Mobile Overlay */}
       <button
         type="button"
-        aria-label="Close sidebar overlay"
         onClick={() => setIsMobileSidebarOpen(false)}
         className={`fixed inset-0 z-30 bg-black/40 transition-opacity duration-200 ease-out lg:hidden ${
           isMobileSidebarOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
@@ -764,7 +758,6 @@ export default function HomePage() {
                 className={`hidden rounded-lg p-2 transition-colors lg:block ${
                   isDark ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
                 }`}
-                aria-label="Toggle sidebar"
               >
                 {isSidebarCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
               </button>
@@ -774,7 +767,6 @@ export default function HomePage() {
                 className={`rounded-lg p-2 transition-colors lg:hidden ${
                   isDark ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
                 }`}
-                aria-label="Close sidebar"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -827,7 +819,6 @@ export default function HomePage() {
                   }}
                 />
 
-                {/* Tool sub-items appear immediately after Tools button */}
                 {item.id === 'Tools' && activeMainMenu === 'Tools' && !isSidebarCollapsed && (
                   <div className={`my-1 ml-3 space-y-0.5 border-l-2 pl-2 ${
                     isDark ? 'border-emerald-500/25' : 'border-emerald-500/30'
@@ -844,7 +835,6 @@ export default function HomePage() {
                   </div>
                 )}
 
-                {/* Collapsed tool buttons */}
                 {item.id === 'Tools' && activeMainMenu === 'Tools' && isSidebarCollapsed && (
                   <div className="my-1 hidden space-y-0.5 lg:block">
                     {toolsSubItems.map(tool => (
@@ -862,7 +852,6 @@ export default function HomePage() {
             ))}
           </div>
 
-          {/* Resources section */}
           <div className="mt-7">
             <SectionLabel collapsed={isSidebarCollapsed} label="RESOURCES" />
             <div className="space-y-0.5">
@@ -881,13 +870,10 @@ export default function HomePage() {
           </div>
         </nav>
 
-        {/* Sidebar Footer */}
         <div className={`border-t p-4 ${isDark ? 'border-slate-700/60' : 'border-gray-200'}`}>
           {!isSidebarCollapsed ? (
             <div className={`rounded-xl border p-3.5 ${
-              isAdmin 
-                ? 'border-amber-500/30 bg-amber-500/10' 
-                : 'border-emerald-500/30 bg-emerald-500/10'
+              isAdmin ? 'border-amber-500/30 bg-amber-500/10' : 'border-emerald-500/30 bg-emerald-500/10'
             }`}>
               <div className="flex items-center gap-2">
                 <span className={`h-2 w-2 rounded-full ${
@@ -927,7 +913,6 @@ export default function HomePage() {
                 className={`flex-shrink-0 rounded-lg p-2 transition-colors lg:hidden ${
                   isDark ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
                 }`}
-                aria-label="Open sidebar"
               >
                 <Menu className="h-5 w-5" />
               </button>
@@ -942,7 +927,6 @@ export default function HomePage() {
             </div>
 
             <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2">
-              {/* Admin badge */}
               {isAdmin && (
                 <span className="hidden rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 px-3 py-1 text-xs font-semibold text-amber-400 md:inline-flex">
                   <Shield className="mr-1 h-3 w-3" />
@@ -950,7 +934,6 @@ export default function HomePage() {
                 </span>
               )}
 
-              {/* User email badge */}
               {user && (
                 <span className="hidden rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-400 md:inline-flex">
                   {user.email}
@@ -982,6 +965,7 @@ export default function HomePage() {
                 <Command className="h-4 w-4" />
               </button>
 
+              {/* Notification Bell with Desktop Support */}
               <div className="relative">
                 <button
                   type="button"
@@ -989,46 +973,138 @@ export default function HomePage() {
                   className={`relative rounded-lg border p-2 transition-colors ${
                     isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
                   }`}
+                  title={isSupported && permission === 'granted' ? 'Desktop notifications enabled' : 
+                         isSupported && permission === 'denied' ? 'Desktop notifications blocked' : 
+                         'Notifications'}
                 >
-                  <Bell className="h-4 w-4" />
+                  {isSupported && permission === 'granted' ? (
+                    <Bell className="h-4 w-4" />
+                  ) : isSupported && permission === 'denied' ? (
+                    <BellOff className="h-4 w-4 text-yellow-400" />
+                  ) : (
+                    <Bell className="h-4 w-4" />
+                  )}
                   {unreadCount > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                      {unreadCount}
+                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white animate-pulse">
+                      {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                   )}
                 </button>
 
                 {notifOpen && (
-                  <div className={`absolute right-0 top-full z-50 mt-2 w-80 rounded-2xl border shadow-2xl ${
+                  <div className={`absolute right-0 top-full z-50 mt-2 w-80 max-h-[400px] rounded-2xl border shadow-2xl overflow-hidden ${
                     isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-white'
                   }`}>
                     <div className={`flex items-center justify-between border-b px-4 py-3 ${isDark ? 'border-slate-700/60' : 'border-gray-100'}`}>
-                      <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Notifications</span>
-                      {unreadCount > 0 && (
-                        <button type="button" onClick={markAllRead} className="text-xs text-emerald-400 hover:underline">
-                          Mark all read
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          Notifications
+                        </span>
+                        {isSupported && permission === 'denied' && (
+                          <span className="text-xs text-yellow-400" title="Desktop notifications are blocked">
+                            <AlertCircle className="inline h-3 w-3" />
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isSupported && permission !== 'granted' && permission !== 'denied' && (
+                          <button
+                            type="button"
+                            onClick={requestPermission}
+                            className="text-xs text-emerald-400 hover:underline"
+                          >
+                            Enable desktop
+                          </button>
+                        )}
+                        {unreadCount > 0 && (
+                          <button 
+                            type="button" 
+                            onClick={markAllAsRead} 
+                            className="text-xs text-emerald-400 hover:underline"
+                          >
+                            Mark all read
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="divide-y divide-slate-800/60 py-1">
-                      {notifications.map(n => (
-                        <div key={n.id} className={`flex items-start gap-3 px-4 py-3 ${
-                          !n.read ? (isDark ? 'bg-slate-800/40' : 'bg-blue-50/40') : ''
-                        }`}>
-                          <span className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${
-                            n.type === 'success' ? 'bg-emerald-400' : n.type === 'warning' ? 'bg-yellow-400' : 'bg-blue-400'
-                          }`} />
-                          <div className="min-w-0 flex-1">
-                            <p className={`text-sm ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>{n.message}</p>
-                            <p className={`mt-0.5 text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>{n.time}</p>
-                          </div>
+                    <div className="overflow-y-auto max-h-[300px] divide-y divide-slate-800/60">
+                      {notifications.length === 0 ? (
+                        <div className="px-4 py-8 text-center">
+                          <Bell className="mx-auto h-8 w-8 opacity-20" />
+                          <p className={`mt-2 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                            No notifications yet
+                          </p>
+                          {isSupported && permission === 'default' && (
+                            <button
+                              type="button"
+                              onClick={requestPermission}
+                              className="mt-3 text-xs text-emerald-400 hover:underline"
+                            >
+                              Enable desktop notifications
+                            </button>
+                          )}
                         </div>
-                      ))}
+                      ) : (
+                        notifications.map(n => (
+                          <div 
+                            key={n.id} 
+                            className={`flex items-start gap-3 px-4 py-3 transition-colors cursor-pointer hover:bg-opacity-50 ${
+                              !n.read ? (isDark ? 'bg-slate-800/40' : 'bg-blue-50/40') : ''
+                            } ${isDark ? 'hover:bg-slate-800/30' : 'hover:bg-gray-50'}`}
+                            onClick={() => markAsRead(n.id)}
+                          >
+                            <span className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${
+                              n.type === 'success' ? 'bg-emerald-400' 
+                              : n.type === 'warning' ? 'bg-yellow-400' 
+                              : n.type === 'error' ? 'bg-red-400' 
+                              : 'bg-blue-400'
+                            }`} />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className={`text-sm font-medium ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>
+                                  {n.title}
+                                </p>
+                                {n.agent_name && n.agent_name !== 'System' && (
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${
+                                    isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-100 text-gray-600'
+                                  }`}>
+                                    @{n.agent_name}
+                                  </span>
+                                )}
+                              </div>
+                              <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                                {n.message}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                                  {new Date(n.created_at).toLocaleString()}
+                                </p>
+                                {n.tool_name && (
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                                    isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                                  }`}>
+                                    {n.tool_name.replace('_', ' ')}
+                                  </span>
+                                )}
+                                {n.agent_email && n.agent_name !== 'System' && (
+                                  <span className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                                    by {n.agent_email}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            {!n.read && (
+                              <span className="h-2 w-2 rounded-full bg-blue-500 flex-shrink-0 mt-1" />
+                            )}
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 )}
               </div>
 
+              {/* User Menu */}
               <div className="relative">
                 <button
                   type="button"
@@ -1064,7 +1140,10 @@ export default function HomePage() {
                       </button>
                       <button
                         type="button"
-                        onClick={handleSignOut}
+                        onClick={async () => {
+                          await supabase.auth.signOut();
+                          window.location.reload();
+                        }}
                         className={`flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
                           isDark ? 'text-red-400 hover:bg-slate-800' : 'text-red-600 hover:bg-gray-50'
                         }`}
@@ -1092,8 +1171,6 @@ export default function HomePage() {
         </main>
       </div>
     </div>
-    </MaintenanceGuard>
-    </MaintenanceProvider>
   );
 }
 

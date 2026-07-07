@@ -1,21 +1,41 @@
 // lib/notification-service.ts
+import { supabase } from '@/lib/supabase/client';
 
-// Check if browser supports notifications
-export const isNotificationSupported = (): boolean => {
-  return (
-    typeof window !== 'undefined' &&
-    'Notification' in window &&
-    'serviceWorker' in navigator &&
-    'PushManager' in window
+export interface Notification {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  read: boolean;
+  data?: any;
+  agent_id?: string;
+  agent_name?: string;
+  agent_email?: string;
+  tool_name?: string;
+  tool_run_id?: string;
+  sku_batch_id?: string;
+  asin_check_id?: string;
+  basecamp_generation_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Check if browser supports desktop notifications
+export const isDesktopNotificationSupported = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  
+  const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
   );
+  
+  if (isMobile) return false;
+  return 'Notification' in window;
 };
 
 // Request permission
 export const requestNotificationPermission = async (): Promise<boolean> => {
-  if (!isNotificationSupported()) {
-    console.warn('Notifications not supported in this browser');
-    return false;
-  }
+  if (!isDesktopNotificationSupported()) return false;
 
   try {
     const permission = await Notification.requestPermission();
@@ -26,126 +46,208 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
   }
 };
 
-// Get current permission status
+// Get current permission
 export const getNotificationPermission = (): NotificationPermission => {
-  if (!isNotificationSupported()) {
-    return 'denied';
-  }
+  if (!isDesktopNotificationSupported()) return 'denied';
   return Notification.permission;
 };
 
-// Subscribe to push notifications
-export const subscribeToPushNotifications = async (): Promise<PushSubscription | null> => {
-  if (!isNotificationSupported()) {
-    console.warn('Push notifications not supported');
-    return null;
-  }
+// Show desktop notification
+export const showDesktopNotification = (
+  title: string,
+  options?: NotificationOptions,
+  agentName?: string
+): void => {
+  if (!isDesktopNotificationSupported()) return;
 
-  try {
-    const registration = await navigator.serviceWorker.ready;
-    
-    // Get the VAPID public key from your server
-    const response = await fetch('/api/push/vapid-public-key');
-    const data = await response.json();
-    
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: data.publicKey,
+  if (Notification.permission !== 'granted') {
+    requestNotificationPermission().then(granted => {
+      if (granted) {
+        const notification = new Notification(
+          agentName ? `${title} (${agentName})` : title,
+          {
+            icon: '/favicon.ico',
+            badge: '/favicon.ico',
+            requireInteraction: true,
+            ...options,
+          }
+        );
+        setTimeout(() => notification.close(), 10000);
+        notification.onclick = () => {
+          window.focus();
+          if (options?.data?.url) {
+            window.location.href = options.data.url;
+          }
+          notification.close();
+        };
+      }
     });
-    
-    // Send subscription to server
-    await fetch('/api/push/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        subscription: subscription.toJSON(),
-        userEmail: localStorage.getItem('userEmail') || 'anonymous',
-      }),
-    });
-    
-    return subscription;
-  } catch (error) {
-    console.error('Error subscribing to push notifications:', error);
-    return null;
-  }
-};
-
-// Unsubscribe from push notifications
-export const unsubscribeFromPushNotifications = async (): Promise<boolean> => {
-  if (!isNotificationSupported()) {
-    return false;
-  }
-
-  try {
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
-    
-    if (subscription) {
-      // Unsubscribe from server
-      await fetch('/api/push/unsubscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          endpoint: subscription.endpoint,
-        }),
-      });
-      
-      await subscription.unsubscribe();
-      return true;
-    }
-    
-    return false;
-  } catch (error) {
-    console.error('Error unsubscribing from push notifications:', error);
-    return false;
-  }
-};
-
-// Send test notification
-export const sendTestNotification = async (): Promise<void> => {
-  if (!isNotificationSupported()) {
-    console.warn('Notifications not supported');
     return;
   }
 
   try {
-    const permission = getNotificationPermission();
-    if (permission !== 'granted') {
-      const granted = await requestNotificationPermission();
-      if (!granted) {
-        console.warn('Notification permission denied');
-        return;
+    const notification = new Notification(
+      agentName ? `${title} (${agentName})` : title,
+      {
+        icon: '/favicon.ico',
+        badge: '/favicon.ico',
+        requireInteraction: true,
+        ...options,
       }
-    }
-
-    // Show notification via service worker
-    const registration = await navigator.serviceWorker.ready;
-    registration.showNotification('Test Notification', {
-      body: 'This is a test notification!',
-      icon: '/favicon.ico',
-      badge: '/favicon.ico',
-      vibrate: [200, 100, 200],
-      data: {
-        url: '/',
-      },
-    });
+    );
+    setTimeout(() => notification.close(), 10000);
+    notification.onclick = () => {
+      window.focus();
+      if (options?.data?.url) {
+        window.location.href = options.data.url;
+      }
+      notification.close();
+    };
   } catch (error) {
-    console.error('Error sending test notification:', error);
+    console.error('Error showing desktop notification:', error);
   }
 };
 
-// Check if user has active subscription
-export const hasActiveSubscription = async (): Promise<boolean> => {
-  if (!isNotificationSupported()) {
-    return false;
+// Create notification with full context
+export const createNotification = async (
+  userId: string,
+  title: string,
+  message: string,
+  type: Notification['type'] = 'info',
+  data?: any,
+  agentInfo?: {
+    id: string;
+    name: string;
+    email: string;
+  },
+  toolContext?: {
+    toolName?: string;
+    toolRunId?: string;
+    skuBatchId?: string;
+    asinCheckId?: string;
+    basecampGenerationId?: string;
+  }
+): Promise<Notification | null> => {
+  const { data: notification, error } = await supabase
+    .from('notifications')
+    .insert({
+      user_id: userId,
+      title,
+      message,
+      type,
+      data,
+      read: false,
+      agent_id: agentInfo?.id || null,
+      agent_name: agentInfo?.name || 'System',
+      agent_email: agentInfo?.email || null,
+      tool_name: toolContext?.toolName || null,
+      tool_run_id: toolContext?.toolRunId || null,
+      sku_batch_id: toolContext?.skuBatchId || null,
+      asin_check_id: toolContext?.asinCheckId || null,
+      basecamp_generation_id: toolContext?.basecampGenerationId || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating notification:', error);
+    return null;
   }
 
-  try {
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
-    return !!subscription;
-  } catch (error) {
-    console.error('Error checking subscription:', error);
-    return false;
+  return notification;
+};
+
+// Subscribe to real-time notifications
+export const subscribeToNotifications = (
+  userId: string,
+  onNotification: (notification: Notification) => void,
+  onError?: (error: Error) => void
+) => {
+  const subscription = supabase
+    .channel(`notifications-${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${userId}`,
+      },
+      (payload) => {
+        const notification = payload.new as Notification;
+        onNotification(notification);
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('✅ Subscribed to notifications');
+      }
+      if (status === 'CHANNEL_ERROR' && onError) {
+        onError(new Error('Failed to subscribe to notifications'));
+      }
+    });
+
+  return subscription;
+};
+
+// Fetch unread notifications
+export const fetchUnreadNotifications = async (userId: string): Promise<Notification[]> => {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('read', false)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching notifications:', error);
+    return [];
   }
+
+  return data || [];
+};
+
+// Mark notification as read
+export const markNotificationAsRead = async (notificationId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true, updated_at: new Date().toISOString() })
+    .eq('id', notificationId);
+
+  if (error) {
+    console.error('Error marking notification as read:', error);
+  }
+};
+
+// Mark all notifications as read
+export const markAllNotificationsAsRead = async (userId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('read', false);
+
+  if (error) {
+    console.error('Error marking all notifications as read:', error);
+  }
+};
+
+// Get notification preferences
+export const getNotificationPreferences = async (userId: string) => {
+  const { data, error } = await supabase
+    .from('notification_preferences')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error fetching notification preferences:', error);
+  }
+
+  return data || { 
+    desktop_enabled: true, 
+    email_enabled: false, 
+    sound_enabled: true,
+    preferences: { success: true, warning: true, error: true, info: true }
+  };
 };

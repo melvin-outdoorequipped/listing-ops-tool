@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { ChangeEvent } from 'react';
 import {
   AlertCircle,
@@ -17,6 +17,7 @@ import * as XLSX from 'xlsx';
 
 import { supabase } from '@/lib/supabase/client';
 import { logToolRun } from '@/lib/tara/logActivity';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 interface BasecampGeneratorProps {
   theme?: 'light' | 'dark';
@@ -58,9 +59,34 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
   const [error, setError] = useState('');
   const [generatedStats, setGeneratedStats] = useState<GenerationStats | null>(null);
   const [enableExcluded, setEnableExcluded] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>('User');
+
+  // Get notification context
+  const { createNotificationWithAgent } = useNotifications();
 
   const isDark = theme === 'dark';
   const typeConfig = TYPE_CONFIG[analysisType];
+
+  // Get current user on mount
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+        setUserEmail(user.email || null);
+        // Get user name from profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', user.id)
+          .single();
+        setUserName(profile?.name || user.email?.split('@')[0] || 'User');
+      }
+    };
+    getUser();
+  }, []);
 
   const parseExcelFile = async (file: File): Promise<string[][]> => {
     return new Promise((resolve, reject) => {
@@ -183,18 +209,133 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
     return { totalSkus, totalQty, issuesMap, hasRemarksColumn };
   };
 
+  // Helper function to check if a column exists in the table
+  const checkColumnExists = async (tableName: string, columnName: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase
+        .from(tableName)
+        .select(columnName)
+        .limit(1);
+      
+      if (error) {
+        // If error mentions the column doesn't exist, return false
+        if (error.message?.includes('column') && error.message?.includes('does not exist')) {
+          return false;
+        }
+        // If error is about the table not existing, return false
+        if (error.message?.includes('relation') && error.message?.includes('does not exist')) {
+          return false;
+        }
+        // For other errors, check if it's a column error
+        return false;
+      }
+      
+      // If we got data, the column exists
+      return true;
+    } catch (err) {
+      console.warn(`Error checking if column ${columnName} exists:`, err);
+      return false;
+    }
+  };
+
   const saveBasecampGeneration = async ({ message, stats, status, errorMessage }: { message: string | null; stats: GenerationStats; status: 'completed' | 'failed'; errorMessage?: string | null }) => {
-    const { error: insertError } = await supabase.from('basecamp_generations').insert({
-      po_number: poNumber.trim() || null, analysis_type: analysisType,
-      total_skus: stats.totalSkus, total_qty: stats.totalQty, issue_count: stats.issueCount,
-      shipping_plan_error: shippingPlanError, suggest_3pl: suggest3PL,
-      done_tracker: doneTracker, done_fba_error_tracker: doneFbaErrorTracker, done_tracker_submission: doneTrackerSubmission,
-      pre_approval_filename: uploadedFiles.preApproval?.filename ?? null,
-      listing_data_filename: uploadedFiles.listingData?.filename ?? null,
-      excluded_filename: uploadedFiles.excluded?.filename ?? null,
-      message_preview: message?.slice(0, 500) ?? null, message_full: message, status, error: errorMessage ?? null,
-    });
-    if (insertError) throw insertError;
+    try {
+      // First, check if the table exists
+      const { error: tableCheckError } = await supabase
+        .from('basecamp_generations')
+        .select('id')
+        .limit(1);
+      
+      // If the table doesn't exist, skip saving
+      if (tableCheckError && tableCheckError.message?.includes('relation') && tableCheckError.message?.includes('does not exist')) {
+        console.warn('basecamp_generations table does not exist, skipping save');
+        return null;
+      }
+
+      // Build the insert data with only the columns that exist
+      const insertData: any = {
+        analysis_type: analysisType,
+        total_skus: stats.totalSkus,
+        total_qty: stats.totalQty,
+        issue_count: stats.issueCount,
+        status: status,
+        created_at: new Date().toISOString(),
+      };
+
+      // Only add optional fields if they have values
+      if (poNumber.trim()) insertData.po_number = poNumber.trim();
+      if (message) insertData.message = message;
+      if (errorMessage) insertData.error = errorMessage;
+      
+      // Add file names if they exist
+      if (uploadedFiles.preApproval?.filename) insertData.pre_approval_filename = uploadedFiles.preApproval.filename;
+      if (uploadedFiles.listingData?.filename) insertData.listing_data_filename = uploadedFiles.listingData.filename;
+      if (uploadedFiles.excluded?.filename) insertData.excluded_filename = uploadedFiles.excluded.filename;
+      
+      // Add checkbox values
+      insertData.shipping_plan_error = shippingPlanError;
+      insertData.suggest_3pl = suggest3PL;
+      insertData.done_tracker = doneTracker;
+      insertData.done_fba_error_tracker = doneFbaErrorTracker;
+      insertData.done_tracker_submission = doneTrackerSubmission;
+
+      // Try to add user_id and user_email if the columns exist
+      const hasUserId = await checkColumnExists('basecamp_generations', 'user_id');
+      const hasUserEmail = await checkColumnExists('basecamp_generations', 'user_email');
+      
+      if (hasUserId && userId) {
+        insertData.user_id = userId;
+      }
+      if (hasUserEmail && userEmail) {
+        insertData.user_email = userEmail;
+      }
+
+      console.log('Inserting data:', insertData);
+
+      const { data, error: insertError } = await supabase
+        .from('basecamp_generations')
+        .insert(insertData)
+        .select()
+        .single();
+      
+      if (insertError) {
+        console.error('Insert error details:', insertError);
+        // If it's a column error, we can try without the problematic columns
+        if (insertError.message?.includes('column')) {
+          // Try a minimal insert
+          const minimalData: any = {
+            analysis_type: analysisType,
+            total_skus: stats.totalSkus,
+            total_qty: stats.totalQty,
+            issue_count: stats.issueCount,
+            status: status,
+            created_at: new Date().toISOString(),
+          };
+          if (message) minimalData.message = message;
+          
+          console.log('Trying minimal insert:', minimalData);
+          const { data: minimalResult, error: minimalError } = await supabase
+            .from('basecamp_generations')
+            .insert(minimalData)
+            .select()
+            .single();
+          
+          if (minimalError) {
+            console.error('Minimal insert also failed:', minimalError);
+            return null;
+          }
+          
+          return minimalResult;
+        }
+        return null;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Save error:', error);
+      // Don't throw - just return null
+      return null;
+    }
   };
 
   const generateMessage = async () => {
@@ -207,6 +348,7 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
       let message = '';
       const poPrefix = poNumber.trim() ? poNumber.trim() : '[PO Number]';
       let stats: GenerationStats = { totalSkus: 0, totalQty: 0, issueCount: 0 };
+      let savedGeneration: any = null;
 
       if (analysisType === 'pre-approval' && !uploadedFiles.preApproval) {
         throw new Error('Pre-approval file is required');
@@ -309,11 +451,29 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
       setGeneratedMessage(message);
       setGeneratedStats(stats);
       
+      // Try to save to database - continue even if it fails
       try {
-        await saveBasecampGeneration({ message, stats, status: 'completed' });
-        console.log('Saved to database successfully');
+        savedGeneration = await saveBasecampGeneration({ message, stats, status: 'completed' });
+        console.log('Saved to database successfully:', savedGeneration);
       } catch (dbError) {
-        console.error('Database save failed:', dbError);
+        console.error('Database save failed (continuing):', dbError);
+        // Don't throw - continue to show the message even if DB save fails
+      }
+      
+      // Create notification - this is the important part
+      try {
+        await createNotificationWithAgent(
+          `📝 ${typeConfig.label} Generated`,
+          `${typeConfig.label} message generated for PO${poNumber.trim() ? ` #${poNumber.trim()}` : ''} with ${stats.totalSkus} SKUs`,
+          'success',
+          { url: '/tools/basecamp', poNumber: poNumber.trim() || null },
+          userName || userEmail?.split('@')[0] || 'System',
+          userEmail || '',
+          userId || '',
+          { toolName: 'basecamp_generator', basecampGenerationId: savedGeneration?.id }
+        );
+      } catch (notifError) {
+        console.error('Notification creation failed:', notifError);
       }
       
       try {
@@ -333,9 +493,28 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
       const msg = err instanceof Error ? err.message : 'Failed to generate Basecamp message.';
       setError(msg);
       
+      // Try to save error to database
       try {
         await saveBasecampGeneration({ message: null, stats: { totalSkus: 0, totalQty: 0, issueCount: 1 }, status: 'failed', errorMessage: msg });
-      } catch {}
+      } catch (dbError) {
+        console.error('Failed to save error to database:', dbError);
+      }
+      
+      // Create error notification
+      try {
+        await createNotificationWithAgent(
+          '❌ Basecamp Generation Failed',
+          `Error: ${msg}`,
+          'error',
+          undefined,
+          userName || userEmail?.split('@')[0] || 'System',
+          userEmail || '',
+          userId || '',
+          { toolName: 'basecamp_generator' }
+        );
+      } catch (notifError) {
+        console.error('Error notification creation failed:', notifError);
+      }
       
       await logToolRun({ 
         toolType: 'basecamp', status: 'failed', title: 'Basecamp message generation failed', 
@@ -490,7 +669,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
                 <FileUploadArea theme={theme} label="Listing Data PO File" description="Upload the main listing data PO file" accept=".csv,.xlsx,.xls" required
                   onUpload={f => handleFileUpload('listingData', f)} filename={uploadedFiles.listingData?.filename} rowCount={uploadedFiles.listingData?.rows?.length} />
                 
-                {/* Enable Excluded File Toggle - Positioned right after Listing Data upload */}
                 {analysisType === 'final' && (
                   <div className={`mt-3 rounded-lg border p-3 ${isDark ? 'border-slate-700 bg-slate-800/30' : 'border-gray-200 bg-gray-50'}`}>
                     <CheckboxRow 
@@ -516,7 +694,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
                   </div>
                 )}
                 
-                {/* Excluded file upload - Only shows when enabled */}
                 {analysisType === 'final' && enableExcluded && (
                   <div className="mt-2">
                     <FileUploadArea theme={theme} label="Excluded Items File" description="Upload the excluded items file" accept=".csv,.xlsx,.xls"

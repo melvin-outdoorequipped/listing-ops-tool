@@ -17,6 +17,7 @@ import {
 
 import { supabase } from '@/lib/supabase/client';
 import { logToolRun } from '@/lib/tara/logActivity';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 interface SkuProcessorProps {
   theme?: 'light' | 'dark';
@@ -118,8 +119,12 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>('User');
   const [showAllBatches, setShowAllBatches] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+
+  // Get notification context
+  const { createNotificationWithAgent } = useNotifications();
 
   const isDark = theme === 'dark';
 
@@ -128,10 +133,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
 
   const showFeedback = (type: Feedback['type'], message: string) => {
     setFeedback({ type, message });
-
-    window.setTimeout(() => {
-      setFeedback(null);
-    }, 3500);
+    window.setTimeout(() => { setFeedback(null); }, 3500);
   };
 
   // Get current user on mount
@@ -141,7 +143,14 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
       if (user) {
         setUserId(user.id);
         setUserEmail(user.email || null);
-        // Check if user is admin (based on email or custom logic)
+        // Get user name from profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', user.id)
+          .single();
+        setUserName(profile?.name || user.email?.split('@')[0] || 'User');
+        // Check if user is admin
         const isUserAdmin = user.email === 'admin@example.com' || user.email?.includes('admin') || false;
         setIsAdmin(isUserAdmin);
         fetchBatches(user.id, false);
@@ -151,44 +160,44 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
   }, []);
 
   const fetchBatches = async (uid: string, showAll: boolean) => {
-  setIsLoadingBatches(true);
+    setIsLoadingBatches(true);
 
-  try {
-    let query = supabase
-      .from('sku_batches')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(100);
+    try {
+      let query = supabase
+        .from('sku_batches')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
 
-    if (!showAll) {
-      query = query.eq('user_id', uid);
-    }
+      if (!showAll) {
+        query = query.eq('user_id', uid);
+      }
 
-    const { data, error } = await query;
+      const { data, error } = await query;
 
-    if (error) {
-      console.error('Error fetching batches:', error);
-      showFeedback('error', `Failed to load batches: ${error.message}`);
+      if (error) {
+        console.error('Error fetching batches:', error);
+        showFeedback('error', `Failed to load batches: ${error.message}`);
+        setBatches([]);
+      } else {
+        setBatches((data ?? []) as SkuBatchRow[]);
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      showFeedback('error', 'Failed to load batches');
       setBatches([]);
-    } else {
-      setBatches((data ?? []) as SkuBatchRow[]);
+    } finally {
+      setIsLoadingBatches(false);
     }
-  } catch (err) {
-    console.error('Unexpected error:', err);
-    showFeedback('error', 'Failed to load batches');
-    setBatches([]);
-  } finally {
-    setIsLoadingBatches(false);
-  }
-};
+  };
 
   const toggleFilter = () => {
-  const newShowAll = !showAllBatches;
-  setShowAllBatches(newShowAll);
-  if (userId) {
-    fetchBatches(userId, newShowAll);
-  }
-};
+    const newShowAll = !showAllBatches;
+    setShowAllBatches(newShowAll);
+    if (userId) {
+      fetchBatches(userId, newShowAll);
+    }
+  };
 
   const handleProcess = async () => {
     if (!hasValidSkus || isProcessing) {
@@ -245,14 +254,12 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
 
       if (!response.ok) {
         let message = 'Processing failed.';
-
         try {
           const errorData = await response.json();
           message = errorData?.error || message;
         } catch {
           message = response.statusText || message;
         }
-
         throw new Error(message);
       }
 
@@ -356,6 +363,20 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
         },
       });
 
+      // 👇 Create notification
+      await createNotificationWithAgent(
+        matchedCount > 0 ? '✅ SKU Processing Complete' : '⚠️ SKU Processing Warning',
+        matchedCount > 0 
+          ? `Successfully processed ${matchedCount} of ${totalRequested} SKUs${brands.length > 0 ? `, found ${brands.length} brands` : ''}`
+          : `No matching SKUs found out of ${totalRequested} total SKUs`,
+        matchedCount > 0 ? 'success' : 'warning',
+        { url: '/downloads', batchId, matchedCount, totalRequested },
+        userName || currentUserEmail?.split('@')[0] || 'System',
+        currentUserEmail || '',
+        userId || '',
+        { toolName: 'sku_processor', skuBatchId: insertedBatch?.id }
+      );
+
       setBatches((previous) => [
         insertedBatch as SkuBatchRow,
         ...previous.filter((batch) => batch.id !== temporaryRow.id),
@@ -411,6 +432,18 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
           error: message,
         },
       });
+
+      // 👇 Create error notification
+      await createNotificationWithAgent(
+        '❌ SKU Processing Failed',
+        `Error: ${message}`,
+        'error',
+        undefined,
+        userName || currentUserEmail?.split('@')[0] || 'System',
+        currentUserEmail || '',
+        userId || '',
+        { toolName: 'sku_processor' }
+      );
 
       if (failedBatch && !insertError) {
         setBatches((previous) => [
@@ -711,7 +744,6 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
               {showAllBatches ? 'All Batches' : 'My Batches'}
             </button>
 
-
             <button
               type="button"
               onClick={refreshBatches}
@@ -768,7 +800,7 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
             {/* Desktop Table */}
             <div className="hidden overflow-x-auto lg:block">
               <table className="w-full min-w-[1180px] border-collapse text-sm">
-                                <thead>
+                <thead>
                   <tr className={isDark ? 'bg-cyan-950/70 text-slate-100' : 'bg-cyan-900 text-white'}>
                     <th className="w-10 px-3 py-3 text-left">
                       <input type="checkbox" className="h-4 w-4 rounded" />
@@ -1032,7 +1064,7 @@ function BatchTableRow({
   );
 }
 
-// Helper Components (defined once)
+// Helper Components
 function TableHead({ children, alignRight = false }: { children: ReactNode; alignRight?: boolean }) {
   return (
     <th className={`whitespace-nowrap px-4 py-3 text-xs font-semibold ${alignRight ? 'text-right' : 'text-left'}`}>

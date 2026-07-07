@@ -17,6 +17,7 @@ import {
 
 import { supabase } from '@/lib/supabase/client';
 import { logToolRun } from '@/lib/tara/logActivity';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 interface AsinConflictCheckerProps {
   theme?: 'light' | 'dark';
@@ -124,7 +125,6 @@ function LineGutter({ text, isDark }: { text: string; isDark: boolean }) {
       }`}
       style={{ 
         minWidth: '3.5rem', 
-        /* This must match the textarea lineHeight exactly */
         lineHeight: '1.625rem' 
       }}
     >
@@ -147,6 +147,9 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
   const [scrollPct, setScrollPct] = useState(0);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+
+  // Get notification context
+  const { createNotificationWithAgent } = useNotifications();
 
   const stylesRef = useRef<HTMLTextAreaElement>(null);
   const asinsRef = useRef<HTMLTextAreaElement>(null);
@@ -212,7 +215,6 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
       return; 
     }
     
-    // Get current user if not already set
     let currentUserEmail = userEmail;
     let currentUserId = userId;
     
@@ -254,7 +256,7 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         userEmail: currentUserEmail || 'System',
       });
 
-      // Save to asin_checks table with user info
+      // Save to asin_checks table
       try {
         const insertData: any = {
           total_rows: totalRows,
@@ -269,7 +271,21 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         if (currentUserId) insertData.user_id = currentUserId;
         if (currentUserEmail) insertData.user_email = currentUserEmail;
         
-        await supabase.from('asin_checks').insert(insertData);
+        const { data: savedCheck } = await supabase.from('asin_checks').insert(insertData).select().single();
+        
+        // 👇 Create notification
+        await createNotificationWithAgent(
+          conflictCount > 0 ? '⚠️ ASIN Conflicts Found' : '✅ ASIN Check Complete',
+          conflictCount > 0 
+            ? `Detected ${conflictCount} style${conflictCount === 1 ? '' : 's'} with multiple parent ASINs`
+            : 'No conflicts detected - all styles have unique parent ASINs',
+          conflictCount > 0 ? 'warning' : 'success',
+          { url: '/tools/asin', conflictCount },
+          currentUserEmail?.split('@')[0] || 'System',
+          currentUserEmail || '',
+          currentUserId || '',
+          { toolName: 'asin_checker', asinCheckId: savedCheck?.id }
+        );
       } catch (err) {
         console.error('Failed to save to asin_checks:', err);
       }
@@ -323,6 +339,18 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         if (currentUserEmail) insertData.user_email = currentUserEmail;
         
         await supabase.from('asin_checks').insert(insertData);
+        
+        // 👇 Create error notification
+        await createNotificationWithAgent(
+          '❌ ASIN Check Failed',
+          `Error: ${message}`,
+          'error',
+          undefined,
+          currentUserEmail?.split('@')[0] || 'System',
+          currentUserEmail || '',
+          currentUserId || '',
+          { toolName: 'asin_checker' }
+        );
       } catch (err) {
         console.error('Failed to save failed run:', err);
       }
@@ -585,7 +613,6 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
                 onChange={e => setStylesInput(e.target.value)}
                 disabled={isChecking}
                 spellCheck={false}
-                /* This line is critical: it forces the height to match the line count */
                 style={{ height: `${Math.max(splitLines(stylesInput).length, 20) * 1.625}rem`, lineHeight: '1.625rem' }}
               />
             </div>
@@ -605,7 +632,6 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
                 onChange={e => setAsinsInput(e.target.value)}
                 disabled={isChecking}
                 spellCheck={false}
-                /* Matches the gutter line height exactly */
                 style={{ height: `${Math.max(splitLines(asinsInput).length, 20) * 1.625}rem`, lineHeight: '1.625rem' }}
               />
             </div>
