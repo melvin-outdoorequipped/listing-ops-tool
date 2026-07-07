@@ -1,19 +1,3 @@
-// components/dashboard/TaskManagement.tsx
-//
-// Visual/UX refresh. All state, handlers, API calls, and business logic are
-// unchanged from the original — only the presentation layer was reworked:
-//   - Shared primitives (Button, StatusBadge, Card, Modal, EmptyState,
-//     skeleton loaders) from ./dashboard-ui-kit replace one-off className
-//     ternaries, so every surface reads consistently in light and dark mode.
-//   - First load now shows a skeleton that matches the active layout
-//     (table/card/list) instead of a blank spinner, so the page doesn't jump.
-//   - Empty and error states now explain what happened and offer a next
-//     action (clear filters / retry) instead of a bare sentence.
-//   - Buttons get visible focus rings, a small active-press effect, and
-//     consistent spacing (8px scale) across the whole toolbar.
-//   - Status is shown with an icon + color everywhere (table, card, list,
-//     detail modal) via one StatusBadge component instead of four different
-//     copies of the same color-mapping logic.
 
 'use client';
 
@@ -57,6 +41,7 @@ import {
   pushRecentTaskName,
   loadRecentTaskNames,
   RecentTaskName,
+  TD_TASK_CATEGORIES
 } from '../../lib/td-task-names';
 import AgentCompletionTracker from './AgentCompletionTracker';
 import {
@@ -477,28 +462,53 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
   const [copiedTemplate, setCopiedTemplate] = useState<string | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
   const [recentTasks, setRecentTasks] = useState<RecentTaskName[]>([]);
+  
+  // State for editing brand and category
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [customBrand, setCustomBrand] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [isEditingBrand, setIsEditingBrand] = useState(false);
+  const [showRecentTasks, setShowRecentTasks] = useState(true);
 
   const isDark = theme === 'dark';
+
+  // Get all unique categories
+  const allCategories = useMemo(() => {
+    return TD_TASK_CATEGORIES.map(cat => cat.category);
+  }, []);
 
   useEffect(() => {
     if (isOpen && task) {
       setRecentTasks(loadRecentTaskNames(task.agent || 'default'));
+      setSelectedBrand(task.brand || '');
+      setCustomBrand('');
+      setIsEditingBrand(false);
+      
+      const category = findCategoryByTaskName(task.task);
+      setSelectedCategory(category?.category || '');
     }
   }, [isOpen, task]);
 
   if (!isOpen || !task) return null;
 
-  const category = findCategoryByTaskName(task.task);
+  const category = selectedCategory 
+    ? TD_TASK_CATEGORIES.find(cat => cat.category === selectedCategory) 
+    : findCategoryByTaskName(task.task);
+    
   const templates = category?.templates || [];
 
   const filteredTemplates = searchQuery.trim()
     ? templates.filter((t) =>
-        generateTaskName(t, { brand: task.brand, agent: task.agent }).toLowerCase().includes(searchQuery.toLowerCase())
+        generateTaskName(t, { brand: selectedBrand || task.brand, agent: task.agent }).toLowerCase().includes(searchQuery.toLowerCase())
       )
     : templates;
 
   const handleCopy = (template: string) => {
-    const generated = generateTaskName(template, { brand: task.brand, agent: task.agent });
+    const brandToUse = selectedBrand || task.brand;
+    const generated = generateTaskName(template, { 
+      brand: brandToUse, 
+      agent: task.agent 
+    });
 
     navigator.clipboard.writeText(generated);
     setCopiedTemplate(template);
@@ -508,7 +518,11 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
       setCopiedText(null);
     }, 2000);
 
-    pushRecentTaskName(task.agent || 'default', { text: generated, category: task.task, timestamp: Date.now() });
+    pushRecentTaskName(task.agent || 'default', { 
+      text: generated, 
+      category: category?.category || task.task, 
+      timestamp: Date.now() 
+    });
     setRecentTasks(loadRecentTaskNames(task.agent || 'default'));
   };
 
@@ -518,86 +532,309 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
     setTimeout(() => setCopiedText(null), 2000);
   };
 
+  const handleBrandChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    if (value === '__CUSTOM__') {
+      setIsEditingBrand(true);
+      setSelectedBrand('');
+      setCustomBrand('');
+    } else {
+      setSelectedBrand(value);
+      setIsEditingBrand(false);
+      setCustomBrand('');
+    }
+  };
+
+  const handleCustomBrandSubmit = () => {
+    if (customBrand.trim()) {
+      setSelectedBrand(customBrand.trim());
+      setIsEditingBrand(false);
+    }
+  };
+
+  const handleBrandInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleCustomBrandSubmit();
+    }
+    if (e.key === 'Escape') {
+      setIsEditingBrand(false);
+      setCustomBrand('');
+      setSelectedBrand(task.brand || '');
+    }
+  };
+
+  const handleReset = () => {
+    setSelectedBrand(task.brand || '');
+    setSelectedCategory('');
+    setIsEditingBrand(false);
+    setCustomBrand('');
+    setSearchQuery('');
+  };
+
   const mutedText = isDark ? 'text-slate-400' : 'text-gray-500';
   const inputCls = isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400';
+  const labelCls = cn('text-xs sm:text-sm font-medium', mutedText);
+  const selectCls = cn(
+    'w-full rounded-lg border px-3 py-2 text-sm transition-colors',
+    focusRing,
+    inputCls
+  );
+
+  const brandToUse = selectedBrand || task.brand;
+  const isBrandInOptions = brandToUse && BRAND_OPTIONS.includes(brandToUse);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} theme={theme} maxWidth="max-w-2xl" labelledBy="generator-title">
+    <Modal isOpen={isOpen} onClose={onClose} theme={theme} maxWidth="max-w-3xl" labelledBy="generator-title">
       <ModalHeader
         icon={Sparkles}
         iconClassName="bg-gradient-to-r from-blue-500 to-purple-500"
-        title="TD Task Name Generator"
-        subtitle={`Generate task names for ${task.brand} · ${task.task}`}
+        title="Task Name Generator"
+        subtitle={`Generate task names for ${brandToUse} · ${category?.category || task.task}`}
         onClose={onClose}
         theme={theme}
         titleId="generator-title"
       />
 
+      {/* Controls Section - Clean 2-column grid */}
       <div className={cn('p-4 sm:p-5 border-b', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
-        <div className="relative">
-          <Search className={cn('absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5', mutedText)} />
-          <input
-            type="text"
-            placeholder="Search task names..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className={cn('w-full rounded-lg border pl-9 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 text-sm sm:text-base', focusRing, inputCls)}
-            autoFocus
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Brand Control */}
+          <div className="space-y-1.5">
+            <label className={labelCls}>
+              Brand <span className="text-amber-400">*</span>
+            </label>
+            {!isEditingBrand ? (
+              <div className="flex gap-2">
+                <select
+                  value={isBrandInOptions ? brandToUse : '__CUSTOM__'}
+                  onChange={handleBrandChange}
+                  className={selectCls}
+                >
+                  <option value={brandToUse}>
+                    {brandToUse || 'Select brand...'}
+                  </option>
+                  {BRAND_OPTIONS
+                    .filter(b => b !== brandToUse)
+                    .slice(0, 10)
+                    .map((brand) => (
+                      <option key={brand} value={brand}>{brand}</option>
+                    ))}
+                  {BRAND_OPTIONS.length > 10 && (
+                    <option disabled>───</option>
+                  )}
+                  {BRAND_OPTIONS
+                    .filter(b => b !== brandToUse)
+                    .slice(10)
+                    .map((brand) => (
+                      <option key={brand} value={brand}>{brand}</option>
+                    ))}
+                  <option value="__CUSTOM__">✏️ Custom Brand</option>
+                </select>
+                {!isBrandInOptions && brandToUse && (
+                  <span className={cn('inline-flex items-center px-2 text-xs rounded', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
+                    Custom
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Enter brand name..."
+                  value={customBrand}
+                  onChange={(e) => setCustomBrand(e.target.value)}
+                  onKeyDown={handleBrandInputKeyDown}
+                  className={cn('flex-1 rounded-lg border px-3 py-2 text-sm', focusRing, inputCls)}
+                  autoFocus
+                />
+                <Button
+                  theme={theme}
+                  variant="primary"
+                  size="sm"
+                  onClick={handleCustomBrandSubmit}
+                  disabled={!customBrand.trim()}
+                  className="px-3"
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button
+                  theme={theme}
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setIsEditingBrand(false);
+                    setCustomBrand('');
+                    setSelectedBrand(task.brand || '');
+                  }}
+                  className="px-3"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            <p className={cn('text-[10px]', mutedText)}>
+              {isEditingBrand ? 'Type a brand name and press Enter' : 'Select a brand or choose "Custom Brand"'}
+            </p>
+          </div>
+
+          {/* Category Control */}
+          <div className="space-y-1.5">
+            <label className={labelCls}>
+              Category
+            </label>
+            <div className="flex gap-2">
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className={selectCls}
+              >
+                <option value="">Auto-detect</option>
+                {allCategories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              {selectedCategory && (
+                <Button
+                  theme={theme}
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setSelectedCategory('')}
+                  className="px-3 flex-shrink-0"
+                  title="Reset to auto-detect"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            <p className={cn('text-[10px]', mutedText)}>
+              {selectedCategory ? `Using: ${selectedCategory}` : 'Auto-detected from task name'}
+            </p>
+          </div>
         </div>
-        <div className="mt-2 flex flex-wrap gap-1.5 sm:gap-2 items-center">
-          <span className={cn('text-[10px] sm:text-xs font-medium', mutedText)}>Brand:</span>
-          <span className={cn('inline-flex items-center rounded-full px-2 sm:px-2.5 py-0.5 text-[10px] sm:text-xs font-medium', isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700')}>
-            {task.brand}
-          </span>
-          <span className={cn('text-[10px] sm:text-xs font-medium', mutedText)}>Agent:</span>
-          <span className={cn('inline-flex items-center rounded-full px-2 sm:px-2.5 py-0.5 text-[10px] sm:text-xs font-medium', isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}>
+
+        {/* Search Bar - Full width */}
+        <div className="mt-4">
+          <div className="relative">
+            <Search className={cn('absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4', mutedText)} />
+            <input
+              type="text"
+              placeholder="Search templates..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={cn(
+                'w-full rounded-lg border pl-9 pr-3 py-2 text-sm',
+                focusRing,
+                inputCls
+              )}
+            />
+          </div>
+        </div>
+
+        {/* Context Chip */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className={cn('text-[10px] font-medium', mutedText)}>Context:</span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
+            <User className="h-3 w-3" />
             {task.agent || 'Unassigned'}
           </span>
-          <span className={cn('text-[10px] sm:text-xs font-medium', mutedText)}>Category:</span>
-          <span className={cn('inline-flex items-center rounded-full px-2 sm:px-2.5 py-0.5 text-[10px] sm:text-xs font-medium', isDark ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700')}>
-            {category?.category || 'Unknown'}
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-medium text-blue-400">
+            <span className="font-mono">{filteredTemplates.length}</span> templates
           </span>
+          {brandToUse && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/20 px-2.5 py-0.5 text-xs font-medium text-purple-400">
+              {brandToUse}
+            </span>
+          )}
+          {selectedCategory && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-400">
+              {selectedCategory}
+            </span>
+          )}
+          <button
+            onClick={handleReset}
+            className={cn(
+              'ml-auto text-xs font-medium transition-colors',
+              focusRing,
+              isDark ? 'text-slate-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'
+            )}
+          >
+            Reset All
+          </button>
         </div>
       </div>
 
+      {/* Recent Tasks - Collapsible */}
       {recentTasks.length > 0 && (
-        <div className={cn('p-4 sm:p-5 border-b', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
-          <p className={cn('text-xs sm:text-sm font-medium mb-2', mutedText)}>Recent Task Names</p>
-          <div className="flex flex-wrap gap-2">
-            {recentTasks.slice(0, 4).map((recent, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleCopyRecent(recent.text)}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-lg border px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm transition-all group',
-                  focusRing,
-                  isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600 hover:bg-slate-700' : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
-                )}
-              >
-                <span className="truncate max-w-[100px] sm:max-w-[150px]">{recent.text}</span>
-                {copiedText === recent.text ? <Check className="h-3 w-3 sm:h-4 sm:w-4 text-emerald-400" /> : <Copy className="h-3 w-3 sm:h-4 sm:w-4 opacity-50 group-hover:opacity-100" />}
-              </button>
-            ))}
-          </div>
+        <div className={cn('border-b', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
+          <button
+            onClick={() => setShowRecentTasks(!showRecentTasks)}
+            className={cn(
+              'w-full flex items-center justify-between px-4 sm:px-5 py-2 text-xs font-medium transition-colors',
+              focusRing,
+              isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800/50' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+            )}
+          >
+            <span>📋 Recent</span>
+            <span className="text-[10px]">
+              {showRecentTasks ? '▼' : '▶'} {recentTasks.length}
+            </span>
+          </button>
+          {showRecentTasks && (
+            <div className="px-4 sm:px-5 pb-3 flex flex-wrap gap-2">
+              {recentTasks.slice(0, 5).map((recent, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleCopyRecent(recent.text)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-all group',
+                    focusRing,
+                    isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600 hover:bg-slate-700' : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                  )}
+                >
+                  <span className="truncate max-w-[120px]">{recent.text}</span>
+                  {copiedText === recent.text ? (
+                    <Check className="h-3 w-3 text-emerald-400" />
+                  ) : (
+                    <Copy className="h-3 w-3 opacity-50 group-hover:opacity-100" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
+      {/* Templates List */}
       <div className="p-4 sm:p-5 max-h-[400px] overflow-y-auto">
         {filteredTemplates.length === 0 ? (
-          <EmptyState theme={theme} icon={Search} title="No templates found" description="Try adjusting your search terms." />
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <Search className={cn('h-12 w-12 mb-4', mutedText)} />
+            <p className={cn('text-sm font-medium', isDark ? 'text-white' : 'text-gray-900')}>
+              {searchQuery ? 'No templates match your search' : 'No templates available'}
+            </p>
+            <p className={cn('text-xs mt-1', mutedText)}>
+              {searchQuery ? 'Try adjusting your search terms' : 'Try selecting a different category'}
+            </p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 gap-2 sm:gap-3">
+          <div className="space-y-2">
             {filteredTemplates.map((template, idx) => {
-              const generated = generateTaskName(template, { brand: task.brand, agent: task.agent });
+              const generated = generateTaskName(template, { 
+                brand: brandToUse, 
+                agent: task.agent 
+              });
               const isCopied = copiedTemplate === template;
+              const usesBrandToken = template.includes('{brand}');
+              const usesAgentToken = template.includes('{agent}');
+              const hasPlaceholder = template.includes('[specify what file]');
 
               return (
                 <button
                   key={idx}
                   onClick={() => handleCopy(template)}
                   className={cn(
-                    'group flex flex-col sm:flex-row items-start sm:items-center justify-between rounded-lg border p-3 sm:p-4 text-left transition-all hover:shadow-md',
+                    'group w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 rounded-lg border p-3 sm:p-4 text-left transition-all hover:shadow-md',
                     focusRing,
                     isCopied
                       ? isDark
@@ -609,20 +846,38 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
                   )}
                 >
                   <div className="flex-1 min-w-0">
-                    <p className={cn('text-sm sm:text-base font-medium', isCopied ? 'text-emerald-400' : isDark ? 'text-white' : 'text-gray-900')}>{generated}</p>
-                    {template.includes('[specify what file]') && (
-                      <p className={cn('text-[10px] sm:text-xs mt-0.5 inline-flex items-center gap-1', mutedText)}>
-                        <AlertTriangle className="h-3 w-3" /> Contains editable placeholder — edit before using
-                      </p>
-                    )}
+                    <p className={cn(
+                      'text-sm font-medium break-all',
+                      isCopied ? 'text-emerald-400' : isDark ? 'text-white' : 'text-gray-900'
+                    )}>
+                      {generated}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {hasPlaceholder && (
+                        <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
+                          <AlertTriangle className="h-2.5 w-2.5" />
+                          Editable
+                        </span>
+                      )}
+                      {!usesBrandToken && (
+                        <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium', isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-500')}>
+                          No brand
+                        </span>
+                      )}
+                      {!usesAgentToken && (
+                        <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium', isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-500')}>
+                          No agent
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-2 sm:mt-0 ml-0 sm:ml-3 flex-shrink-0">
+                  <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
                     {isCopied ? (
-                      <span className="inline-flex items-center gap-1 text-xs sm:text-sm font-medium text-emerald-400">
-                        <Check className="h-4 w-4 sm:h-5 sm:w-5" /> Copied!
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400">
+                        <Check className="h-4 w-4" /> Copied!
                       </span>
                     ) : (
-                      <Copy className={cn('h-4 w-4 sm:h-5 sm:w-5 opacity-0 transition-opacity group-hover:opacity-100', mutedText)} />
+                      <Copy className={cn('h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100', mutedText)} />
                     )}
                   </div>
                 </button>
@@ -632,13 +887,29 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
         )}
       </div>
 
+      {/* Footer */}
       <ModalFooter theme={theme} align="between">
-        <span className={cn('text-xs sm:text-sm', mutedText)}>
-          {filteredTemplates.length} template{filteredTemplates.length !== 1 ? 's' : ''} available · Press Esc to close
-        </span>
-        <Button theme={theme} variant="secondary" onClick={onClose}>
-          Close
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className={mutedText}>
+            {filteredTemplates.length} template{filteredTemplates.length !== 1 ? 's' : ''}
+          </span>
+          <span className={cn('w-px h-4', isDark ? 'bg-slate-700' : 'bg-gray-200')} />
+          <span className={mutedText}>
+            {brandToUse && `Brand: ${brandToUse}`}
+            {selectedCategory && ` · ${selectedCategory}`}
+          </span>
+          <span className={cn('text-[10px]', mutedText)}>
+            · Esc to close
+          </span>
+        </div>
+        <div className="flex gap-2">
+          <Button theme={theme} variant="secondary" size="sm" onClick={handleReset}>
+            Reset
+          </Button>
+          <Button theme={theme} variant="secondary" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </div>
       </ModalFooter>
     </Modal>
   );

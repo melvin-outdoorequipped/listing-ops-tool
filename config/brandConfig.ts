@@ -248,16 +248,21 @@ export const brandConfigs = [
       name: "Shopkeep title"
     }
   },
-  {
-    brandName: "Royal Robbin",
+    {
+    brandName: "Royal Robbins",
     spreadsheetId: "1V6s3el807YNJbtJ6zG1VaKxtFYqsgyoRjWhyFU991gw",
     sheetName: "RoyalRobbinsSp26Store",
     columns: {
-      upc: "UPC",
-      sku: "SKU",
-      style_number: "Item number",
-      color_code: "Colour",
-      size: "Size"
+      upc: "UPC",              // ✓ Matches header
+      sku: "SKU",              // ✓ Matches header
+      style_number: "Item number", // ✓ Matches header
+      description: "",          // No description column in this sheet
+      name: "",                 // No Shopkeep Name column
+      color: "Colour",         // ✓ Matches header (note: British spelling)
+      color_code: "",          // No color code column
+      size: "Size",            // ✓ Matches header
+      gender: "",              // No gender column
+      // Additional columns in sheet: PO #, Smart, Unit price, MSRP, Discount, Disc. pct.
     }
   }
 ];
