@@ -311,26 +311,42 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         { toolName: 'asin_checker', asinCheckId: savedCheck?.id }
       );
 
-      // 👇 Notify ALL users if critical conflicts found (3+)
-      if (conflictCount >= 3) {
-        await notifyAllUsers(
-          `🚨 Critical: ${conflictCount} ASIN Conflicts Detected!`,
-          `${currentUserName || currentUserEmail} found ${conflictCount} styles with multiple parent ASINs. Please review immediately.`,
-          'error',
-          { 
-            url: '/tools/asin', 
-            conflictCount, 
-            detectedBy: currentUserEmail || currentUserName,
-            severity: 'critical'
-          },
-          {
-            id: currentUserId || '',
-            name: currentUserName || currentUserEmail?.split('@')[0] || 'System',
-            email: currentUserEmail || '',
-          },
-          { toolName: 'asin_checker' },
-          currentUserId || undefined
-        );
+      // 👇👀 IMPORTANT: Notify ALL users about this run (always)
+      try {
+        const { data: allUsers } = await supabase
+          .from('profiles')
+          .select('id, email, name');
+        
+        if (allUsers && allUsers.length > 1) {
+          console.log(`🔔 Notifying ${allUsers.length - 1} other users about ASIN check...`);
+          
+          await notifyAllUsers(
+            conflictCount > 0 
+              ? `⚠️ ${conflictCount} ASIN Conflict${conflictCount > 1 ? 's' : ''} Found`
+              : '✅ ASIN Check Complete',
+            conflictCount > 0 
+              ? `${currentUserName || currentUserEmail} found ${conflictCount} style${conflictCount === 1 ? '' : 's'} with multiple parent ASINs${conflictCount >= 3 ? ' - Please review!' : ''}`
+              : `${currentUserName || currentUserEmail} completed an ASIN check with no conflicts found.`,
+            conflictCount >= 3 ? 'error' : (conflictCount > 0 ? 'warning' : 'info'),
+            { 
+              url: '/tools/asin', 
+              conflictCount, 
+              detectedBy: currentUserEmail || currentUserName,
+              userName: currentUserName
+            },
+            {
+              id: currentUserId || '',
+              name: currentUserName || currentUserEmail?.split('@')[0] || 'System',
+              email: currentUserEmail || '',
+            },
+            { toolName: 'asin_checker', asinCheckId: savedCheck?.id },
+            currentUserId || undefined
+          );
+        } else {
+          console.log('ℹ️ No other users found to notify');
+        }
+      } catch (notifError) {
+        console.error('Failed to send notifications to other users:', notifError);
       }
 
       await logToolRun({
@@ -396,23 +412,33 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         );
 
         // 👇 Notify ALL users about the error
-        await notifyAllUsers(
-          '❌ ASIN Check Failed',
-          `${currentUserName || currentUserEmail} encountered an error: ${message}`,
-          'error',
-          { 
-            url: '/tools/asin', 
-            error: message,
-            user: currentUserEmail || currentUserName
-          },
-          {
-            id: currentUserId || '',
-            name: currentUserName || currentUserEmail?.split('@')[0] || 'System',
-            email: currentUserEmail || '',
-          },
-          { toolName: 'asin_checker' },
-          currentUserId || undefined
-        );
+        try {
+          const { data: allUsers } = await supabase
+            .from('profiles')
+            .select('id');
+          
+          if (allUsers && allUsers.length > 1) {
+            await notifyAllUsers(
+              '❌ ASIN Check Failed',
+              `${currentUserName || currentUserEmail} encountered an error: ${message}`,
+              'error',
+              { 
+                url: '/tools/asin', 
+                error: message,
+                user: currentUserEmail || currentUserName
+              },
+              {
+                id: currentUserId || '',
+                name: currentUserName || currentUserEmail?.split('@')[0] || 'System',
+                email: currentUserEmail || '',
+              },
+              { toolName: 'asin_checker' },
+              currentUserId || undefined
+            );
+          }
+        } catch (notifError) {
+          console.error('Failed to send error notification:', notifError);
+        }
       } catch (err) {
         console.error('Failed to save failed run:', err);
       }

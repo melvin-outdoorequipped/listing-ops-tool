@@ -1,4 +1,4 @@
-// contexts/NotificationContext.tsx
+// contexts/NotificationContext.tsx (Fixed - No infinite loop)
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
@@ -35,6 +35,7 @@ interface NotificationContextType {
   permission: NotificationPermission;
   requestPermission: () => Promise<boolean>;
   isSupported: boolean;
+  refreshNotifications: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -57,11 +58,38 @@ export function NotificationProvider({
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [isSupported, setIsSupported] = useState(false);
   
-  // Use refs to prevent infinite loops
+  // ✅ Use refs instead of state to prevent infinite loops
   const subscriptionRef = useRef<any>(null);
   const isMountedRef = useRef(true);
+  const isSubscribedRef = useRef(false);
 
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Refresh notifications
+  const refreshNotifications = useCallback(async () => {
+    if (!userId) {
+      console.warn('⚠️ Cannot refresh: No userId');
+      return;
+    }
+    
+    try {
+      console.log('🔄 Refreshing notifications for user:', userId);
+      setLoading(true);
+      
+      const unread = await fetchUnreadNotifications(userId);
+      
+      if (isMountedRef.current) {
+        setNotifications(unread);
+        console.log(`✅ Refreshed ${unread.length} notifications`);
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('❌ Error refreshing notifications:', error);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [userId]);
 
   // Load initial notifications
   useEffect(() => {
@@ -69,10 +97,18 @@ export function NotificationProvider({
 
     const loadNotifications = async () => {
       setLoading(true);
-      const unread = await fetchUnreadNotifications(userId);
-      if (isMountedRef.current) {
-        setNotifications(unread);
-        setLoading(false);
+      try {
+        const unread = await fetchUnreadNotifications(userId);
+        if (isMountedRef.current) {
+          setNotifications(unread);
+          console.log(`📬 Loaded ${unread.length} unread notifications`);
+        }
+      } catch (error) {
+        console.error('Error loading notifications:', error);
+      } finally {
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
       }
     };
 
@@ -84,41 +120,55 @@ export function NotificationProvider({
       setPermission(getNotificationPermission());
     }
 
-    // Cleanup
     return () => {
       isMountedRef.current = false;
     };
-  }, [userId]); // Only run when userId changes
+  }, [userId]);
 
-  // Subscribe to real-time notifications
+  // Auto-refresh notifications every 30 seconds
   useEffect(() => {
     if (!userId) return;
 
-    console.log('🔄 Subscribing to notifications for user:', userId);
+    const interval = setInterval(() => {
+      refreshNotifications();
+    }, 30000);
 
-    // Unsubscribe from previous subscription if exists
+    return () => clearInterval(interval);
+  }, [userId, refreshNotifications]);
+
+  // ✅ FIXED: Subscribe to real-time notifications - ONLY runs when userId changes
+  useEffect(() => {
+    // Don't subscribe if no userId or already subscribed
+    if (!userId || isSubscribedRef.current) {
+      return;
+    }
+
+    console.log('🔄 Setting up real-time subscription for user:', userId);
+
+    // Clean up existing subscription
     if (subscriptionRef.current) {
       subscriptionRef.current.unsubscribe();
       subscriptionRef.current = null;
     }
 
+    // ✅ Use the subscribeToNotifications function from the service
     const subscription = subscribeToNotifications(
       userId,
       (notification) => {
-        console.log('📨 New notification received:', notification);
+        console.log('📨 Real-time notification received!', notification);
         
+        // Add notification to state
         setNotifications(prev => {
-          // Check if notification already exists (prevent duplicates)
           if (prev.some(n => n.id === notification.id)) {
             return prev;
           }
           return [notification, ...prev];
         });
 
-        // Show desktop notification if enabled
+        // Show desktop notification
         if (isSupported && permission === 'granted') {
           showDesktopNotification(
-            notification.title, 
+            notification.title,
             {
               body: notification.message,
               icon: '/favicon.ico',
@@ -132,24 +182,26 @@ export function NotificationProvider({
           );
         }
 
-        // Play sound
         playNotificationSound();
       },
       (error) => {
-        console.error('❌ Notification subscription error:', error);
+        console.error('❌ Subscription error:', error);
+        isSubscribedRef.current = false;
       }
     );
 
     subscriptionRef.current = subscription;
+    isSubscribedRef.current = true;
 
     return () => {
-      console.log('🔌 Unsubscribing from notifications');
+      console.log('🔌 Cleaning up subscription');
       if (subscriptionRef.current) {
         subscriptionRef.current.unsubscribe();
         subscriptionRef.current = null;
+        isSubscribedRef.current = false;
       }
     };
-  }, [userId, isSupported, permission]); // Removed isSubscribed to prevent infinite loop
+  }, [userId]); // ✅ Only depends on userId - NOT on isSubscribed
 
   const markAsRead = useCallback(async (id: string) => {
     await markNotificationAsRead(id);
@@ -207,7 +259,6 @@ export function NotificationProvider({
     );
 
     if (notification) {
-      // Add to local state
       setNotifications(prev => {
         if (prev.some(n => n.id === notification.id)) {
           return prev;
@@ -215,7 +266,6 @@ export function NotificationProvider({
         return [notification, ...prev];
       });
 
-      // Show desktop notification
       if (isSupported && permission === 'granted') {
         showDesktopNotification(title, {
           body: message,
@@ -254,6 +304,7 @@ export function NotificationProvider({
         permission,
         requestPermission,
         isSupported,
+        refreshNotifications,
       }}
     >
       {children}

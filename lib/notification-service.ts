@@ -163,7 +163,7 @@ export const createNotification = async (
   }
 };
 
-// Subscribe to real-time notifications
+// lib/notification-service.ts - Updated subscribe function
 export const subscribeToNotifications = (
   userId: string,
   onNotification: (notification: Notification) => void,
@@ -171,7 +171,6 @@ export const subscribeToNotifications = (
 ) => {
   console.log('📡 Setting up real-time subscription for user:', userId);
   
-  // Create a unique channel name for this user
   const channelName = `notifications-${userId}`;
   
   const subscription = supabase
@@ -190,23 +189,33 @@ export const subscribeToNotifications = (
         onNotification(notification);
       }
     )
-    .subscribe((status) => {
-      console.log(`📡 Subscription status for ${channelName}:`, status);
+    .subscribe((status, err) => {
+      console.log(`📡 Subscription status for ${channelName}:`, status, err || '');
       if (status === 'SUBSCRIBED') {
         console.log('✅ Successfully subscribed to notifications');
       }
       if (status === 'CHANNEL_ERROR') {
-        console.error('❌ Error subscribing to notifications');
-        if (onError) onError(new Error('Failed to subscribe to notifications'));
+        console.error('❌ Error subscribing to notifications:', err);
+        if (onError) onError(new Error(err?.message || 'Failed to subscribe to notifications'));
+      }
+      if (status === 'TIMED_OUT') {
+        console.warn('⚠️ Subscription timed out, retrying...');
+        if (onError) onError(new Error('Subscription timed out'));
       }
     });
 
   return subscription;
 };
 
-// Fetch unread notifications
 export const fetchUnreadNotifications = async (userId: string): Promise<Notification[]> => {
   try {
+    console.log('🔍 Fetching unread notifications for user:', userId);
+    
+    if (!userId) {
+      console.warn('⚠️ No userId provided to fetchUnreadNotifications');
+      return [];
+    }
+
     const { data, error } = await supabase
       .from('notifications')
       .select('*')
@@ -216,14 +225,51 @@ export const fetchUnreadNotifications = async (userId: string): Promise<Notifica
       .limit(50);
 
     if (error) {
-      console.error('Error fetching notifications:', error);
+      console.error('❌ Error fetching notifications:', error);
       return [];
     }
 
+    console.log(`📬 Found ${data?.length || 0} unread notifications for user ${userId}`);
+    if (data && data.length > 0) {
+      console.log('📬 First notification:', data[0]);
+    }
+    
     return data || [];
   } catch (error) {
-    console.error('Error in fetchUnreadNotifications:', error);
+    console.error('❌ Error in fetchUnreadNotifications:', error);
     return [];
+  }
+};
+
+// Fetch all notifications with pagination
+export const fetchAllNotifications = async (
+  userId: string,
+  limit: number = 50,
+  offset: number = 0
+): Promise<{ data: Notification[]; count: number }> => {
+  try {
+    const [{ data, error }, { count }] = await Promise.all([
+      supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1),
+      supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId),
+    ]);
+
+    if (error) {
+      console.error('Error fetching notifications:', error);
+      return { data: [], count: 0 };
+    }
+
+    return { data: data || [], count: count || 0 };
+  } catch (error) {
+    console.error('Error in fetchAllNotifications:', error);
+    return { data: [], count: 0 };
   }
 };
 
@@ -257,5 +303,88 @@ export const markAllNotificationsAsRead = async (userId: string): Promise<void> 
     }
   } catch (error) {
     console.error('Error in markAllNotificationsAsRead:', error);
+  }
+};
+
+// Delete notification
+export const deleteNotification = async (notificationId: string): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('id', notificationId);
+
+    if (error) {
+      console.error('Error deleting notification:', error);
+    }
+  } catch (error) {
+    console.error('Error in deleteNotification:', error);
+  }
+};
+
+// Get notification preferences
+export const getNotificationPreferences = async (userId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('notification_preferences')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error fetching notification preferences:', error);
+    }
+
+    return data || { 
+      notify_on_success: true,
+      notify_on_warning: true,
+      notify_on_error: true,
+      notify_on_info: true,
+      notify_from_all: true,
+      notify_from_team: true,
+      notify_from_admins: false,
+      desktop_enabled: true,
+      email_enabled: false,
+      sound_enabled: true,
+    };
+  } catch (error) {
+    console.error('Error in getNotificationPreferences:', error);
+    return null;
+  }
+};
+
+// Update notification preferences
+export const updateNotificationPreferences = async (
+  userId: string,
+  preferences: {
+    notify_on_success?: boolean;
+    notify_on_warning?: boolean;
+    notify_on_error?: boolean;
+    notify_on_info?: boolean;
+    notify_from_all?: boolean;
+    notify_from_team?: boolean;
+    notify_from_admins?: boolean;
+    desktop_enabled?: boolean;
+    email_enabled?: boolean;
+    sound_enabled?: boolean;
+  }
+): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('notification_preferences')
+      .upsert({
+        user_id: userId,
+        ...preferences,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error updating notification preferences:', error);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error in updateNotificationPreferences:', error);
+    throw error;
   }
 };

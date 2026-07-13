@@ -26,6 +26,7 @@ import {
   Shield,
   CheckCircle2,
   Loader2,
+  RefreshCw
 } from 'lucide-react';
 
 import SkuProcessor from './components/SkuProcessor';
@@ -185,16 +186,15 @@ export default function HomePage() {
   );
 }
 
-// Main content component with notifications
-function HomePageContent({
-  theme,
-  user,
+function HomePageContent({ 
+  theme, 
+  user, 
   isAdmin,
   setTheme,
-  userName,
-}: {
-  theme: Theme;
-  user: AppUser;
+  userName
+}: { 
+  theme: Theme; 
+  user: User; 
   isAdmin: boolean;
   setTheme: (theme: Theme) => void;
   userName: string;
@@ -211,15 +211,16 @@ function HomePageContent({
   const [isTransitioning, setIsTransitioning] = useState(false);
   const prevMenuRef = useRef<MainMenuId>('Dashboard');
 
-  // Use notification context
-  const {
-    notifications,
-    unreadCount,
-    markAsRead,
+  // Use notification context - ✅ ADD refreshNotifications HERE
+  const { 
+    notifications, 
+    unreadCount, 
+    markAsRead, 
     markAllAsRead,
     permission,
     requestPermission,
     isSupported,
+    refreshNotifications, // 👈 This was missing
   } = useNotifications();
 
   const isDark = theme === 'dark';
@@ -804,41 +805,51 @@ function HomePageContent({
                 </button>
 
                 {notifOpen && (
-                  <div className={`absolute right-0 top-full z-50 mt-2 w-80 max-h-[400px] rounded-2xl border shadow-2xl overflow-hidden ${
-                    isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-white'
-                  }`}>
-                    <div className={`flex items-center justify-between border-b px-4 py-3 ${isDark ? 'border-slate-700/60' : 'border-gray-100'}`}>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                          Notifications
+                <div className={`absolute right-0 top-full z-50 mt-2 w-80 max-h-[400px] rounded-2xl border shadow-2xl overflow-hidden ${
+                  isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-white'
+                }`}>
+                  <div className={`flex items-center justify-between border-b px-4 py-3 ${isDark ? 'border-slate-700/60' : 'border-gray-100'}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        Notifications
+                      </span>
+                      {isSupported && permission === 'denied' && (
+                        <span className="text-xs text-yellow-400" title="Desktop notifications are blocked">
+                          <AlertCircle className="inline h-3 w-3" />
                         </span>
-                        {isSupported && permission === 'denied' && (
-                          <span className="text-xs text-yellow-400" title="Desktop notifications are blocked">
-                            <AlertCircle className="inline h-3 w-3" />
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {isSupported && permission !== 'granted' && permission !== 'denied' && (
-                          <button
-                            type="button"
-                            onClick={requestPermission}
-                            className="text-xs text-emerald-400 hover:underline"
-                          >
-                            Enable desktop
-                          </button>
-                        )}
-                        {unreadCount > 0 && (
-                          <button
-                            type="button"
-                            onClick={markAllAsRead}
-                            className="text-xs text-emerald-400 hover:underline"
-                          >
-                            Mark all read
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
+                    <div className="flex items-center gap-2">
+                      {/* 👇 Refresh button */}
+                      <button
+                        type="button"
+                        onClick={refreshNotifications}
+                        className="text-xs text-emerald-400 hover:underline flex items-center gap-1"
+                        title="Refresh notifications"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        Refresh
+                      </button>
+                      {isSupported && permission !== 'granted' && permission !== 'denied' && (
+                        <button
+                          type="button"
+                          onClick={requestPermission}
+                          className="text-xs text-emerald-400 hover:underline"
+                        >
+                          Enable desktop
+                        </button>
+                      )}
+                      {unreadCount > 0 && (
+                        <button 
+                          type="button" 
+                          onClick={markAllAsRead} 
+                          className="text-xs text-emerald-400 hover:underline"
+                        >
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
+                  </div>
                     <div className="overflow-y-auto max-h-[300px] divide-y divide-slate-800/60">
                       {notifications.length === 0 ? (
                         <div className="px-4 py-8 text-center">

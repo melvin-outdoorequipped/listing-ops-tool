@@ -1,4 +1,4 @@
-// lib/notification-helper.ts
+// lib/notification-helper.ts (Updated - no status filter)
 import { supabase } from '@/lib/supabase/client';
 import { createNotification, Notification } from './notification-service';
 
@@ -13,101 +13,89 @@ export const notifyAllUsers = async (
     email: string;
   },
   toolContext?: any,
-  excludeUserId?: string // Optional: exclude the user who triggered the action
-) => {
-  try {
-    // Get all users from profiles table
-    const { data: users, error } = await supabase
-      .from('profiles')
-      .select('id, email, name')
-      .eq('status', 'active'); // Only active users
-
-    if (error) {
-      console.error('Error fetching users:', error);
-      return [];
-    }
-
-    if (!users || users.length === 0) {
-      console.warn('No users found to notify');
-      return [];
-    }
-
-    const results = [];
-    
-    for (const user of users) {
-      // Skip the user who performed the action (optional)
-      if (excludeUserId && user.id === excludeUserId) continue;
-      
-      // Skip users who don't want this type of notification
-      const { data: prefs } = await supabase
-        .from('notification_preferences')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-      
-      // Check if user has disabled this notification type
-      if (prefs) {
-        if (type === 'success' && prefs.notify_on_success === false) continue;
-        if (type === 'warning' && prefs.notify_on_warning === false) continue;
-        if (type === 'error' && prefs.notify_on_error === false) continue;
-        if (prefs.notify_from_all === false) continue;
-      }
-      
-      const result = await createNotification(
-        user.id,
-        title,
-        message,
-        type,
-        data,
-        agentInfo,
-        toolContext
-      );
-      results.push(result);
-    }
-    
-    console.log(`✅ Notified ${results.length} users`);
-    return results;
-  } catch (error) {
-    console.error('Error notifying all users:', error);
-    return [];
-  }
-};
-
-// Notify users by role
-export const notifyUsersByRole = async (
-  roles: string[],
-  title: string,
-  message: string,
-  type: Notification['type'],
-  data?: any,
-  agentInfo?: {
-    id: string;
-    name: string;
-    email: string;
-  },
-  toolContext?: any,
   excludeUserId?: string
 ) => {
   try {
+    console.log('📬 ===== STARTING notifyAllUsers =====');
+    console.log('📬 Title:', title);
+    console.log('📬 Type:', type);
+    console.log('📬 ExcludeUserId:', excludeUserId);
+    console.log('📬 AgentInfo:', agentInfo);
+    
+    // ✅ Get ALL users from profiles (NO status filter)
     const { data: users, error } = await supabase
       .from('profiles')
-      .select('id, email, name, role')
-      .in('role', roles)
-      .eq('status', 'active');
+      .select('id, email, name');
 
     if (error) {
-      console.error('Error fetching users by role:', error);
+      console.error('❌ Error fetching users:', error);
+      console.log('📬 Trying to get users from auth.users as fallback...');
+      
+      const { data: authUsers, authError } = await supabase
+        .from('auth.users')
+        .select('id, email');
+      
+      if (authError) {
+        console.error('❌ Error fetching auth users:', authError);
+        return [];
+      }
+      
+      if (!authUsers || authUsers.length === 0) {
+        console.warn('⚠️ No users found in auth.users');
+        return [];
+      }
+      
+      console.log(`📬 Found ${authUsers.length} users from auth.users`);
+      
+      const results = [];
+      for (const user of authUsers) {
+        if (excludeUserId && user.id === excludeUserId) {
+          console.log(`⏭️ Skipping ${user.email} (excluded)`);
+          continue;
+        }
+        
+        console.log(`📨 Creating notification for ${user.email}...`);
+        
+        const result = await createNotification(
+          user.id,
+          title,
+          message,
+          type,
+          data,
+          agentInfo,
+          toolContext
+        );
+        
+        if (result) {
+          results.push(result);
+          console.log(`✅ Notification created for ${user.email}`);
+        }
+      }
+      
+      console.log(`✅ Successfully created ${results.length} notifications`);
+      return results;
+    }
+
+    console.log('📬 All users from profiles:', users.map(u => u.email));
+
+    if (!users || users.length === 0) {
+      console.warn('⚠️ No users found in profiles');
       return [];
     }
 
-    if (!users || users.length === 0) {
-      return [];
-    }
+    // ✅ Use ALL users, don't filter by status
+    console.log(`📬 Found ${users.length} total users to notify`);
 
     const results = [];
     
     for (const user of users) {
-      if (excludeUserId && user.id === excludeUserId) continue;
+      // Skip the user who performed the action
+      if (excludeUserId && user.id === excludeUserId) {
+        console.log(`⏭️ Skipping ${user.email} (excluded - they already know)`);
+        continue;
+      }
+      
+      console.log(`📨 Creating notification for ${user.email}...`);
       
       const result = await createNotification(
         user.id,
@@ -118,12 +106,20 @@ export const notifyUsersByRole = async (
         agentInfo,
         toolContext
       );
-      results.push(result);
+      
+      if (result) {
+        results.push(result);
+        console.log(`✅ Notification created for ${user.email}`);
+      } else {
+        console.log(`❌ Failed to create notification for ${user.email}`);
+      }
     }
     
+    console.log(`✅ Successfully created ${results.length} notifications for other users`);
+    console.log('📬 ===== END notifyAllUsers =====');
     return results;
   } catch (error) {
-    console.error('Error notifying users by role:', error);
+    console.error('❌ Error notifying all users:', error);
     return [];
   }
 };

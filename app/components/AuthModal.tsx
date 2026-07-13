@@ -249,7 +249,6 @@ export default function AuthModal({ theme, onSuccess, onSignOut }: AuthModalProp
           </button>
         </div>
 
-        {/* Admin quick login hint */}
         <div className={`mt-6 rounded-lg border p-3 ${
           isDark ? 'border-amber-500/30 bg-amber-500/10' : 'border-amber-200 bg-amber-50'
         }`}>

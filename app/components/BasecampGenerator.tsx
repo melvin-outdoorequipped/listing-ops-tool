@@ -440,27 +440,39 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
         console.error('Notification creation failed:', notifError);
       }
 
-      // 👇 Notify ALL users about final analysis
-      if (analysisType === 'final') {
-        await notifyAllUsers(
-          `📋 New Basecamp Message Generated`,
-          `${userName} generated a Final Analysis Basecamp message for PO #${poNumber || 'N/A'} with ${stats.totalSkus} SKUs`,
-          'info',
-          { 
-            url: '/tools/basecamp', 
-            poNumber: poNumber.trim() || null,
-            generatedBy: userName,
-            type: analysisType,
-            skuCount: stats.totalSkus
-          },
-          {
-            id: userId || '',
-            name: userName,
-            email: userEmail || '',
-          },
-          { toolName: 'basecamp_generator' },
-          userId || undefined
-        );
+      // 👇👀 IMPORTANT: Notify ALL users about this Basecamp generation (always)
+      try {
+        const { data: allUsers } = await supabase
+          .from('profiles')
+          .select('id, email, name');
+        
+        if (allUsers && allUsers.length > 1) {
+          console.log(`🔔 Notifying ${allUsers.length - 1} other users about Basecamp generation...`);
+          
+          await notifyAllUsers(
+            `📝 ${typeConfig.label} Generated`,
+            `${userName || userEmail?.split('@')[0] || 'System'} generated a ${typeConfig.label} Basecamp message for PO${poNumber.trim() ? ` #${poNumber.trim()}` : ''} with ${stats.totalSkus} SKUs`,
+            'info',
+            { 
+              url: '/tools/basecamp', 
+              poNumber: poNumber.trim() || null,
+              generatedBy: userName,
+              type: analysisType,
+              skuCount: stats.totalSkus
+            },
+            {
+              id: userId || '',
+              name: userName || userEmail?.split('@')[0] || 'System',
+              email: userEmail || '',
+            },
+            { toolName: 'basecamp_generator', basecampGenerationId: savedGeneration?.id },
+            userId || undefined
+          );
+        } else {
+          console.log('ℹ️ No other users found to notify');
+        }
+      } catch (notifError) {
+        console.error('Failed to send notifications to other users:', notifError);
       }
       
       try {
@@ -503,24 +515,34 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
       }
 
       // 👇 Notify ALL users about the error
-      await notifyAllUsers(
-        '❌ Basecamp Generation Failed',
-        `${userName} encountered an error while generating Basecamp message: ${msg}`,
-        'error',
-        { 
-          url: '/tools/basecamp', 
-          error: msg,
-          user: userName,
-          type: analysisType
-        },
-        {
-          id: userId || '',
-          name: userName,
-          email: userEmail || '',
-        },
-          { toolName: 'basecamp_generator' },
-        userId || undefined
-      );
+      try {
+        const { data: allUsers } = await supabase
+          .from('profiles')
+          .select('id');
+        
+        if (allUsers && allUsers.length > 1) {
+          await notifyAllUsers(
+            '❌ Basecamp Generation Failed',
+            `${userName || userEmail?.split('@')[0] || 'System'} encountered an error while generating Basecamp message: ${msg}`,
+            'error',
+            { 
+              url: '/tools/basecamp', 
+              error: msg,
+              user: userName,
+              type: analysisType
+            },
+            {
+              id: userId || '',
+              name: userName || userEmail?.split('@')[0] || 'System',
+              email: userEmail || '',
+            },
+            { toolName: 'basecamp_generator' },
+            userId || undefined
+          );
+        }
+      } catch (notifError) {
+        console.error('Failed to send error notification:', notifError);
+      }
       
       await logToolRun({ 
         toolType: 'basecamp', status: 'failed', title: 'Basecamp message generation failed', 
