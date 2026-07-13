@@ -117,7 +117,7 @@ interface Announcement {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 // Updated: Multiple admin emails
-const ADMIN_EMAILS = ['melvin@outdoorequipped.com', 'jonisa@outdoorequipped.com', 'arlie@outdoorequipped.com'];
+const ADMIN_EMAILS = ['melvin@outdoorequipped.com', 'jonisa@outdoorequipped.com', 'arlie@outdoorequipped.com', 'jogie@outdoorequipped.com'];
 
 const ALL_KNOWN_USERS = [
   { email: 'arlie@outdoorequipped.com', name: 'Arlie' },
@@ -131,6 +131,7 @@ const ALL_KNOWN_USERS = [
   { email: 'mpasturan@outdoorequipped.com', name: 'Mark' },
   { email: 'spuebla@outdoorequipped.com', name: 'Shenna' },
   { email: 'wjdelcorro@outdoorequipped.com', name: 'Wyndell' },
+  { email: 'jogie@outdoorequipped.com', name: 'Jogie' },
 ];
 
 const TEAM_MEMBERS = ALL_KNOWN_USERS.map(u => u.email);

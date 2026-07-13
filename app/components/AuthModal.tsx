@@ -11,7 +11,13 @@ interface AuthModalProps {
   onSignOut?: () => void;
 }
 
-const ADMIN_EMAIL = 'melvin@outdoorequipped.com';
+// Updated: Multiple admin emails
+const ADMIN_EMAILS = [
+  'melvin@outdoorequipped.com',
+  'jonisa@outdoorequipped.com',
+  'arlie@outdoorequipped.com',
+  'jogie@outdoorequipped.com'
+];
 
 export default function AuthModal({ theme, onSuccess, onSignOut }: AuthModalProps) {
   const [email, setEmail] = useState('');
@@ -31,14 +37,14 @@ export default function AuthModal({ theme, onSuccess, onSignOut }: AuthModalProp
       if (user?.email) {
         setIsSignedIn(true);
         setUserEmail(user.email);
-        setIsAdmin(user.email === ADMIN_EMAIL);
+        setIsAdmin(ADMIN_EMAILS.includes(user.email));
       }
     };
     checkSession();
   }, []);
 
   useEffect(() => {
-    setIsAdmin(email === ADMIN_EMAIL);
+    setIsAdmin(ADMIN_EMAILS.includes(email));
   }, [email]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -254,7 +260,7 @@ export default function AuthModal({ theme, onSuccess, onSignOut }: AuthModalProp
         }`}>
           <p className={`text-center text-xs ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
             <span className="font-semibold">🔑 Admin Login:</span>{' '}
-            <span className="font-mono">{ADMIN_EMAIL}</span>
+            <span className="font-mono text-[10px]">{ADMIN_EMAILS.join(', ')}</span>
             <br />
             <span className="opacity-60">(Bypasses maintenance mode)</span>
           </p>

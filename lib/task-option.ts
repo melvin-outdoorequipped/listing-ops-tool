@@ -11,6 +11,7 @@ export const ADMIN_EMAILS = [
   'arlie@outdoorequipped.com',
   'jonisa@outdoorequipped.com',
   'melvin@outdoorequipped.com',
+  'jogie@outdoorequipped.com'
 ];
 
 export function isTaskAdminEmail(email: string | null | undefined): boolean {

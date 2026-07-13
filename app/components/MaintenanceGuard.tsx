@@ -20,7 +20,12 @@ interface MaintenanceGuardProps {
   theme?: 'light' | 'dark';
 }
 
-const ADMIN_EMAILS = ['melvin@outdoorequipped.com', 'jonisa@outdoorequipped.com', 'arlie@outdoorequipped.com'];
+const ADMIN_EMAILS = [
+  'melvin@outdoorequipped.com',
+  'jonisa@outdoorequipped.com',
+  'arlie@outdoorequipped.com',
+  'jogie@outdoorequipped.com'
+];
 
 // How long to wait for supabase.auth.getUser() before giving up and
 // showing the login screen anyway. Prevents an infinite spinner if

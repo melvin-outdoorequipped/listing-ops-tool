@@ -71,6 +71,13 @@ const VALID_TASK_STATUSES = [
   'For Correx'
 ];
 
+const ADMIN_EMAILS = [
+  'melvin@outdoorequipped.com',
+  'jonisa@outdoorequipped.com',
+  'arlie@outdoorequipped.com',
+  'jogie@outdoorequipped.com'
+];
+
 // Also add BRAND_OPTIONS since it's referenced in the edit modal
 const BRAND_OPTIONS = [
   'Outdoor Equipped',
@@ -150,7 +157,7 @@ export default function DashboardClient({
   const didInitialLoadRef = useRef(false);
 
   const isDark = theme === 'dark';
-  const isAdmin = currentUserEmail === 'melvin@outdoorequipped.com';
+  const isAdmin = ADMIN_EMAILS.includes(currentUserEmail);
   const isTaskAdmin = isTaskAdminEmail(currentUserEmail);
 
   // Debounce search term
