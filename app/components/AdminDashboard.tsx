@@ -1,7 +1,7 @@
-// components/AdminDashboard.tsx
+// components/AdminDashboard.tsx - Redesigned with 2026 UI/UX Principles
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   Users,
   Activity,
@@ -34,11 +34,8 @@ import {
   History,
   ChevronLeft,
   ChevronRight,
-  Wrench,
   Bell,
   BellOff,
-  ToggleLeft,
-  ToggleRight,
   Save,
   Zap,
   Globe,
@@ -46,24 +43,28 @@ import {
   FileText,
   BarChart2,
   ArrowLeft,
-  ExternalLink,
   AlertCircle,
-  CheckCircle,
   Radio,
   Trash,
   Pin,
   PinOff,
   MoreVertical,
-  Filter,
   ArrowUpDown,
   Download,
-  Printer,
   Copy,
   Share2,
   Star,
   StarOff,
   Clock as ClockIcon,
   Target,
+  FolderKanban,
+  Sparkles,
+  Users2,
+  Gauge,
+  Timer,
+  CheckCircle,
+  ToggleLeft,  // ← ADD THIS
+  ToggleRight, // ← ADD THIS
 } from 'lucide-react';
 import { supabase, supabaseAdmin } from '@/lib/supabase/admin';
 
@@ -163,6 +164,86 @@ const DEFAULT_SETTINGS: SystemSettings = {
 
 type AdminTab = 'overview' | 'settings' | 'announcements' | 'activity';
 
+// ─── Design System ──────────────────────────────────────────────────────────
+
+const DESIGN = {
+  spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, '2xl': 32, '3xl': 48 },
+  radius: { sm: 6, md: 8, lg: 12, xl: 16 },
+  transition: { fast: '150ms', base: '200ms', slow: '300ms' },
+};
+
+// ─── Reusable Components ────────────────────────────────────────────────────
+
+const StatCard = ({ 
+  label, value, icon, color, theme, subtitle 
+}: { 
+  label: string; 
+  value: string | number; 
+  icon: React.ReactNode; 
+  color: string; 
+  theme: 'light' | 'dark';
+  subtitle?: string;
+}) => {
+  const isDark = theme === 'dark';
+  return (
+    <div className={`group rounded-xl border p-4 transition-all duration-200 hover:shadow-lg ${
+      isDark ? 'border-slate-700/40 bg-slate-800/30 hover:bg-slate-800/50' : 'border-gray-200 bg-white hover:bg-gray-50'
+    }`}>
+      <div className="flex items-start justify-between">
+        <div className="min-w-0">
+          <p className={`text-sm font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{label}</p>
+          <p className={`mt-1 text-2xl font-bold tracking-tight ${color}`}>{value}</p>
+          {subtitle && <p className={`mt-0.5 text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>{subtitle}</p>}
+        </div>
+        <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${isDark ? 'bg-slate-700/50' : 'bg-gray-100'} ${color}`}>
+          {icon}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const StatusBadge = ({ status, theme }: { status: string; theme: 'light' | 'dark' }) => {
+  const isDark = theme === 'dark';
+  const config: Record<string, { label: string; bg: string; text: string }> = {
+    completed: { label: 'Completed', bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50', text: isDark ? 'text-emerald-400' : 'text-emerald-700' },
+    success: { label: 'Success', bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50', text: isDark ? 'text-emerald-400' : 'text-emerald-700' },
+    failed: { label: 'Failed', bg: isDark ? 'bg-red-500/10' : 'bg-red-50', text: isDark ? 'text-red-400' : 'text-red-700' },
+    error: { label: 'Error', bg: isDark ? 'bg-red-500/10' : 'bg-red-50', text: isDark ? 'text-red-400' : 'text-red-700' },
+    warning: { label: 'Warning', bg: isDark ? 'bg-amber-500/10' : 'bg-amber-50', text: isDark ? 'text-amber-400' : 'text-amber-700' },
+  };
+  const { label, bg, text } = config[status] || { label: status, bg: isDark ? 'bg-slate-700/50' : 'bg-gray-100', text: isDark ? 'text-slate-300' : 'text-gray-600' };
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${bg} ${text}`}>
+      {label}
+    </span>
+  );
+};
+
+const EmptyState = ({ 
+  icon, title, description, action, theme 
+}: { 
+  icon: React.ReactNode; 
+  title: string; 
+  description: string; 
+  action?: React.ReactNode;
+  theme: 'light' | 'dark';
+}) => {
+  const isDark = theme === 'dark';
+  return (
+    <div className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 text-center ${
+      isDark ? 'border-slate-700/40 bg-slate-800/20' : 'border-gray-200 bg-gray-50'
+    }`}>
+      <div className={`rounded-full p-3 ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
+        {icon}
+      </div>
+      <h4 className={`mt-4 text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{title}</h4>
+      <p className={`mt-1 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{description}</p>
+      {action && <div className="mt-4">{action}</div>}
+    </div>
+  );
+};
+
 // ─── Tab Navigation ──────────────────────────────────────────────────────────
 
 function AdminTabNavigation({
@@ -170,15 +251,11 @@ function AdminTabNavigation({
   setActiveTab,
   announcements,
   isDark,
-  textClass,
-  mutedTextClass,
 }: {
   activeTab: AdminTab;
   setActiveTab: (tab: AdminTab) => void;
   announcements: Announcement[];
   isDark: boolean;
-  textClass: string;
-  mutedTextClass: string;
 }) {
   const tabs: Array<{ id: AdminTab; label: string; icon: React.ReactNode; badge?: number }> = [
     { id: 'overview', label: 'Overview', icon: <BarChart2 className="h-4 w-4" /> },
@@ -187,25 +264,27 @@ function AdminTabNavigation({
   ];
 
   return (
-    <div className={`flex flex-wrap gap-1 rounded-xl border p-1 ${isDark ? 'border-slate-700/50 bg-slate-800/50' : 'border-gray-200 bg-gray-100'}`}>
+    <div className={`flex flex-wrap gap-1 rounded-xl border p-1 ${
+      isDark ? 'border-slate-700/40 bg-slate-800/30' : 'border-gray-200 bg-gray-100'
+    }`}>
       {tabs.map(tab => (
         <button
           key={tab.id}
           onClick={() => setActiveTab(tab.id)}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 min-w-[100px] ${
+          className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 min-w-[100px] ${
             activeTab === tab.id
               ? isDark 
-                ? 'bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 text-white shadow-lg shadow-emerald-500/10' 
-                : 'bg-white text-gray-900 shadow-lg shadow-gray-200/50'
+                ? 'bg-slate-700/60 text-white shadow-lg' 
+                : 'bg-white text-gray-900 shadow-md'
               : isDark 
-                ? 'text-slate-400 hover:text-white hover:bg-slate-700/50' 
-                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                ? 'text-slate-400 hover:text-white hover:bg-slate-800/50' 
+                : 'text-gray-500 hover:text-gray-900 hover:bg-white/50'
           }`}
         >
           {tab.icon}
           <span className="hidden sm:inline">{tab.label}</span>
           {tab.badge !== undefined && tab.badge > 0 && (
-            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
               {tab.badge}
             </span>
           )}
@@ -288,12 +367,12 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
   // Styles
   const textClass = isDark ? 'text-white' : 'text-gray-900';
   const mutedTextClass = isDark ? 'text-slate-400' : 'text-gray-500';
-  const borderClass = isDark ? 'border-slate-700/50' : 'border-gray-200';
-  const panelClass = isDark ? 'bg-slate-900/70 border-slate-700/50' : 'bg-white border-gray-200';
+  const borderClass = isDark ? 'border-slate-700/40' : 'border-gray-200';
+  const panelClass = isDark ? 'bg-slate-800/40 border-slate-700/40' : 'bg-white border-gray-200';
   const inputClass = isDark
-    ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-400'
+    ? 'bg-slate-800/60 border-slate-700 text-white placeholder-slate-400'
     : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400';
-  const hoverRowClass = isDark ? 'hover:bg-slate-800/50' : 'hover:bg-gray-50';
+  const hoverRowClass = isDark ? 'hover:bg-slate-800/40' : 'hover:bg-gray-50';
 
   // ─── Data Fetching ──────────────────────────────────────────────────────────
 
@@ -633,10 +712,6 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     return () => clearTimeout(timeoutId);
   }, [isLoading]);
 
-  useEffect(() => {
-    if (dataLoadedRef.current && isLoading) setIsLoading(false);
-  }, [isLoading]);
-
   const refreshData = useCallback(async () => {
     setIsRefreshing(true);
     dataLoadedRef.current = false;
@@ -666,9 +741,9 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
       const success = await saveSettingsToDB();
       if (success) {
         setSettingsDirty(false);
-        setActionSuccess('✅ Settings saved to database!');
+        setActionSuccess('Settings saved successfully');
       } else {
-        setActionSuccess('⚠️ Settings saved locally.');
+        setActionSuccess('Settings saved locally');
       }
     } catch (err: any) {
       setError('Failed to save settings: ' + err.message);
@@ -711,7 +786,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         setShowAnnounceModal(false);
         setAnnounceForm({ title: '', message: '', type: 'info', targetAll: true, targetEmails: [], pinned: false });
         setTargetEmailInput('');
-        setActionSuccess(`📢 "${newAnn.title}" published!`);
+        setActionSuccess(`"${newAnn.title}" published`);
       }
     } catch (err: any) {
       setError('Failed to publish announcement: ' + err.message);
@@ -743,7 +818,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     const success = await deleteAnnouncementFromDB(id);
     if (success) {
       setAnnouncements(prev => prev.filter(a => a.id !== id));
-      setActionSuccess('🗑️ Announcement deleted.');
+      setActionSuccess('Announcement deleted');
       setTimeout(() => setActionSuccess(null), 3000);
     }
   };
@@ -764,7 +839,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
       if (error) throw error;
       setUserStats(prev => prev.filter(u => u.id !== userId));
       setShowDeleteConfirm(null);
-      setActionSuccess(`🗑️ ${userToDelete.email} deleted.`);
+      setActionSuccess(`${userToDelete.email} deleted`);
       await refreshData();
     } catch (err: any) {
       setError(err.message || 'Failed to delete user');
@@ -789,7 +864,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     try {
       const { error } = await supabaseAdmin.auth.admin.updateUserById(passwordUser.id, { password: newPassword });
       if (error) throw error;
-      setActionSuccess(`🔑 Password updated for ${passwordUser.email}`);
+      setActionSuccess(`Password updated for ${passwordUser.email}`);
       setShowPasswordModal(false);
       setPasswordUser(null);
       setNewPassword('');
@@ -815,7 +890,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         email_confirm: true 
       });
       if (error) throw error;
-      setActionSuccess(`✅ ${newUserEmail} created!`);
+      setActionSuccess(`${newUserEmail} created`);
       setIsAddingUser(false);
       setNewUserEmail('');
       setNewUserPassword('');
@@ -839,7 +914,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         redirectTo: window.location.origin + '/reset-password' 
       });
       if (error) throw error;
-      setActionSuccess(`📧 Reset email sent to ${email}`);
+      setActionSuccess(`Reset email sent to ${email}`);
     } catch (err: any) {
       setError(err.message || 'Failed to send reset email');
     } finally {
@@ -876,48 +951,41 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  const getStatusBadgeColor = (status: string) => {
-    switch (status) {
-      case 'completed': case 'success': return isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700';
-      case 'failed': case 'error': return isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700';
-      case 'warning': return isDark ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-700';
-      default: return isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-100 text-gray-600';
-    }
-  };
-
   const getAnnounceColor = (type: string) => {
     switch (type) {
-      case 'info': return { bg: isDark ? 'bg-blue-500/10 border-blue-500/30' : 'bg-blue-50 border-blue-200', text: 'text-blue-400', icon: <Info className="h-4 w-4" /> };
-      case 'warning': return { bg: isDark ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-yellow-50 border-yellow-200', text: 'text-yellow-400', icon: <AlertTriangle className="h-4 w-4" /> };
-      case 'success': return { bg: isDark ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200', text: 'text-emerald-400', icon: <CheckCircle className="h-4 w-4" /> };
-      case 'error': return { bg: isDark ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200', text: 'text-red-400', icon: <AlertCircle className="h-4 w-4" /> };
+      case 'info': return { bg: isDark ? 'bg-blue-500/8 border-blue-500/20' : 'bg-blue-50 border-blue-200', text: 'text-blue-400', icon: <Info className="h-4 w-4" /> };
+      case 'warning': return { bg: isDark ? 'bg-amber-500/8 border-amber-500/20' : 'bg-amber-50 border-amber-200', text: 'text-amber-400', icon: <AlertTriangle className="h-4 w-4" /> };
+      case 'success': return { bg: isDark ? 'bg-emerald-500/8 border-emerald-500/20' : 'bg-emerald-50 border-emerald-200', text: 'text-emerald-400', icon: <CheckCircle className="h-4 w-4" /> };
+      case 'error': return { bg: isDark ? 'bg-red-500/8 border-red-500/20' : 'bg-red-50 border-red-200', text: 'text-red-400', icon: <AlertCircle className="h-4 w-4" /> };
       default: return { bg: '', text: mutedTextClass, icon: null };
     }
   };
 
-  const filteredUsers = userStats
-    .filter(user => {
-      const matchesSearch = user.email.toLowerCase().includes(searchQuery.toLowerCase());
-      const isAdm = ADMIN_EMAILS.includes(user.email);
-      const isTeam = TEAM_MEMBERS.includes(user.email);
-      let matchesRole = true;
-      if (filterRole === 'admin') matchesRole = isAdm;
-      else if (filterRole === 'team') matchesRole = isTeam;
-      else if (filterRole === 'other') matchesRole = !isTeam && !isAdm;
-      return matchesSearch && matchesRole;
-    })
-    .sort((a, b) => {
-      let aVal: any = a[sortField];
-      let bVal: any = b[sortField];
-      if (sortField === 'lastRun') {
-        aVal = aVal ? new Date(aVal).getTime() : 0;
-        bVal = bVal ? new Date(bVal).getTime() : 0;
-      }
-      if (typeof aVal === 'string') {
-        return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-      }
-      return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
-    });
+  const filteredUsers = useMemo(() => {
+    return userStats
+      .filter(user => {
+        const matchesSearch = user.email.toLowerCase().includes(searchQuery.toLowerCase());
+        const isAdm = ADMIN_EMAILS.includes(user.email);
+        const isTeam = TEAM_MEMBERS.includes(user.email);
+        let matchesRole = true;
+        if (filterRole === 'admin') matchesRole = isAdm;
+        else if (filterRole === 'team') matchesRole = isTeam;
+        else if (filterRole === 'other') matchesRole = !isTeam && !isAdm;
+        return matchesSearch && matchesRole;
+      })
+      .sort((a, b) => {
+        let aVal: any = a[sortField];
+        let bVal: any = b[sortField];
+        if (sortField === 'lastRun') {
+          aVal = aVal ? new Date(aVal).getTime() : 0;
+          bVal = bVal ? new Date(bVal).getTime() : 0;
+        }
+        if (typeof aVal === 'string') {
+          return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        }
+        return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      });
+  }, [userStats, searchQuery, filterRole, sortField, sortOrder]);
 
   const paginatedActivity = userActivityLogs.slice(
     (activityPage - 1) * ACTIVITY_PAGE_SIZE,
@@ -929,13 +997,26 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
 
   if (error?.includes('Access denied')) {
     return (
-      <div className={`rounded-xl border border-red-500/30 bg-red-500/10 p-8 text-center ${panelClass}`}>
-        <Shield className="mx-auto h-16 w-16 text-red-400 opacity-50" />
+      <div className={`rounded-xl border border-red-500/20 bg-red-500/5 p-8 text-center ${panelClass}`}>
+        <Shield className="mx-auto h-16 w-16 text-red-400 opacity-40" />
         <h3 className={`mt-4 text-xl font-bold ${textClass}`}>Access Denied</h3>
-        <p className={`mt-2 ${mutedTextClass}`}>{error}</p>
-        <button onClick={() => window.location.href = '/'} className="mt-4 rounded-lg bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500 transition-colors">
+        <p className={`mt-2 text-sm ${mutedTextClass}`}>{error}</p>
+        <button onClick={() => window.location.href = '/'} className="mt-4 rounded-lg bg-emerald-600 px-6 py-2 text-sm font-medium text-white hover:bg-emerald-500 transition-colors">
           Return to Dashboard
         </button>
+      </div>
+    );
+  }
+
+  // ─── Loading State ──────────────────────────────────────────────────────────
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-emerald-400 mx-auto" />
+          <p className={`mt-3 text-sm ${mutedTextClass}`}>Loading admin data...</p>
+        </div>
       </div>
     );
   }
@@ -943,17 +1024,6 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
   // ─── Render Content ────────────────────────────────────────────────────────
 
   const renderContent = () => {
-    if (isLoading) {
-      return (
-        <div className="flex items-center justify-center py-16">
-          <div className="text-center">
-            <Loader2 className="h-10 w-10 animate-spin text-emerald-500 mx-auto" />
-            <p className={`mt-4 text-sm ${mutedTextClass}`}>Loading admin data...</p>
-          </div>
-        </div>
-      );
-    }
-
     // User Activity History
     if (activeTab === 'activity' && viewingUserActivity) {
       const displayName = viewingUserActivity.displayName || viewingUserActivity.email.split('@')[0];
@@ -961,12 +1031,14 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
       userActivityLogs.forEach(l => { toolBreakdown[l.tool_type] = (toolBreakdown[l.tool_type] || 0) + 1; });
 
       return (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-6 animate-in fade-in duration-200">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <button
                 onClick={closeUserActivity}
-                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  isDark ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                }`}
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back
@@ -1003,14 +1075,18 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
 
           {Object.keys(toolBreakdown).length > 0 && (
             <div className={`rounded-xl border ${panelClass} p-4`}>
-              <h3 className={`mb-3 text-sm font-semibold ${textClass}`}>Tool Usage</h3>
+              <h3 className={`mb-3 text-sm font-medium ${textClass}`}>Tool Usage</h3>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(toolBreakdown)
                   .sort((a, b) => b[1] - a[1])
                   .map(([tool, count]) => (
-                    <div key={tool} className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm ${isDark ? 'border-slate-700 bg-slate-800' : 'border-gray-200 bg-gray-50'}`}>
+                    <div key={tool} className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm ${
+                      isDark ? 'border-slate-700 bg-slate-800/50' : 'border-gray-200 bg-gray-50'
+                    }`}>
                       <span className={textClass}>{tool}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>{count}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                      }`}>{count}</span>
                     </div>
                   ))}
               </div>
@@ -1019,22 +1095,22 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
 
           <div className={`rounded-xl border ${panelClass} overflow-hidden`}>
             <div className={`border-b px-6 py-4 ${borderClass}`}>
-              <h3 className={`font-semibold ${textClass}`}>Run History</h3>
+              <h3 className={`font-medium ${textClass}`}>Run History</h3>
             </div>
             {userActivityLoading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
+                <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
               </div>
             ) : userActivityLogs.length === 0 ? (
               <div className={`py-12 text-center ${mutedTextClass}`}>
                 <Activity className="mx-auto h-10 w-10 opacity-30" />
-                <p className="mt-2">No activity yet</p>
+                <p className="mt-2 text-sm">No activity yet</p>
               </div>
             ) : (
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className={isDark ? 'bg-slate-800/50' : 'bg-gray-50'}>
+                    <thead className={isDark ? 'bg-slate-800/30' : 'bg-gray-50'}>
                       <tr>
                         {['Title', 'Tool', 'Status', 'Items', 'Date'].map(h => (
                           <th key={h} className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedTextClass}`}>{h}</th>
@@ -1047,7 +1123,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                           <td className={`px-4 py-3 font-medium ${textClass}`}>{log.title}</td>
                           <td className={`px-4 py-3 ${mutedTextClass}`}>{log.tool_type}</td>
                           <td className="px-4 py-3">
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getStatusBadgeColor(log.status)}`}>{log.status}</span>
+                            <StatusBadge status={log.status} theme={theme} />
                           </td>
                           <td className={`px-4 py-3 ${mutedTextClass}`}>{log.total_count}</td>
                           <td className={`px-4 py-3 ${mutedTextClass}`}>{formatDate(log.created_at)}</td>
@@ -1065,14 +1141,18 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                       <button
                         onClick={() => setActivityPage(p => Math.max(1, p - 1))}
                         disabled={activityPage === 1}
-                        className={`rounded-lg p-1.5 transition-colors disabled:opacity-40 ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-100 text-gray-500'}`}
+                        className={`rounded-lg p-1.5 transition-colors disabled:opacity-40 ${
+                          isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-100 text-gray-500'
+                        }`}
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => setActivityPage(p => Math.min(totalActivityPages, p + 1))}
                         disabled={activityPage === totalActivityPages}
-                        className={`rounded-lg p-1.5 transition-colors disabled:opacity-40 ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-100 text-gray-500'}`}
+                        className={`rounded-lg p-1.5 transition-colors disabled:opacity-40 ${
+                          isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-100 text-gray-500'
+                        }`}
                       >
                         <ChevronRight className="h-4 w-4" />
                       </button>
@@ -1089,26 +1169,28 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     // Settings Tab
     if (activeTab === 'settings') {
       return (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-6 animate-in fade-in duration-200">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className={`text-xl font-bold ${textClass}`}>System Settings</h2>
-              <p className={`text-sm ${mutedTextClass}`}>Configure site-wide behaviour and access controls</p>
-              {settingsDirty && (
-                <span className={`text-xs ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>● Unsaved changes</span>
-              )}
+              <p className={`text-sm ${mutedTextClass}`}>Configure site-wide behavior and access controls</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {settingsDirty && (
+                <span className={`text-xs ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>• Unsaved changes</span>
+              )}
               <button
                 onClick={resetSettings}
-                className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
+                className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                  isDark ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                }`}
               >
                 Reset
               </button>
               <button
                 onClick={saveSettings}
                 disabled={!settingsDirty || settingsSaving}
-                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors"
               >
                 {settingsSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Save Changes
@@ -1117,7 +1199,9 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
           </div>
 
           {actionSuccess && (
-            <div className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${isDark ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-emerald-300 bg-emerald-50 text-emerald-700'}`}>
+            <div className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${
+              isDark ? 'border-emerald-500/20 bg-emerald-500/8 text-emerald-400' : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            }`}>
               <CheckCircle className="h-4 w-4" /> {actionSuccess}
             </div>
           )}
@@ -1125,10 +1209,10 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
           <div className={`rounded-xl border ${panelClass} overflow-hidden`}>
             <div className={`border-b px-6 py-4 ${borderClass} flex items-center gap-2`}>
               <Globe className={`h-4 w-4 ${mutedTextClass}`} />
-              <h3 className={`font-semibold ${textClass}`}>Site Configuration</h3>
+              <h3 className={`font-medium ${textClass}`}>Site Configuration</h3>
             </div>
-            <div className="p-6 space-y-6">
-              <div className="grid gap-6 sm:grid-cols-2">
+            <div className="p-6 space-y-5">
+              <div className="grid gap-5 sm:grid-cols-2">
                 <div>
                   <label className={`block text-sm font-medium mb-1.5 ${mutedTextClass}`}>Site Name</label>
                   <input
@@ -1148,7 +1232,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                   />
                 </div>
               </div>
-              <div className="grid gap-6 sm:grid-cols-2">
+              <div className="grid gap-5 sm:grid-cols-2">
                 <div>
                   <label className={`block text-sm font-medium mb-1.5 ${mutedTextClass}`}>Max Runs Per User</label>
                   <input
@@ -1183,7 +1267,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
           <div className={`rounded-xl border ${panelClass} overflow-hidden`}>
             <div className={`border-b px-6 py-4 ${borderClass} flex items-center gap-2`}>
               <Lock className={`h-4 w-4 ${mutedTextClass}`} />
-              <h3 className={`font-semibold ${textClass}`}>Access Controls</h3>
+              <h3 className={`font-medium ${textClass}`}>Access Controls</h3>
             </div>
             <div className="p-6 space-y-4">
               {[
@@ -1193,14 +1277,14 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
               ].map(({ key, label, desc, danger }) => (
                 <div key={key} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border p-4 ${
                   danger && settings[key]
-                    ? isDark ? 'border-red-500/40 bg-red-500/10' : 'border-red-200 bg-red-50'
-                    : isDark ? 'border-slate-700/60 bg-slate-800/30' : 'border-gray-100 bg-gray-50'
+                    ? isDark ? 'border-red-500/20 bg-red-500/8' : 'border-red-200 bg-red-50'
+                    : isDark ? 'border-slate-700/40 bg-slate-800/20' : 'border-gray-100 bg-gray-50'
                 }`}>
                   <div>
-                    <p className={`font-medium text-sm ${danger && settings[key] ? 'text-red-400' : textClass}`}>
+                    <p className={`text-sm font-medium ${danger && settings[key] ? 'text-red-400' : textClass}`}>
                       {label}
                       {danger && settings[key] && (
-                        <span className="ml-2 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-400">ACTIVE</span>
+                        <span className="ml-2 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-medium text-red-400">ACTIVE</span>
                       )}
                     </p>
                     <p className={`text-xs mt-0.5 ${mutedTextClass}`}>{desc}</p>
@@ -1210,8 +1294,8 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                     className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                       settings[key]
                         ? danger
-                          ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                          : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+                          ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25'
+                          : 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'
                         : isDark ? 'bg-slate-700 text-slate-400 hover:bg-slate-600' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
                     }`}
                   >
@@ -1229,7 +1313,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     // Announcements Tab
     if (activeTab === 'announcements') {
       return (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-6 animate-in fade-in duration-200">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className={`text-xl font-bold ${textClass}`}>Announcements</h2>
@@ -1237,7 +1321,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             </div>
             <button
               onClick={() => setShowAnnounceModal(true)}
-              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors"
+              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 transition-colors"
             >
               <Megaphone className="h-4 w-4" />
               New Announcement
@@ -1245,17 +1329,20 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
           </div>
 
           {actionSuccess && (
-            <div className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${isDark ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-emerald-300 bg-emerald-50 text-emerald-700'}`}>
+            <div className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${
+              isDark ? 'border-emerald-500/20 bg-emerald-500/8 text-emerald-400' : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            }`}>
               <CheckCircle className="h-4 w-4" /> {actionSuccess}
             </div>
           )}
 
           {announcements.length === 0 ? (
-            <div className={`rounded-xl border ${panelClass} py-16 text-center`}>
-              <Megaphone className={`mx-auto h-12 w-12 opacity-20 ${mutedTextClass}`} />
-              <p className={`mt-3 font-medium ${textClass}`}>No announcements yet</p>
-              <p className={`text-sm ${mutedTextClass}`}>Create one to broadcast to all users.</p>
-            </div>
+            <EmptyState
+              icon={<Megaphone className="h-8 w-8 text-slate-400" />}
+              title="No announcements yet"
+              description="Create one to broadcast to all users."
+              theme={theme}
+            />
           ) : (
             <div className="space-y-3">
               {announcements
@@ -1269,14 +1356,20 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                           <span className={`mt-0.5 flex-shrink-0 ${color.text}`}>{color.icon}</span>
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <p className={`font-semibold text-sm ${textClass}`}>{ann.title}</p>
+                              <p className={`font-medium text-sm ${textClass}`}>{ann.title}</p>
                               {ann.pinned && (
-                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>📌 Pinned</span>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                  isDark ? 'bg-amber-500/15 text-amber-400' : 'bg-amber-100 text-amber-700'
+                                }`}>📌 Pinned</span>
                               )}
                               {!ann.active && (
-                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-200 text-gray-500'}`}>Inactive</span>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                  isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-200 text-gray-500'
+                                }`}>Inactive</span>
                               )}
-                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700/60 text-slate-400' : 'bg-gray-200 text-gray-500'}`}>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                isDark ? 'bg-slate-700/50 text-slate-400' : 'bg-gray-200 text-gray-500'
+                              }`}>
                                 {ann.targetAll ? 'All users' : `${ann.targetEmails.length} users`}
                               </span>
                             </div>
@@ -1288,20 +1381,26 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                           <button
                             onClick={() => togglePin(ann.id)}
                             title={ann.pinned ? 'Unpin' : 'Pin'}
-                            className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-amber-400' : 'hover:bg-gray-200 text-gray-400 hover:text-amber-500'}`}
+                            className={`rounded-lg p-1.5 transition-colors ${
+                              isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-amber-400' : 'hover:bg-gray-200 text-gray-400 hover:text-amber-500'
+                            }`}
                           >
                             {ann.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
                           </button>
                           <button
                             onClick={() => toggleActive(ann.id)}
                             title={ann.active ? 'Deactivate' : 'Activate'}
-                            className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-200 text-gray-400'}`}
+                            className={`rounded-lg p-1.5 transition-colors ${
+                              isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-200 text-gray-400'
+                            }`}
                           >
                             {ann.active ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
                           </button>
                           <button
                             onClick={() => deleteAnnouncement(ann.id)}
-                            className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-red-500/20 text-slate-400 hover:text-red-400' : 'hover:bg-red-100 text-gray-400 hover:text-red-500'}`}
+                            className={`rounded-lg p-1.5 transition-colors ${
+                              isDark ? 'hover:bg-red-500/20 text-slate-400 hover:text-red-400' : 'hover:bg-red-100 text-gray-400 hover:text-red-500'
+                            }`}
                           >
                             <Trash className="h-4 w-4" />
                           </button>
@@ -1315,7 +1414,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
 
           {/* Announcement Modal */}
           {showAnnounceModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
               <div className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border p-6 shadow-2xl ${panelClass}`}>
                 <div className="flex items-center justify-between mb-5">
                   <h3 className={`text-xl font-bold ${textClass}`}>New Announcement</h3>
@@ -1398,14 +1497,16 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                               setTargetEmailInput('');
                             }
                           }}
-                          className="rounded-lg bg-emerald-600/20 px-3 py-2 text-sm text-emerald-400 hover:bg-emerald-600/30 transition-colors"
+                          className="rounded-lg bg-emerald-600/15 px-3 py-2 text-sm text-emerald-400 hover:bg-emerald-600/25 transition-colors"
                         >
                           Add
                         </button>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {announceForm.targetEmails?.map(em => (
-                          <span key={em} className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-100 text-gray-700'}`}>
+                          <span key={em} className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${
+                            isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-100 text-gray-700'
+                          }`}>
                             {em}
                             <button onClick={() => setAnnounceForm(f => ({ ...f, targetEmails: f.targetEmails?.filter(e => e !== em) }))}>
                               <X className="h-3 w-3 opacity-60 hover:opacity-100" />
@@ -1416,7 +1517,9 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                     </div>
                   )}
 
-                  <div className={`flex flex-col sm:flex-row items-center justify-between gap-3 rounded-lg border px-4 py-3 ${isDark ? 'border-slate-700 bg-slate-800/40' : 'border-gray-100 bg-gray-50'}`}>
+                  <div className={`flex flex-col sm:flex-row items-center justify-between gap-3 rounded-lg border px-4 py-3 ${
+                    isDark ? 'border-slate-700 bg-slate-800/20' : 'border-gray-100 bg-gray-50'
+                  }`}>
                     <div>
                       <p className={`text-sm font-medium ${textClass}`}>Pin announcement</p>
                       <p className={`text-xs ${mutedTextClass}`}>Pinned announcements appear first</p>
@@ -1425,7 +1528,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                       onClick={() => setAnnounceForm(f => ({ ...f, pinned: !f.pinned }))}
                       className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                         announceForm.pinned
-                          ? 'bg-amber-500/20 text-amber-400'
+                          ? 'bg-amber-500/15 text-amber-400'
                           : isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-200 text-gray-500'
                       }`}
                     >
@@ -1438,14 +1541,16 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                     <button
                       onClick={sendAnnouncement}
                       disabled={announceSending || !announceForm.title || !announceForm.message}
-                      className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors"
+                      className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 font-medium text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors"
                     >
                       {announceSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                       Publish
                     </button>
                     <button
                       onClick={() => setShowAnnounceModal(false)}
-                      className={`flex-1 rounded-lg border py-2.5 font-semibold transition-colors ${isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                      className={`flex-1 rounded-lg border py-2.5 font-medium transition-colors ${
+                        isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                      }`}
                     >
                       Cancel
                     </button>
@@ -1460,30 +1565,54 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
 
     // ─── Overview Tab ─────────────────────────────────────────────────────────
     return (
-      <div className="space-y-6 animate-fade-in">
-        {/* Stats Cards */}
+      <div className="space-y-6 animate-in fade-in duration-200">
+        {/* Stats Cards - Clean, minimal grid */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-          {[
-            { label: 'Total Users', value: stats.totalUsers, color: 'text-blue-400', bg: 'bg-blue-500/20', icon: <Users className="h-5 w-5 text-blue-400" /> },
-            { label: 'Active (7d)', value: stats.activeUsers, color: 'text-emerald-400', bg: 'bg-emerald-500/20', icon: <Activity className="h-5 w-5 text-emerald-400" /> },
-            { label: 'Total Runs', value: stats.totalRuns, color: 'text-purple-400', bg: 'bg-purple-500/20', icon: <TrendingUp className="h-5 w-5 text-purple-400" /> },
-            { label: 'Success Rate', value: `${stats.successRate}%`, color: 'text-yellow-400', bg: 'bg-yellow-500/20', icon: <Target className="h-5 w-5 text-yellow-400" /> },
-            { label: 'Errors', value: stats.totalErrors, color: 'text-red-400', bg: 'bg-red-500/20', icon: <AlertTriangle className="h-5 w-5 text-red-400" /> },
-            { label: 'Avg Runs/User', value: stats.averageRunsPerUser, color: 'text-cyan-400', bg: 'bg-cyan-500/20', icon: <BarChart2 className="h-5 w-5 text-cyan-400" /> },
-          ].map(card => (
-            <div key={card.label} className={`rounded-xl border p-4 ${panelClass} transition-all hover:scale-[1.02]`}>
-              <div className="flex items-center gap-3">
-                <div className={`rounded-lg p-2 ${card.bg}`}>{card.icon}</div>
-                <div>
-                  <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
-                  <p className={`text-xs ${mutedTextClass}`}>{card.label}</p>
-                </div>
-              </div>
-            </div>
-          ))}
+          <StatCard 
+            label="Total Users" 
+            value={stats.totalUsers} 
+            icon={<Users className="h-5 w-5" />} 
+            color={isDark ? 'text-blue-400' : 'text-blue-600'} 
+            theme={theme}
+          />
+          <StatCard 
+            label="Active (7d)" 
+            value={stats.activeUsers} 
+            icon={<Activity className="h-5 w-5" />} 
+            color={isDark ? 'text-emerald-400' : 'text-emerald-600'} 
+            theme={theme}
+          />
+          <StatCard 
+            label="Total Runs" 
+            value={stats.totalRuns} 
+            icon={<TrendingUp className="h-5 w-5" />} 
+            color={isDark ? 'text-purple-400' : 'text-purple-600'} 
+            theme={theme}
+          />
+          <StatCard 
+            label="Success Rate" 
+            value={`${stats.successRate}%`} 
+            icon={<Target className="h-5 w-5" />} 
+            color={isDark ? 'text-amber-400' : 'text-amber-600'} 
+            theme={theme}
+          />
+          <StatCard 
+            label="Errors" 
+            value={stats.totalErrors} 
+            icon={<AlertTriangle className="h-5 w-5" />} 
+            color={isDark ? 'text-red-400' : 'text-red-600'} 
+            theme={theme}
+          />
+          <StatCard 
+            label="Avg Runs/User" 
+            value={stats.averageRunsPerUser} 
+            icon={<BarChart2 className="h-5 w-5" />} 
+            color={isDark ? 'text-cyan-400' : 'text-cyan-600'} 
+            theme={theme}
+          />
         </div>
 
-        {/* Search & Filter */}
+        {/* Search & Filter - Clean toolbar */}
         <div className={`rounded-xl border ${panelClass} p-4`}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1">
@@ -1507,36 +1636,50 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                 <option value="team">Team Members</option>
                 <option value="other">Other</option>
               </select>
-              <button
-                onClick={() => setSearchQuery('')}
-                className={`rounded-lg border px-3 py-2 text-sm transition-colors ${isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-gray-200 text-gray-500 hover:bg-gray-100'}`}
-              >
-                <X className="h-4 w-4" />
-              </button>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-gray-200 text-gray-500 hover:bg-gray-100'
+                  }`}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Users Table */}
+        {/* Users Table - Clean, scannable */}
         <div className={`rounded-xl border ${panelClass} overflow-hidden`}>
           <div className={`border-b px-6 py-4 ${borderClass} flex flex-col sm:flex-row sm:items-center gap-3`}>
             <div className="flex items-center gap-2">
               <Shield className={`h-5 w-5 ${mutedTextClass}`} />
-              <h3 className={`font-semibold ${textClass}`}>User Statistics</h3>
-              <span className={`rounded-full px-2 py-0.5 text-xs ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-100 text-gray-500'}`}>
+              <h3 className={`font-medium ${textClass}`}>User Statistics</h3>
+              <span className={`rounded-full px-2 py-0.5 text-xs ${
+                isDark ? 'bg-slate-700/50 text-slate-400' : 'bg-gray-100 text-gray-500'
+              }`}>
                 {filteredUsers.length}
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
               {usingFallbackData && (
-                <span className={`rounded-full px-2 py-0.5 text-xs ${isDark ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-700'}`}>
+                <span className={`rounded-full px-2 py-0.5 text-xs ${
+                  isDark ? 'bg-amber-500/15 text-amber-400' : 'bg-amber-100 text-amber-700'
+                }`}>
                   ⚠️ Fallback Mode
                 </span>
               )}
               <button
                 onClick={() => setIsAddingUser(true)}
                 disabled={usingFallbackData}
-                className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${usingFallbackData ? 'opacity-50 cursor-not-allowed bg-slate-700 text-slate-400' : isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
+                className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  usingFallbackData 
+                    ? 'opacity-50 cursor-not-allowed bg-slate-700 text-slate-400' 
+                    : isDark 
+                      ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' 
+                      : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                }`}
               >
                 <UserPlus className="h-4 w-4" /> Add User
               </button>
@@ -1544,24 +1687,26 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
           </div>
 
           {filteredUsers.length === 0 ? (
-            <div className={`py-12 text-center ${mutedTextClass}`}>
-              <Users className="mx-auto h-12 w-12 opacity-30" />
-              <p className="mt-2">No users found</p>
-            </div>
+            <EmptyState
+              icon={<Users className="h-8 w-8 text-slate-400" />}
+              title="No users found"
+              description="Try adjusting your search or filter."
+              theme={theme}
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className={isDark ? 'bg-slate-800/50' : 'bg-gray-50'}>
+                <thead className={isDark ? 'bg-slate-800/20' : 'bg-gray-50'}>
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                      <button onClick={() => handleSort('email')} className="flex items-center gap-1 hover:text-emerald-400 transition-colors">
+                      <button onClick={() => handleSort('email')} className={`flex items-center gap-1 transition-colors ${isDark ? 'hover:text-emerald-400' : 'hover:text-emerald-600'}`}>
                         User <ArrowUpDown className="h-3 w-3" />
                       </button>
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Joined</th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Last Sign In</th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                      <button onClick={() => handleSort('totalRuns')} className="flex items-center gap-1 hover:text-emerald-400 transition-colors">
+                      <button onClick={() => handleSort('totalRuns')} className={`flex items-center gap-1 transition-colors ${isDark ? 'hover:text-emerald-400' : 'hover:text-emerald-600'}`}>
                         Runs <ArrowUpDown className="h-3 w-3" />
                       </button>
                     </th>
@@ -1583,18 +1728,26 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                       <tr key={user.id} className={`transition-colors ${hoverRowClass} ${!hasRuns ? 'opacity-60' : ''}`}>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full ${isAdm ? 'bg-amber-500/20 text-amber-400' : isTeam ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-400'}`}>
+                            <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full ${
+                              isAdm ? 'bg-amber-500/15 text-amber-400' : isTeam ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-500/15 text-slate-400'
+                            }`}>
                               {isAdm ? <Crown className="h-4 w-4" /> : <User className="h-4 w-4" />}
                             </div>
                             <div className="min-w-0">
                               <p className={`font-medium text-sm ${textClass}`}>{displayName}
-                                {!isFromAuth && <span className={`ml-1 text-[9px] ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>(local)</span>}
+                                {!isFromAuth && <span className={`ml-1 text-[9px] ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>(local)</span>}
                               </p>
                               <p className={`text-xs truncate max-w-[160px] ${mutedTextClass}`}>{user.email}</p>
                               <div className="flex gap-1 mt-0.5 flex-wrap">
-                                {isAdm && <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-bold ${isDark ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-100 text-amber-700'}`}>ADMIN</span>}
-                                {isTeam && !isAdm && <span className={`rounded-full px-1.5 py-0.5 text-[8px] ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>Team</span>}
-                                {!hasRuns && <span className={`rounded-full px-1.5 py-0.5 text-[8px] ${isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-500'}`}>No runs</span>}
+                                {isAdm && <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-medium ${
+                                  isDark ? 'bg-amber-500/20 text-amber-300' : 'bg-amber-100 text-amber-700'
+                                }`}>ADMIN</span>}
+                                {isTeam && !isAdm && <span className={`rounded-full px-1.5 py-0.5 text-[8px] ${
+                                  isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                                }`}>Team</span>}
+                                {!hasRuns && <span className={`rounded-full px-1.5 py-0.5 text-[8px] ${
+                                  isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-500'
+                                }`}>No runs</span>}
                               </div>
                             </div>
                           </div>
@@ -1605,8 +1758,10 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                         <td className="px-4 py-3">
                           {hasRuns ? (
                             <div className="flex items-center gap-2">
-                              <div className="w-14 h-1.5 rounded-full bg-slate-700 overflow-hidden">
-                                <div className={`h-full rounded-full ${successRate >= 80 ? 'bg-emerald-500' : successRate >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${successRate}%` }} />
+                              <div className="w-14 h-1 rounded-full bg-slate-700 overflow-hidden">
+                                <div className={`h-full rounded-full ${
+                                  successRate >= 80 ? 'bg-emerald-500' : successRate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                                }`} style={{ width: `${successRate}%` }} />
                               </div>
                               <span className={`text-sm ${textClass}`}>{successRate}%</span>
                             </div>
@@ -1619,7 +1774,9 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                               <button
                                 onClick={() => openUserActivity(user)}
                                 title="View activity"
-                                className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-blue-500/20 text-slate-400 hover:text-blue-400' : 'hover:bg-blue-100 text-gray-400 hover:text-blue-600'}`}
+                                className={`rounded-lg p-1.5 transition-colors ${
+                                  isDark ? 'hover:bg-blue-500/15 text-slate-400 hover:text-blue-400' : 'hover:bg-blue-100 text-gray-400 hover:text-blue-600'
+                                }`}
                               >
                                 <History className="h-4 w-4" />
                               </button>
@@ -1628,7 +1785,9 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                               <button 
                                 onClick={() => { setEditingUser(user); setEditFormData({ email: user.email, role: user.role }); setShowUserModal(true); }} 
                                 title="Edit" 
-                                className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-gray-200 text-gray-400 hover:text-gray-700'}`}
+                                className={`rounded-lg p-1.5 transition-colors ${
+                                  isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-gray-200 text-gray-400 hover:text-gray-700'
+                                }`}
                               >
                                 <Edit2 className="h-4 w-4" />
                               </button>
@@ -1639,7 +1798,9 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                               <button 
                                 onClick={() => { setPasswordUser(user); setNewPassword(''); setShowPassword(false); setShowPasswordModal(true); }} 
                                 title="Change password" 
-                                className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-blue-500/20 text-slate-400 hover:text-blue-400' : 'hover:bg-blue-100 text-gray-400 hover:text-blue-600'}`}
+                                className={`rounded-lg p-1.5 transition-colors ${
+                                  isDark ? 'hover:bg-blue-500/15 text-slate-400 hover:text-blue-400' : 'hover:bg-blue-100 text-gray-400 hover:text-blue-600'
+                                }`}
                               >
                                 <Key className="h-4 w-4" />
                               </button>
@@ -1648,7 +1809,9 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                               <button 
                                 onClick={() => handleSendResetEmail(user.email)} 
                                 title="Send reset email" 
-                                className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-amber-500/20 text-slate-400 hover:text-amber-400' : 'hover:bg-amber-100 text-gray-400 hover:text-amber-600'}`}
+                                className={`rounded-lg p-1.5 transition-colors ${
+                                  isDark ? 'hover:bg-amber-500/15 text-slate-400 hover:text-amber-400' : 'hover:bg-amber-100 text-gray-400 hover:text-amber-600'
+                                }`}
                               >
                                 <Send className="h-4 w-4" />
                               </button>
@@ -1656,15 +1819,19 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                             {(isSuperAdmin || !isAdm) && isFromAuth && (
                               showDeleteConfirm === user.id ? (
                                 <>
-                                  <button onClick={() => handleDeleteUser(user.id)} className="rounded-lg bg-red-500/20 p-1.5 text-red-400 hover:bg-red-500/30">
+                                  <button onClick={() => handleDeleteUser(user.id)} className="rounded-lg bg-red-500/15 p-1.5 text-red-400 hover:bg-red-500/25">
                                     <Check className="h-4 w-4" />
                                   </button>
-                                  <button onClick={() => setShowDeleteConfirm(null)} className={`rounded-lg p-1.5 ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-200 text-gray-400'}`}>
+                                  <button onClick={() => setShowDeleteConfirm(null)} className={`rounded-lg p-1.5 ${
+                                    isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-200 text-gray-400'
+                                  }`}>
                                     <X className="h-4 w-4" />
                                   </button>
                                 </>
                               ) : (
-                                <button onClick={() => setShowDeleteConfirm(user.id)} title="Delete" className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-red-500/20 text-slate-400 hover:text-red-400' : 'hover:bg-red-100 text-gray-400 hover:text-red-600'}`}>
+                                <button onClick={() => setShowDeleteConfirm(user.id)} title="Delete" className={`rounded-lg p-1.5 transition-colors ${
+                                  isDark ? 'hover:bg-red-500/15 text-slate-400 hover:text-red-400' : 'hover:bg-red-100 text-gray-400 hover:text-red-600'
+                                }`}>
                                   <Trash2 className="h-4 w-4" />
                                 </button>
                               )
@@ -1680,19 +1847,25 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
           )}
         </div>
 
-        {/* Recent Activity */}
+        {/* Recent Activity - Clean timeline */}
         <div className={`rounded-xl border ${panelClass}`}>
           <div className={`border-b px-6 py-4 ${borderClass} flex items-center gap-2`}>
             <Activity className={`h-5 w-5 ${mutedTextClass}`} />
-            <h3 className={`font-semibold ${textClass}`}>Recent Activity</h3>
-            <span className={`rounded-full px-2 py-0.5 text-xs ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-100 text-gray-500'}`}>Last 10</span>
+            <h3 className={`font-medium ${textClass}`}>Recent Activity</h3>
+            <span className={`rounded-full px-2 py-0.5 text-xs ${
+              isDark ? 'bg-slate-700/50 text-slate-400' : 'bg-gray-100 text-gray-500'
+            }`}>Last 10</span>
           </div>
-          <div className={`divide-y ${isDark ? 'divide-slate-700/50' : 'divide-gray-100'}`}>
+          <div className={`divide-y ${isDark ? 'divide-slate-700/30' : 'divide-gray-100'}`}>
             {activities.length === 0 ? (
-              <div className={`py-8 text-center ${mutedTextClass}`}><p>No recent activity</p></div>
+              <div className={`py-8 text-center ${mutedTextClass}`}>
+                <p className="text-sm">No recent activity</p>
+              </div>
             ) : activities.map(a => (
               <div key={a.id} className={`flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 px-4 sm:px-6 py-3 ${hoverRowClass}`}>
-                <div className={`flex-shrink-0 w-2 h-2 rounded-full ${a.status === 'completed' ? 'bg-emerald-400' : a.status === 'failed' ? 'bg-red-400' : 'bg-blue-400'}`} />
+                <div className={`flex-shrink-0 w-2 h-2 rounded-full ${
+                  a.status === 'completed' ? 'bg-emerald-400' : a.status === 'failed' ? 'bg-red-400' : 'bg-blue-400'
+                }`} />
                 <div className="flex-1 min-w-0">
                   <p className={`text-sm ${textClass}`}>
                     <span className="font-medium">{a.user_email}</span>
@@ -1701,7 +1874,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                   <p className={`text-xs ${mutedTextClass}`}>{a.tool_type} · {a.total_count} items</p>
                 </div>
                 <span className={`text-xs ${mutedTextClass} flex-shrink-0`}>{formatDate(a.created_at)}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium flex-shrink-0 ${getStatusBadgeColor(a.status)}`}>{a.status}</span>
+                <StatusBadge status={a.status} theme={theme} />
               </div>
             ))}
           </div>
@@ -1714,17 +1887,18 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className={`text-2xl font-bold ${textClass}`}>Admin Dashboard</h2>
+          <h2 className={`text-2xl font-bold tracking-tight ${textClass}`}>Admin Dashboard</h2>
           <p className={`text-sm ${mutedTextClass}`}>
-            Logged in as <span className="font-semibold text-amber-400">{currentUser?.email}</span>
+            Logged in as <span className="font-medium text-amber-400">{currentUser?.email}</span>
             {isSuperAdmin && (
-              <span className="ml-2 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-bold text-amber-400">SUPER ADMIN</span>
+              <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-400">SUPER ADMIN</span>
             )}
           </p>
           {usingFallbackData ? (
-            <div className={`mt-1 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-2 text-xs ${isDark ? 'text-yellow-400' : 'text-yellow-700'}`}>
+            <div className={`mt-1.5 rounded-lg border border-amber-500/20 bg-amber-500/5 p-2 text-xs ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
               <Info className="h-3 w-3 inline mr-1" />
               Fallback mode — using localStorage. Some features may not sync.
               <button onClick={refreshData} className="ml-2 inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300">
@@ -1744,7 +1918,9 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
           <button
             onClick={refreshData}
             disabled={isRefreshing}
-            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
+            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+              isDark ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
           >
             {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Refresh
@@ -1752,31 +1928,35 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         </div>
       </div>
 
+      {/* Navigation */}
       <AdminTabNavigation
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         announcements={announcements}
         isDark={isDark}
-        textClass={textClass}
-        mutedTextClass={mutedTextClass}
       />
 
+      {/* Error Display */}
       {error && !error.includes('Access denied') && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-400 flex items-center gap-2">
-          <AlertTriangle className="h-5 w-5 flex-shrink-0" /> {error}
+        <div className={`rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-red-400 flex items-center gap-2`}>
+          <AlertTriangle className="h-5 w-5 flex-shrink-0" /> 
+          <span className="text-sm">{error}</span>
         </div>
       )}
 
+      {/* Content */}
       {renderContent()}
 
       {/* Modals */}
       {/* Add User Modal */}
       {isAddingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${panelClass}`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={`text-xl font-bold ${textClass}`}>Add New User</h3>
-              <button onClick={() => { setIsAddingUser(false); setNewUserEmail(''); setNewUserPassword(''); }} className={`rounded-lg p-1 ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}><X className={`h-5 w-5 ${mutedTextClass}`} /></button>
+              <button onClick={() => { setIsAddingUser(false); setNewUserEmail(''); setNewUserPassword(''); }} className={`rounded-lg p-1 ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
+                <X className={`h-5 w-5 ${mutedTextClass}`} />
+              </button>
             </div>
             <div className="space-y-4">
               <div>
@@ -1788,10 +1968,12 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                 <input type="password" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} placeholder="Min 6 characters" className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass}`} />
               </div>
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <button onClick={handleAddUser} disabled={actionLoading} className="flex-1 rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors">
+                <button onClick={handleAddUser} disabled={actionLoading} className="flex-1 rounded-lg bg-emerald-600 py-2.5 font-medium text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors">
                   {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Create User'}
                 </button>
-                <button onClick={() => { setIsAddingUser(false); setNewUserEmail(''); setNewUserPassword(''); }} className={`flex-1 rounded-lg border py-2.5 font-semibold ${isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>Cancel</button>
+                <button onClick={() => { setIsAddingUser(false); setNewUserEmail(''); setNewUserPassword(''); }} className={`flex-1 rounded-lg border py-2.5 font-medium ${
+                  isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                }`}>Cancel</button>
               </div>
             </div>
           </div>
@@ -1800,21 +1982,28 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
 
       {/* Edit User Modal */}
       {showUserModal && editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${panelClass}`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={`text-xl font-bold ${textClass}`}>Edit User</h3>
-              <button onClick={() => { setShowUserModal(false); setEditingUser(null); }} className={`rounded-lg p-1 ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}><X className={`h-5 w-5 ${mutedTextClass}`} /></button>
+              <button onClick={() => { setShowUserModal(false); setEditingUser(null); }} className={`rounded-lg p-1 ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
+                <X className={`h-5 w-5 ${mutedTextClass}`} />
+              </button>
             </div>
             <div className="space-y-4">
-              <div><label className={`block text-sm font-medium mb-1 ${mutedTextClass}`}>Email</label><p className={`text-sm ${textClass}`}>{editingUser.email}</p></div>
+              <div>
+                <label className={`block text-sm font-medium mb-1 ${mutedTextClass}`}>Email</label>
+                <p className={`text-sm ${textClass}`}>{editingUser.email}</p>
+              </div>
               <div>
                 <label className={`block text-sm font-medium mb-1 ${mutedTextClass}`}>Role</label>
                 <select 
                   value={editFormData.role || 'user'} 
                   onChange={e => setEditFormData({ ...editFormData, role: e.target.value as 'admin' | 'user' })} 
                   disabled={ADMIN_EMAILS.includes(editingUser.email) && !isSuperAdmin}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass} ${ADMIN_EMAILS.includes(editingUser.email) && !isSuperAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass} ${
+                    ADMIN_EMAILS.includes(editingUser.email) && !isSuperAdmin ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 >
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
@@ -1826,13 +2015,15 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                     setUserStats(prev => prev.map(u => u.id === editingUser.id ? { ...u, role: editFormData.role as 'admin' | 'user' } : u));
                     setShowUserModal(false);
                     setEditingUser(null);
-                    setActionSuccess('✅ User updated.');
+                    setActionSuccess('User updated');
                   }} 
-                  className="flex-1 rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-500 transition-colors"
+                  className="flex-1 rounded-lg bg-emerald-600 py-2.5 font-medium text-white hover:bg-emerald-500 transition-colors"
                 >
                   Save Changes
                 </button>
-                <button onClick={() => { setShowUserModal(false); setEditingUser(null); }} className={`flex-1 rounded-lg border py-2.5 font-semibold ${isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>Cancel</button>
+                <button onClick={() => { setShowUserModal(false); setEditingUser(null); }} className={`flex-1 rounded-lg border py-2.5 font-medium ${
+                  isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                }`}>Cancel</button>
               </div>
             </div>
           </div>
@@ -1841,14 +2032,19 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
 
       {/* Change Password Modal */}
       {showPasswordModal && passwordUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${panelClass}`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={`text-xl font-bold ${textClass}`}>Change Password</h3>
-              <button onClick={() => { setShowPasswordModal(false); setPasswordUser(null); setNewPassword(''); }} className={`rounded-lg p-1 ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}><X className={`h-5 w-5 ${mutedTextClass}`} /></button>
+              <button onClick={() => { setShowPasswordModal(false); setPasswordUser(null); setNewPassword(''); }} className={`rounded-lg p-1 ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
+                <X className={`h-5 w-5 ${mutedTextClass}`} />
+              </button>
             </div>
             <div className="space-y-4">
-              <div><label className={`block text-sm font-medium mb-1 ${mutedTextClass}`}>User</label><p className={`text-sm ${textClass}`}>{passwordUser.email}</p></div>
+              <div>
+                <label className={`block text-sm font-medium mb-1 ${mutedTextClass}`}>User</label>
+                <p className={`text-sm ${textClass}`}>{passwordUser.email}</p>
+              </div>
               <div>
                 <label className={`block text-sm font-medium mb-1 ${mutedTextClass}`}>New Password</label>
                 <div className="relative">
@@ -1862,7 +2058,9 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                   <button 
                     type="button" 
                     onClick={() => setShowPassword(!showPassword)} 
-                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded ${isDark ? 'text-slate-400 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded ${
+                      isDark ? 'text-slate-400 hover:text-white' : 'text-gray-400 hover:text-gray-600'
+                    }`}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -1872,11 +2070,13 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                 <button 
                   onClick={handleChangePassword} 
                   disabled={actionLoading || newPassword.length < 6} 
-                  className="flex-1 rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors"
+                  className="flex-1 rounded-lg bg-emerald-600 py-2.5 font-medium text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors"
                 >
                   {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Update Password'}
                 </button>
-                <button onClick={() => { setShowPasswordModal(false); setPasswordUser(null); setNewPassword(''); }} className={`flex-1 rounded-lg border py-2.5 font-semibold ${isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>Cancel</button>
+                <button onClick={() => { setShowPasswordModal(false); setPasswordUser(null); setNewPassword(''); }} className={`flex-1 rounded-lg border py-2.5 font-medium ${
+                  isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                }`}>Cancel</button>
               </div>
             </div>
           </div>

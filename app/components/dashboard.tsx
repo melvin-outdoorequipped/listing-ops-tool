@@ -2,51 +2,25 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
-  Activity,
-  AlertTriangle,
   ArrowRight,
   CheckCircle2,
   Clock,
-  Database,
   Flame,
   Loader2,
   MessageSquare,
   RefreshCw,
-  SearchCheck,
   TrendingUp,
-  User,
   Trophy,
   Medal,
   Crown,
   Users,
-  FileSpreadsheet,
-  Building2,
   Wrench,
-  RotateCcw,
   X,
-  Award,
-  Check,
   Sparkles,
-  RefreshCw as RefreshIcon,
-  Plus,
-  Trash2,
   Edit2,
-  Megaphone,
-  Wrench as WrenchIcon,
-  Clock as ClockIcon,
-  Info,
   AlertCircle,
-  CheckCircle,
   Shield,
-  Filter,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  EyeOff,
   Bell,
-  Calendar,
-  Copy,
-  Search,
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -55,9 +29,8 @@ import { isTaskAdminEmail } from '../../lib/task-option';
 import { NotificationBell } from './notification-bell';
 import { Task, TaskFormValues, ToolRun, TeamMember, defaultTeamMembers, getUserImage, operationTools, StatusDot, relativeTime, formatDate, normalizeStatus, useAnimatedCounter, Sparkline } from './dashboard-utils';
 import { TaskNameGeneratorModal, ReasonForPendingModal, MemberRouletteModal, TaskFormModal } from './dashboard-modals';
-import TaskManagement from '../dashboard/TaskManagement';
 
-// Add this constant here - after imports and before the DashboardClient component
+// Valid task statuses (kept for status transition controls / filters used elsewhere)
 const VALID_TASK_STATUSES = [
   'Completed',
   'Cancelled',
@@ -68,17 +41,16 @@ const VALID_TASK_STATUSES = [
   'For Audit',
   'For Investigation',
   'Hold',
-  'For Correx'
+  'For Correx',
 ];
 
 const ADMIN_EMAILS = [
   'melvin@outdoorequipped.com',
   'jonisa@outdoorequipped.com',
   'arlie@outdoorequipped.com',
-  'jogie@outdoorequipped.com'
+  'jogie@outdoorequipped.com',
 ];
 
-// Also add BRAND_OPTIONS since it's referenced in the edit modal
 const BRAND_OPTIONS = [
   'Outdoor Equipped',
   'Gumshoe',
@@ -93,7 +65,7 @@ const BRAND_OPTIONS = [
   'Kodiak',
   'Forge',
   'Apex',
-  'Other'
+  'Other',
 ];
 
 interface DashboardClientProps {
@@ -107,7 +79,7 @@ export default function DashboardClient({
   initialTasks = [],
   theme = 'dark',
   currentUserEmail = '',
-  currentUserName = ''
+  currentUserName = '',
 }: DashboardClientProps) {
   const [runs, setRuns] = useState<ToolRun[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -116,18 +88,15 @@ export default function DashboardClient({
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
   const [isRouletteOpen, setIsRouletteOpen] = useState(false);
   const [settings, setSettings] = useState<any>(null);
+
+  // Task-related state (surfaced through the Task Detail modal and quick actions below)
   const [tasks, setTasks] = useState<Task[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [previousTaskIds, setPreviousTaskIds] = useState<Set<string>>(new Set());
   const [newTaskIds, setNewTaskIds] = useState<Set<string>>(new Set());
   const [showNewTaskNotification, setShowNewTaskNotification] = useState(false);
   const [viewMode, setViewMode] = useState<'mine' | 'all'>('mine');
-  const [tasksLoading, setTasksLoading] = useState(false);
-  const [allTasksLoading, setAllTasksLoading] = useState(false);
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
@@ -135,24 +104,15 @@ export default function DashboardClient({
   const [showEditTaskModal, setShowEditTaskModal] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState(false);
   const [taskFormError, setTaskFormError] = useState<string | null>(null);
-  const [filterDateRange, setFilterDateRange] = useState<'all' | 'today' | 'week' | 'month' | 'overdue' | 'unassigned' | 'custom'>('all');
-  const [customDateStart, setCustomDateStart] = useState('');
-  const [customDateEnd, setCustomDateEnd] = useState('');
-  const [showDateRangePicker, setShowDateRangePicker] = useState(false);
-  const [showOnlyNew, setShowOnlyNew] = useState(false);
   const [isNotificationEnabled, setIsNotificationEnabled] = useState(false);
   const [showTaskGenerator, setShowTaskGenerator] = useState(false);
   const [selectedTaskForGenerator, setSelectedTaskForGenerator] = useState<Task | null>(null);
-  
+
   // Reason for Pending states
   const [showPendingReasonModal, setShowPendingReasonModal] = useState(false);
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
   const [isSubmittingPending, setIsSubmittingPending] = useState(false);
-  
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(25);
-  
+
   const autoPlayRef = useRef<NodeJS.Timeout | null>(null);
   const didInitialLoadRef = useRef(false);
 
@@ -160,28 +120,13 @@ export default function DashboardClient({
   const isAdmin = ADMIN_EMAILS.includes(currentUserEmail);
   const isTaskAdmin = isTaskAdminEmail(currentUserEmail);
 
-  // Debounce search term
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
-      setCurrentPage(1);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
-
-  // Reset to page 1 when filter changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filterStatus, viewMode, filterDateRange, showOnlyNew]);
-
   // Google Sheets configuration
   const SPREADSHEET_ID = '1aBOYH2ShWyW8ASamH23WAFdoi0NR8bIebsQGuAnU67A';
   const SHEET_NAME = 'Copy of Task Masterlist - Operations';
 
   const processTasksFromSheet = useCallback((sheetData: any): Task[] => {
     let headers: string[];
-    let rowData: { row: any[], rowIndex: number }[];
+    let rowData: { row: any[]; rowIndex: number }[];
 
     if (sheetData && typeof sheetData === 'object' && sheetData.headers && sheetData.rows) {
       headers = sheetData.headers;
@@ -189,10 +134,7 @@ export default function DashboardClient({
     } else if (Array.isArray(sheetData) && sheetData.length > 0) {
       headers = sheetData[0] || [];
       const rows = sheetData.slice(1) || [];
-      rowData = rows.map((row, index) => ({
-        row,
-        rowIndex: index + 2
-      }));
+      rowData = rows.map((row, index) => ({ row, rowIndex: index + 2 }));
     } else {
       console.warn('⚠️ Unknown sheet data format:', sheetData);
       return [];
@@ -234,12 +176,11 @@ export default function DashboardClient({
       return [];
     }
 
-    const get = (row: any[], idx: number | undefined) =>
-      idx !== undefined && idx < row.length ? (row[idx] ?? '') : '';
+    const get = (row: any[], idx: number | undefined) => (idx !== undefined && idx < row.length ? row[idx] ?? '' : '');
 
     const taskList: Task[] = [];
 
-    rowData.forEach(({ row, rowIndex }: { row: any[], rowIndex: number }) => {
+    rowData.forEach(({ row, rowIndex }: { row: any[]; rowIndex: number }) => {
       const taskName = get(row, taskCol);
       if (!taskName) return;
 
@@ -256,7 +197,7 @@ export default function DashboardClient({
 
       taskList.push({
         id: `task-${rowIndex}`,
-        rowIndex: rowIndex,
+        rowIndex,
         date_requested: dateRequested,
         tat: get(row, tatCol),
         segment: get(row, segmentCol),
@@ -280,7 +221,6 @@ export default function DashboardClient({
     return taskList;
   }, []);
 
-  // Send desktop notification for new tasks
   const sendDesktopNotification = useCallback(async (taskData: { task: string; agent: string; rowIndex: number }) => {
     try {
       await fetch('/api/push/notify', {
@@ -293,69 +233,53 @@ export default function DashboardClient({
           taskId: `task-${taskData.rowIndex}`,
         }),
       });
-      console.log('✅ Desktop notification sent for new task');
     } catch (error) {
       console.error('❌ Failed to send desktop notification:', error);
     }
   }, []);
 
-  // Detect new tasks
-  const detectNewTasks = useCallback((newTasks: Task[]) => {
-    const newIds = new Set<string>();
-    const currentIds = new Set(newTasks.map(t => t.id));
-    
-    newTasks.forEach(task => {
-      if (!previousTaskIds.has(task.id)) {
-        newIds.add(task.id);
-        // Send desktop notification if enabled
-        if (isNotificationEnabled) {
-          sendDesktopNotification({
-            task: task.task,
-            agent: task.agent,
-            rowIndex: task.rowIndex,
-          });
+  const detectNewTasks = useCallback(
+    (newTasks: Task[]) => {
+      const newIds = new Set<string>();
+      const currentIds = new Set(newTasks.map(t => t.id));
+
+      newTasks.forEach(task => {
+        if (!previousTaskIds.has(task.id)) {
+          newIds.add(task.id);
+          if (isNotificationEnabled) {
+            sendDesktopNotification({ task: task.task, agent: task.agent, rowIndex: task.rowIndex });
+          }
         }
+      });
+
+      if (newIds.size > 0 && previousTaskIds.size > 0) {
+        setNewTaskIds(newIds);
+        setShowNewTaskNotification(true);
+
+        setAllTasks(prev => prev.map(t => ({ ...t, isNew: newIds.has(t.id) })));
+        setTasks(prev => prev.map(t => ({ ...t, isNew: newIds.has(t.id) })));
+
+        setTimeout(() => setShowNewTaskNotification(false), 10000);
       }
-    });
-    
-    if (newIds.size > 0 && previousTaskIds.size > 0) {
-      setNewTaskIds(newIds);
-      setShowNewTaskNotification(true);
-      
-      setAllTasks(prev => prev.map(t => ({
-        ...t,
-        isNew: newIds.has(t.id)
-      })));
-      setTasks(prev => prev.map(t => ({
-        ...t,
-        isNew: newIds.has(t.id)
-      })));
-      
-      setTimeout(() => {
-        setShowNewTaskNotification(false);
-      }, 10000);
-    }
-    
-    setPreviousTaskIds(currentIds);
-  }, [previousTaskIds, isNotificationEnabled, sendDesktopNotification]);
+
+      setPreviousTaskIds(currentIds);
+    },
+    [previousTaskIds, isNotificationEnabled, sendDesktopNotification]
+  );
 
   const loadTasksFromSheet = useCallback(async () => {
     if (!currentUserEmail && !currentUserName) {
       setTasks([]);
-      setTasksLoading(false);
       setUpdateError('Please log in to view your tasks');
       return;
     }
 
-    setTasksLoading(true);
     setUpdateError(null);
 
     try {
-      const response = await fetch("/api/google-sheets", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const response = await fetch('/api/google-sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           spreadsheetId: SPREADSHEET_ID,
           sheetName: SHEET_NAME,
@@ -376,28 +300,25 @@ export default function DashboardClient({
       } else if (data.values && data.values.length > 0) {
         newTasks = processTasksFromSheet(data.values);
       }
-      
+
       setTasks(newTasks);
       detectNewTasks(newTasks);
     } catch (error) {
       console.error('Failed to load tasks:', error);
       setUpdateError(error instanceof Error ? error.message : 'Failed to load tasks');
       setTasks([]);
-    } finally {
-      setTasksLoading(false);
     }
   }, [currentUserEmail, currentUserName, processTasksFromSheet, detectNewTasks]);
 
   const loadAllTasksFromSheet = useCallback(async () => {
     if (!currentUserEmail && !currentUserName) return;
 
-    setAllTasksLoading(true);
     setUpdateError(null);
 
     try {
-      const response = await fetch("/api/google-sheets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/google-sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           spreadsheetId: SPREADSHEET_ID,
           sheetName: SHEET_NAME,
@@ -412,21 +333,14 @@ export default function DashboardClient({
       }
 
       const data = await response.json();
-      let newTasks: Task[] = [];
-      if (data.rows && data.rows.length > 0) {
-        newTasks = processTasksFromSheet(data);
-      } else {
-        newTasks = [];
-      }
-      
+      const newTasks: Task[] = data.rows && data.rows.length > 0 ? processTasksFromSheet(data) : [];
+
       setAllTasks(newTasks);
       detectNewTasks(newTasks);
     } catch (error) {
       console.error('Failed to load all tasks:', error);
       setUpdateError(error instanceof Error ? error.message : 'Failed to load all tasks');
       setAllTasks([]);
-    } finally {
-      setAllTasksLoading(false);
     }
   }, [currentUserEmail, currentUserName, processTasksFromSheet, detectNewTasks]);
 
@@ -437,20 +351,20 @@ export default function DashboardClient({
     if (initialTasks && initialTasks.length > 0) {
       let newTasks: Task[] = [];
       if (typeof initialTasks === 'object' && 'headers' in initialTasks && 'rows' in initialTasks) {
-        newTasks = processTasksFromSheet(initialTasks as { headers: string[], rows: any[] });
+        newTasks = processTasksFromSheet(initialTasks as { headers: string[]; rows: any[] });
       } else {
         newTasks = processTasksFromSheet(initialTasks);
       }
       setTasks(newTasks);
       setAllTasks(newTasks);
       setPreviousTaskIds(new Set(newTasks.map(t => t.id)));
-      setTasksLoading(false);
     } else {
       loadTasksFromSheet();
       if (viewMode === 'all') {
         loadAllTasksFromSheet();
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialTasks, processTasksFromSheet, loadTasksFromSheet, loadAllTasksFromSheet, viewMode]);
 
   useEffect(() => {
@@ -464,27 +378,10 @@ export default function DashboardClient({
     return () => clearInterval(interval);
   }, [loadTasksFromSheet, loadAllTasksFromSheet, viewMode]);
 
-  const toggleViewMode = useCallback(() => {
-    setFilterStatus('all');
-    setFilterDateRange('all');
-    setSearchTerm('');
-    setDebouncedSearchTerm('');
-    setCurrentPage(1);
-    setShowOnlyNew(false);
-    if (viewMode === 'mine') {
-      setViewMode('all');
-      if (allTasks.length === 0) loadAllTasksFromSheet();
-    } else {
-      setViewMode('mine');
-    }
-    setShowNewTaskNotification(false);
-    setNewTaskIds(new Set());
-  }, [viewMode, allTasks.length, loadAllTasksFromSheet]);
-
   const refreshCurrentView = useCallback(() => {
     setShowNewTaskNotification(false);
     setNewTaskIds(new Set());
-    
+
     if (viewMode === 'all') {
       loadAllTasksFromSheet();
     } else {
@@ -492,159 +389,179 @@ export default function DashboardClient({
     }
   }, [viewMode, loadAllTasksFromSheet, loadTasksFromSheet]);
 
-  const clearCustomDateRange = useCallback(() => {
-    setCustomDateStart('');
-    setCustomDateEnd('');
-    setFilterDateRange('all');
-    setCurrentPage(1);
-    setShowDateRangePicker(false);
-  }, []);
+  const updateTaskStatus = useCallback(
+    async (taskId: string, newStatus: string, reason?: string) => {
+      if (updatingTaskId) return;
 
-  const applyCustomDateRange = useCallback(() => {
-    if (customDateStart && customDateEnd) {
-      setFilterDateRange('custom');
-      setCurrentPage(1);
-      setShowDateRangePicker(false);
-    }
-  }, [customDateStart, customDateEnd]);
+      if (newStatus.toLowerCase() === 'pending' && !reason) {
+        setPendingTaskId(taskId);
+        setShowPendingReasonModal(true);
+        return;
+      }
 
-  const updateTaskStatus = useCallback(async (taskId: string, newStatus: string, reason?: string) => {
-  if (updatingTaskId) return;
+      setUpdatingTaskId(taskId);
+      setUpdateError(null);
 
-  // If setting to Pending and no reason provided, show the modal
-  if (newStatus.toLowerCase() === 'pending' && !reason) {
-    setPendingTaskId(taskId);
-    setShowPendingReasonModal(true);
-    return;
-  }
+      const sourceList = viewMode === 'all' ? allTasks : tasks;
+      const task = sourceList.find(t => t.id === taskId);
+      if (!task) {
+        setUpdatingTaskId(null);
+        setUpdateError('Task not found');
+        return;
+      }
 
-  setUpdatingTaskId(taskId);
-  setUpdateError(null);
+      const rowIndex = Number(task.rowIndex);
+      if (isNaN(rowIndex) || rowIndex < 2) {
+        setUpdateError(`Invalid row index: ${task.rowIndex}`);
+        setUpdatingTaskId(null);
+        return;
+      }
 
-  const sourceList = viewMode === 'all' ? allTasks : tasks;
-  const task = sourceList.find(t => t.id === taskId);
-  if (!task) {
-    setUpdatingTaskId(null);
-    setUpdateError('Task not found');
-    return;
-  }
+      const previousTasks = [...tasks];
+      const previousAllTasks = [...allTasks];
+      const isCompletedOrCancelled = newStatus.toLowerCase() === 'completed' || newStatus.toLowerCase() === 'cancelled';
+      const isPending = newStatus.toLowerCase() === 'pending';
 
-  const rowIndex = Number(task.rowIndex);
-  if (isNaN(rowIndex) || rowIndex < 2) {
-    setUpdateError(`Invalid row index: ${task.rowIndex}`);
-    setUpdatingTaskId(null);
-    return;
-  }
+      const applyOptimisticUpdate = (list: Task[]) =>
+        list.map(t =>
+          t.id === taskId
+            ? {
+                ...t,
+                status: newStatus,
+                date_completed: isCompletedOrCancelled ? new Date().toLocaleDateString('en-US') : null,
+                reason_for_pending: isPending ? reason || '' : '',
+                reason_for_cancel: newStatus.toLowerCase() === 'cancelled' ? t.reason_for_cancel : '',
+              }
+            : t
+        );
 
-  const previousTasks = [...tasks];
-  const previousAllTasks = [...allTasks];
-  const isCompletedOrCancelled = newStatus.toLowerCase() === 'completed' || newStatus.toLowerCase() === 'cancelled';
-  const isPending = newStatus.toLowerCase() === 'pending';
+      setTasks(prev => applyOptimisticUpdate(prev));
+      setAllTasks(prev => applyOptimisticUpdate(prev));
 
-  // Optimistic update - immediately show the change in UI
-  const applyOptimisticUpdate = (list: Task[]) =>
-    list.map(t =>
-      t.id === taskId
-        ? {
-            ...t,
-            status: newStatus,
-            date_completed: isCompletedOrCancelled
-              ? new Date().toLocaleDateString('en-US')
-              : null,
-            // If setting to Pending, set the reason. Otherwise, CLEAR it
-            reason_for_pending: isPending ? (reason || '') : '',
-            reason_for_cancel: newStatus.toLowerCase() === 'cancelled' ? t.reason_for_cancel : '',
-          }
-        : t
-    );
+      if (showTaskModal) {
+        setShowTaskModal(false);
+        setSelectedTask(null);
+      }
 
-  setTasks(prev => applyOptimisticUpdate(prev));
-  setAllTasks(prev => applyOptimisticUpdate(prev));
-
-  if (showTaskModal) {
-    setShowTaskModal(false);
-    setSelectedTask(null);
-  }
-
-  try {
-    const payload = {
-      spreadsheetId: SPREADSHEET_ID,
-      sheetName: SHEET_NAME,
-      rowIndex: rowIndex,
-      newStatus: newStatus,
-      taskName: task.task,
-      agentEmail: task.agent || '',
-      // Only send reason if status is Pending
-      reasonForPending: isPending ? (reason || '') : '',
-    };
-
-    console.log('📤 Sending update status request:', payload);
-
-    const response = await fetch('/api/google-sheets/update-status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    const responseText = await response.text();
-    console.log('📥 Response:', responseText);
-
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch {
-      data = { raw: responseText };
-    }
-
-    if (!response.ok) {
-      throw new Error(data.error || data.raw || `HTTP error ${response.status}`);
-    }
-
-    console.log('✅ Status update successful:', data);
-
-    // Refresh the view after a short delay to get the latest data
-    setTimeout(() => {
-      refreshCurrentView();
-    }, 1500);
-
-  } catch (error) {
-    console.error('❌ Failed to update task status:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to update task status';
-    setUpdateError(errorMessage);
-    setTasks(previousTasks);
-    setAllTasks(previousAllTasks);
-  } finally {
-    setUpdatingTaskId(null);
-    setPendingTaskId(null);
-  }
-}, [tasks, allTasks, viewMode, showTaskModal, refreshCurrentView, updatingTaskId, SPREADSHEET_ID, SHEET_NAME]);
-
-  const handlePendingConfirm = useCallback(async (reason: string) => {
-    if (!pendingTaskId) return;
-    setIsSubmittingPending(true);
-    await updateTaskStatus(pendingTaskId, 'Pending', reason);
-    setIsSubmittingPending(false);
-    setShowPendingReasonModal(false);
-    setPendingTaskId(null);
-  }, [pendingTaskId, updateTaskStatus]);
-
-  const saveTaskEdits = useCallback(async (values: TaskFormValues) => {
-    if (!selectedTask) return;
-    setIsSavingTask(true);
-    setTaskFormError(null);
-
-    const finalBrand = values.brand === '__OTHER__' ? values.customBrand.trim() : values.brand;
-
-    try {
-      const response = await fetch('/api/google-sheets/update-task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      try {
+        const payload = {
           spreadsheetId: SPREADSHEET_ID,
           sheetName: SHEET_NAME,
-          requesterEmail: currentUserEmail,
-          rowIndex: selectedTask.rowIndex,
-          updates: {
+          rowIndex,
+          newStatus,
+          taskName: task.task,
+          agentEmail: task.agent || '',
+          reasonForPending: isPending ? reason || '' : '',
+        };
+
+        const response = await fetch('/api/google-sheets/update-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const responseText = await response.text();
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = { raw: responseText };
+        }
+
+        if (!response.ok) {
+          throw new Error(data.error || data.raw || `HTTP error ${response.status}`);
+        }
+
+        setTimeout(() => refreshCurrentView(), 1500);
+      } catch (error) {
+        console.error('❌ Failed to update task status:', error);
+        setUpdateError(error instanceof Error ? error.message : 'Failed to update task status');
+        setTasks(previousTasks);
+        setAllTasks(previousAllTasks);
+      } finally {
+        setUpdatingTaskId(null);
+        setPendingTaskId(null);
+      }
+    },
+    [tasks, allTasks, viewMode, showTaskModal, refreshCurrentView, updatingTaskId, SPREADSHEET_ID, SHEET_NAME]
+  );
+
+  const handlePendingConfirm = useCallback(
+    async (reason: string) => {
+      if (!pendingTaskId) return;
+      setIsSubmittingPending(true);
+      await updateTaskStatus(pendingTaskId, 'Pending', reason);
+      setIsSubmittingPending(false);
+      setShowPendingReasonModal(false);
+      setPendingTaskId(null);
+    },
+    [pendingTaskId, updateTaskStatus]
+  );
+
+  const saveTaskEdits = useCallback(
+    async (values: TaskFormValues) => {
+      if (!selectedTask) return;
+      setIsSavingTask(true);
+      setTaskFormError(null);
+
+      const finalBrand = values.brand === '__OTHER__' ? values.customBrand.trim() : values.brand;
+
+      try {
+        const response = await fetch('/api/google-sheets/update-task', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            spreadsheetId: SPREADSHEET_ID,
+            sheetName: SHEET_NAME,
+            requesterEmail: currentUserEmail,
+            rowIndex: selectedTask.rowIndex,
+            updates: {
+              dateRequested: values.dateRequested,
+              type: values.type,
+              task: values.task,
+              brand: finalBrand,
+              agent: values.agent,
+              dueDate: values.dueDate,
+              status: values.status,
+              remarks: values.remarks,
+              bcLinks: values.bcLinks,
+            },
+          }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || `HTTP error ${response.status}`);
+        }
+
+        setShowEditTaskModal(false);
+        setShowTaskModal(false);
+        setSelectedTask(null);
+        refreshCurrentView();
+      } catch (error) {
+        setTaskFormError(error instanceof Error ? error.message : 'Failed to save changes');
+      } finally {
+        setIsSavingTask(false);
+      }
+    },
+    [selectedTask, currentUserEmail, refreshCurrentView, SPREADSHEET_ID, SHEET_NAME]
+  );
+
+  const addNewTask = useCallback(
+    async (values: TaskFormValues) => {
+      setIsSavingTask(true);
+      setTaskFormError(null);
+
+      const finalBrand = values.brand === '__OTHER__' ? values.customBrand.trim() : values.brand;
+
+      try {
+        const response = await fetch('/api/google-sheets/add-task', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            spreadsheetId: SPREADSHEET_ID,
+            sheetName: SHEET_NAME,
+            requesterEmail: currentUserEmail,
             dateRequested: values.dateRequested,
             type: values.type,
             task: values.task,
@@ -654,74 +571,28 @@ export default function DashboardClient({
             status: values.status,
             remarks: values.remarks,
             bcLinks: values.bcLinks,
-          },
-        }),
-      });
+          }),
+        });
 
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.error || `HTTP error ${response.status}`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || `HTTP error ${response.status}`);
+        }
+
+        setShowAddTaskModal(false);
+        refreshCurrentView();
+        if (viewMode === 'mine') {
+          setViewMode('all');
+          loadAllTasksFromSheet();
+        }
+      } catch (error) {
+        setTaskFormError(error instanceof Error ? error.message : 'Failed to add task');
+      } finally {
+        setIsSavingTask(false);
       }
-
-      setShowEditTaskModal(false);
-      setShowTaskModal(false);
-      setSelectedTask(null);
-      refreshCurrentView();
-    } catch (error) {
-      setTaskFormError(error instanceof Error ? error.message : 'Failed to save changes');
-    } finally {
-      setIsSavingTask(false);
-    }
-  }, [selectedTask, currentUserEmail, refreshCurrentView, SPREADSHEET_ID, SHEET_NAME]);
-
-  const addNewTask = useCallback(async (values: TaskFormValues) => {
-    setIsSavingTask(true);
-    setTaskFormError(null);
-
-    const finalBrand = values.brand === '__OTHER__' ? values.customBrand.trim() : values.brand;
-
-    try {
-      const response = await fetch('/api/google-sheets/add-task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          spreadsheetId: SPREADSHEET_ID,
-          sheetName: SHEET_NAME,
-          requesterEmail: currentUserEmail,
-          dateRequested: values.dateRequested,
-          type: values.type,
-          task: values.task,
-          brand: finalBrand,
-          agent: values.agent,
-          dueDate: values.dueDate,
-          status: values.status,
-          remarks: values.remarks,
-          bcLinks: values.bcLinks,
-        }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.error || `HTTP error ${response.status}`);
-      }
-
-      setShowAddTaskModal(false);
-      refreshCurrentView();
-      if (viewMode === 'mine') {
-        setViewMode('all');
-        loadAllTasksFromSheet();
-      }
-    } catch (error) {
-      setTaskFormError(error instanceof Error ? error.message : 'Failed to add task');
-    } finally {
-      setIsSavingTask(false);
-    }
-  }, [currentUserEmail, refreshCurrentView, viewMode, loadAllTasksFromSheet, SPREADSHEET_ID, SHEET_NAME]);
-
-  const openTaskNameGenerator = (task: Task) => {
-    setSelectedTaskForGenerator(task);
-    setShowTaskGenerator(true);
-  };
+    },
+    [currentUserEmail, refreshCurrentView, viewMode, loadAllTasksFromSheet, SPREADSHEET_ID, SHEET_NAME]
+  );
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -754,18 +625,9 @@ export default function DashboardClient({
 
     const settingsChannel = supabase
       .channel('system_settings_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'system_settings',
-          filter: 'id=eq.1',
-        },
-        (payload) => {
-          setSettings(payload.new);
-        }
-      )
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'system_settings', filter: 'id=eq.1' }, payload => {
+        setSettings(payload.new);
+      })
       .subscribe();
 
     return () => {
@@ -780,198 +642,13 @@ export default function DashboardClient({
     const saved = localStorage.getItem('lot_admin_settings');
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        return parsed.maintenanceMode || false;
+        return JSON.parse(saved).maintenanceMode || false;
       } catch {
         return false;
       }
     }
     return false;
   };
-
-  const activeTaskSource = viewMode === 'all' ? allTasks : tasks;
-
-  const uniqueStatuses = useMemo(() => {
-    const statusSet = new Set<string>(VALID_TASK_STATUSES);
-    activeTaskSource.forEach(task => {
-      if (task.status) {
-        statusSet.add(task.status);
-      }
-    });
-    return Array.from(statusSet).sort();
-  }, [activeTaskSource]);
-
-  const taskCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: activeTaskSource.length };
-    activeTaskSource.forEach(task => {
-      const status = task.status || 'Pending';
-      counts[status] = (counts[status] || 0) + 1;
-    });
-    return counts;
-  }, [activeTaskSource]);
-
-  // Filtered tasks with date filtering and row number sorting
-  const filteredTasks = useMemo(() => {
-    let filtered = activeTaskSource;
-
-    // Show only new tasks filter
-    if (showOnlyNew) {
-      filtered = filtered.filter(task => newTaskIds.has(task.id));
-    }
-
-    // Status filter
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(task => task.status === filterStatus);
-    }
-
-    // Date range filter
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    if (filterDateRange !== 'all') {
-      filtered = filtered.filter(task => {
-        // Check if task is unassigned (no agent)
-        if (filterDateRange === 'unassigned') {
-          return !task.agent || task.agent.trim() === '';
-        }
-        
-        // Parse the due date
-        const dueDateStr = task.due_date;
-        if (!dueDateStr) return false;
-        
-        const dueDate = new Date(dueDateStr);
-        if (isNaN(dueDate.getTime())) return false;
-        
-        const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
-        
-        // Check overdue tasks (due date is in the past)
-        if (filterDateRange === 'overdue') {
-          return dueDateOnly < today && task.status !== 'Completed' && task.status !== 'Cancelled';
-        }
-        
-        // Today
-        if (filterDateRange === 'today') {
-          return dueDateOnly.getTime() === today.getTime();
-        }
-        
-        // This week (next 7 days)
-        if (filterDateRange === 'week') {
-          const weekEnd = new Date(today);
-          weekEnd.setDate(weekEnd.getDate() + 7);
-          return dueDateOnly >= today && dueDateOnly <= weekEnd;
-        }
-        
-        // This month
-        if (filterDateRange === 'month') {
-          const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-          return dueDateOnly >= today && dueDateOnly <= monthEnd;
-        }
-        
-        // Custom date range
-        if (filterDateRange === 'custom') {
-          const startDate = customDateStart ? new Date(customDateStart) : null;
-          const endDate = customDateEnd ? new Date(customDateEnd) : null;
-          
-          if (startDate) {
-            const startOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-            if (dueDateOnly < startOnly) return false;
-          }
-          if (endDate) {
-            const endOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-            if (dueDateOnly > endOnly) return false;
-          }
-          return true;
-        }
-        
-        return true;
-      });
-    }
-
-    // Search term filter - ENHANCED with due date search
-    if (debouncedSearchTerm.trim()) {
-      const term = debouncedSearchTerm.toLowerCase().trim();
-      
-      filtered = filtered.filter(task => {
-        // Check if search term matches any standard field
-        if (task.task.toLowerCase().includes(term)) return true;
-        if (task.brand.toLowerCase().includes(term)) return true;
-        if (task.status.toLowerCase().includes(term)) return true;
-        if (task.type.toLowerCase().includes(term)) return true;
-        if (task.segment.toLowerCase().includes(term)) return true;
-        if (task.bc_links.toLowerCase().includes(term)) return true;
-        if (task.agent.toLowerCase().includes(term)) return true;
-        if (task.auditor.toLowerCase().includes(term)) return true;
-        if (task.remarks.toLowerCase().includes(term)) return true;
-        if (task.reason_for_pending.toLowerCase().includes(term)) return true;
-        if (task.reason_for_cancel.toLowerCase().includes(term)) return true;
-        
-        // Search by due date
-        if (task.due_date) {
-          try {
-            const dueDate = new Date(task.due_date);
-            if (!isNaN(dueDate.getTime())) {
-              // Format the due date in multiple ways for searching
-              const dateFormats = [
-                task.due_date.toLowerCase(),
-                dueDate.toLocaleDateString('en-US').toLowerCase(),
-                dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase(),
-                dueDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toLowerCase(),
-                dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toLowerCase(),
-                dueDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }).toLowerCase(),
-                dueDate.toISOString().split('T')[0],
-                `${dueDate.getMonth() + 1}/${dueDate.getDate()}/${dueDate.getFullYear()}`,
-                `${dueDate.getMonth() + 1}/${dueDate.getDate()}`,
-                `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-${String(dueDate.getDate()).padStart(2, '0')}`,
-              ];
-              
-              for (const format of dateFormats) {
-                if (format.includes(term)) return true;
-              }
-            }
-          } catch (e) {
-            // If date parsing fails, skip
-          }
-        }
-        
-        return false;
-      });
-    }
-
-    // Sort by row number descending (newest first)
-    filtered = [...filtered].sort((a, b) => b.rowIndex - a.rowIndex);
-
-    return filtered;
-  }, [activeTaskSource, filterStatus, debouncedSearchTerm, filterDateRange, customDateStart, customDateEnd, showOnlyNew, newTaskIds]);
-
-  // Paginated tasks
-  const paginatedTasks = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredTasks.slice(startIndex, endIndex);
-  }, [filteredTasks, currentPage, itemsPerPage]);
-
-  const totalPages = Math.ceil(filteredTasks.length / itemsPerPage);
-
-  if (isMaintenanceMode() && !isAdmin) {
-    return (
-      <div className={`flex min-h-[400px] flex-col items-center justify-center rounded-2xl border p-8 sm:p-12 text-center ${isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'}`}>
-        <div className="mb-6 rounded-full bg-amber-500/20 p-4">
-          <WrenchIcon className="h-12 w-12 sm:h-16 sm:w-16 text-amber-400" />
-        </div>
-        <h2 className={`mb-2 text-2xl sm:text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-          Under Maintenance
-        </h2>
-        <p className={`mb-6 max-w-md text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-          We're currently performing scheduled maintenance to improve your experience.
-          The tools will be back online shortly.
-        </p>
-        <div className="flex items-center gap-2 text-sm text-amber-400">
-          <ClockIcon className="h-4 w-4" />
-          <span>Please check back later</span>
-        </div>
-      </div>
-    );
-  }
 
   const fetchDashboardData = useCallback(async () => {
     setIsLoading(true);
@@ -990,7 +667,9 @@ export default function DashboardClient({
     setIsLoading(false);
   }, []);
 
-  useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
   useEffect(() => {
     const interval = setInterval(fetchDashboardData, 60000);
     return () => clearInterval(interval);
@@ -999,10 +678,12 @@ export default function DashboardClient({
   useEffect(() => {
     if (isAutoPlaying) {
       autoPlayRef.current = setInterval(() => {
-        setCurrentSlide((prev) => (prev + 1) % defaultTeamMembers.length);
+        setCurrentSlide(prev => (prev + 1) % defaultTeamMembers.length);
       }, 3000);
     }
-    return () => { if (autoPlayRef.current) clearInterval(autoPlayRef.current); };
+    return () => {
+      if (autoPlayRef.current) clearInterval(autoPlayRef.current);
+    };
   }, [isAutoPlaying]);
 
   const goToSlide = (index: number) => {
@@ -1027,11 +708,12 @@ export default function DashboardClient({
   const sparklineData = useMemo(() => {
     const days = 7;
     const now = Date.now();
-    const getSparkline = (toolType: string) => Array.from({ length: days }, (_, i) => {
-      const dayStart = now - (days - 1 - i) * 86400000;
-      const dayEnd = dayStart + 86400000;
-      return runs.filter(r => r.tool_type === toolType && new Date(r.created_at).getTime() >= dayStart && new Date(r.created_at).getTime() < dayEnd).length;
-    });
+    const getSparkline = (toolType: string) =>
+      Array.from({ length: days }, (_, i) => {
+        const dayStart = now - (days - 1 - i) * 86400000;
+        const dayEnd = dayStart + 86400000;
+        return runs.filter(r => r.tool_type === toolType && new Date(r.created_at).getTime() >= dayStart && new Date(r.created_at).getTime() < dayEnd).length;
+      });
     return { sku: getSparkline('sku'), asin: getSparkline('asin'), basecamp: getSparkline('basecamp'), bulkAnalyzer: getSparkline('bulk-analyzer') };
   }, [runs]);
 
@@ -1055,12 +737,7 @@ export default function DashboardClient({
   const allUsers = useMemo(() => {
     const usersWithStats = defaultTeamMembers.map(member => {
       const stats = userStatsMap.get(member.email) || { totalRuns: 0, completedRuns: 0, lastRun: '' };
-      return {
-        ...member,
-        totalRuns: stats.totalRuns,
-        completedRuns: stats.completedRuns,
-        lastRun: stats.lastRun,
-      };
+      return { ...member, totalRuns: stats.totalRuns, completedRuns: stats.completedRuns, lastRun: stats.lastRun };
     });
     return usersWithStats.sort((a, b) => b.totalRuns - a.totalRuns);
   }, [userStatsMap]);
@@ -1097,100 +774,63 @@ export default function DashboardClient({
   const pageText = isDark ? 'text-white' : 'text-gray-900';
   const mutedText = isDark ? 'text-slate-400' : 'text-gray-500';
 
-  const maxRuns = allUsers.length > 0 ? allUsers[0].totalRuns : 1;
+  const maxRuns = allUsers.length > 0 ? Math.max(allUsers[0].totalRuns, 1) : 1;
 
   const getStatusColor = (status: string) => {
     const statusLower = status.toLowerCase();
-    
+
     const statusMap: Record<string, { bg: string; text: string; dot: string }> = {
-      'completed': { 
-        bg: isDark ? 'bg-emerald-500/20' : 'bg-emerald-100', 
-        text: isDark ? 'text-emerald-400' : 'text-emerald-700', 
-        dot: 'bg-emerald-400' 
-      },
-      'cancelled': { 
-        bg: isDark ? 'bg-red-500/20' : 'bg-red-100', 
-        text: isDark ? 'text-red-400' : 'text-red-700', 
-        dot: 'bg-red-400' 
-      },
-      'ongoing': { 
-        bg: isDark ? 'bg-blue-500/20' : 'bg-blue-100', 
-        text: isDark ? 'text-blue-400' : 'text-blue-700', 
-        dot: 'bg-blue-400' 
-      },
-      'assigned': { 
-        bg: isDark ? 'bg-cyan-500/20' : 'bg-cyan-100', 
-        text: isDark ? 'text-cyan-400' : 'text-cyan-700', 
-        dot: 'bg-cyan-400' 
-      },
-      'pending': { 
-        bg: isDark ? 'bg-yellow-500/20' : 'bg-yellow-100', 
-        text: isDark ? 'text-yellow-400' : 'text-yellow-700', 
-        dot: 'bg-yellow-400' 
-      },
-      'wip': { 
-        bg: isDark ? 'bg-indigo-500/20' : 'bg-indigo-100', 
-        text: isDark ? 'text-indigo-400' : 'text-indigo-700', 
-        dot: 'bg-indigo-400' 
-      },
-      'for audit': { 
-        bg: isDark ? 'bg-purple-500/20' : 'bg-purple-100', 
-        text: isDark ? 'text-purple-400' : 'text-purple-700', 
-        dot: 'bg-purple-400' 
-      },
-      'for investigation': { 
-        bg: isDark ? 'bg-orange-500/20' : 'bg-orange-100', 
-        text: isDark ? 'text-orange-400' : 'text-orange-700', 
-        dot: 'bg-orange-400' 
-      },
-      'hold': { 
-        bg: isDark ? 'bg-amber-500/20' : 'bg-amber-100', 
-        text: isDark ? 'text-amber-400' : 'text-amber-700', 
-        dot: 'bg-amber-400' 
-      },
-      'for correx': { 
-        bg: isDark ? 'bg-pink-500/20' : 'bg-pink-100', 
-        text: isDark ? 'text-pink-400' : 'text-pink-700', 
-        dot: 'bg-pink-400' 
-      }
+      completed: { bg: isDark ? 'bg-emerald-500/20' : 'bg-emerald-100', text: isDark ? 'text-emerald-400' : 'text-emerald-700', dot: 'bg-emerald-400' },
+      cancelled: { bg: isDark ? 'bg-red-500/20' : 'bg-red-100', text: isDark ? 'text-red-400' : 'text-red-700', dot: 'bg-red-400' },
+      ongoing: { bg: isDark ? 'bg-blue-500/20' : 'bg-blue-100', text: isDark ? 'text-blue-400' : 'text-blue-700', dot: 'bg-blue-400' },
+      assigned: { bg: isDark ? 'bg-cyan-500/20' : 'bg-cyan-100', text: isDark ? 'text-cyan-400' : 'text-cyan-700', dot: 'bg-cyan-400' },
+      pending: { bg: isDark ? 'bg-yellow-500/20' : 'bg-yellow-100', text: isDark ? 'text-yellow-400' : 'text-yellow-700', dot: 'bg-yellow-400' },
+      wip: { bg: isDark ? 'bg-indigo-500/20' : 'bg-indigo-100', text: isDark ? 'text-indigo-400' : 'text-indigo-700', dot: 'bg-indigo-400' },
+      'for audit': { bg: isDark ? 'bg-purple-500/20' : 'bg-purple-100', text: isDark ? 'text-purple-400' : 'text-purple-700', dot: 'bg-purple-400' },
+      'for investigation': { bg: isDark ? 'bg-orange-500/20' : 'bg-orange-100', text: isDark ? 'text-orange-400' : 'text-orange-700', dot: 'bg-orange-400' },
+      hold: { bg: isDark ? 'bg-amber-500/20' : 'bg-amber-100', text: isDark ? 'text-amber-400' : 'text-amber-700', dot: 'bg-amber-400' },
+      'for correx': { bg: isDark ? 'bg-pink-500/20' : 'bg-pink-100', text: isDark ? 'text-pink-400' : 'text-pink-700', dot: 'bg-pink-400' },
     };
-    
-    return statusMap[statusLower] || { 
-      bg: isDark ? 'bg-slate-500/20' : 'bg-gray-100', 
-      text: isDark ? 'text-slate-400' : 'text-gray-700', 
-      dot: 'bg-slate-400' 
-    };
+
+    return statusMap[statusLower] || { bg: isDark ? 'bg-slate-500/20' : 'bg-gray-100', text: isDark ? 'text-slate-400' : 'text-gray-700', dot: 'bg-slate-400' };
   };
 
-  const getStatusOptions = (currentStatus: string) => {
-    return VALID_TASK_STATUSES.filter(
-      (s) => s.toLowerCase() !== currentStatus.toLowerCase()
-    );
-  };
-
-  const openTaskModal = (task: Task) => {
-    setSelectedTask(task);
-    setShowTaskModal(true);
-  };
+  const getStatusOptions = (currentStatus: string) => VALID_TASK_STATUSES.filter(s => s.toLowerCase() !== currentStatus.toLowerCase());
 
   const closeTaskModal = () => {
     setShowTaskModal(false);
     setSelectedTask(null);
   };
 
-  const goToPage = (page: number) => {
-    setCurrentPage(Math.max(1, Math.min(totalPages, page)));
-  };
-
   const newTaskCount = newTaskIds.size;
+
+  if (isMaintenanceMode() && !isAdmin) {
+    return (
+      <div className={`flex min-h-[400px] flex-col items-center justify-center rounded-2xl border p-8 text-center sm:p-12 ${isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'}`}>
+        <div className="mb-6 rounded-full bg-amber-500/20 p-4">
+          <Wrench className="h-12 w-12 text-amber-400 sm:h-16 sm:w-16" />
+        </div>
+        <h2 className={`mb-2 text-2xl font-bold sm:text-3xl ${isDark ? 'text-white' : 'text-gray-900'}`}>Under Maintenance</h2>
+        <p className={`mb-6 max-w-md text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+          We're currently performing scheduled maintenance to improve your experience. The tools will be back online shortly.
+        </p>
+        <div className="flex items-center gap-2 text-sm text-amber-400">
+          <Clock className="h-4 w-4" />
+          <span>Please check back later</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
       {/* New Task Notification Banner */}
       {showNewTaskNotification && newTaskCount > 0 && (
-        <div className={`fixed top-4 left-4 right-4 sm:left-auto sm:right-4 z-50 rounded-xl border shadow-2xl p-4 w-auto sm:w-full sm:max-w-sm animate-in slide-in-from-top-4 duration-300 ${
-          isDark ? 'bg-slate-800 border-emerald-500/30' : 'bg-white border-emerald-300'
-        }`}>
+        <div
+          className={`fixed left-4 right-4 top-4 z-50 w-auto animate-in slide-in-from-top-4 rounded-xl border p-4 shadow-2xl duration-300 motion-reduce:animate-none sm:left-auto sm:right-4 sm:w-full sm:max-w-sm ${
+            isDark ? 'border-emerald-500/30 bg-slate-800' : 'border-emerald-300 bg-white'
+          }`}
+        >
           <div className="flex items-start gap-3">
             <div className="rounded-full bg-emerald-500/20 p-2">
               <Bell className="h-5 w-5 text-emerald-400" />
@@ -1199,13 +839,12 @@ export default function DashboardClient({
               <p className={`text-sm font-semibold ${pageText}`}>
                 {newTaskCount} New Task{newTaskCount > 1 ? 's' : ''} Added!
               </p>
-              <p className={`text-xs ${mutedText}`}>
-                Click refresh to see them in your list
-              </p>
+              <p className={`text-xs ${mutedText}`}>Click refresh to see them in your list</p>
             </div>
             <button
               onClick={() => setShowNewTaskNotification(false)}
-              className={`rounded p-1 transition-colors ${isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-100'}`}
+              className={`rounded p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-100'}`}
+              aria-label="Dismiss"
             >
               <X className="h-4 w-4" />
             </button>
@@ -1213,7 +852,7 @@ export default function DashboardClient({
           <div className="mt-2 flex gap-2">
             <button
               onClick={refreshCurrentView}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
                 isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
               }`}
             >
@@ -1224,7 +863,7 @@ export default function DashboardClient({
       )}
 
       <div className="flex h-[calc(100vh-2rem)] min-h-0 w-full max-w-full flex-col overflow-y-auto overflow-x-hidden">
-        <div className="w-full max-w-full space-y-5 sm:space-y-6 pb-6">
+        <div className="w-full max-w-full space-y-5 pb-6 sm:space-y-6">
           <section className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -1233,7 +872,8 @@ export default function DashboardClient({
                 </div>
                 <h1 className={`break-words text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl ${pageText}`}>Dashboard</h1>
                 <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />LIVE
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400 motion-reduce:animate-none" />
+                  LIVE
                 </span>
                 {isAdmin && (
                   <span className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-400">
@@ -1242,7 +882,7 @@ export default function DashboardClient({
                   </span>
                 )}
                 {newTaskCount > 0 && (
-                  <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400 animate-pulse">
+                  <span className="flex animate-pulse items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400 motion-reduce:animate-none">
                     <Bell className="h-3.5 w-3.5" />
                     {newTaskCount} New
                   </span>
@@ -1251,25 +891,36 @@ export default function DashboardClient({
               <p className={`mt-1.5 text-sm ${mutedText}`}>Listing Operations · Real-time overview</p>
             </div>
             <div className="flex items-center gap-2">
-              <NotificationBell 
-                theme={theme} 
+              <NotificationBell
+                theme={theme}
                 userEmail={currentUserEmail}
-                onPermissionChange={(granted) => {
-                  setIsNotificationEnabled(granted);
-                  if (granted) {
-                    console.log('✅ Desktop notifications enabled');
-                  }
-                }}
+                onPermissionChange={granted => setIsNotificationEnabled(granted)}
               />
-              <button onClick={fetchDashboardData} disabled={isLoading} className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all sm:flex-initial ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}`}>
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                <span className="sm:inline">Refresh</span>
+              <button
+                onClick={fetchDashboardData}
+                disabled={isLoading}
+                className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 sm:flex-initial ${
+                  isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <RefreshCw className="h-4 w-4" />}
+                <span>Refresh</span>
               </button>
             </div>
           </section>
 
-          {errorMessage && <div className={`rounded-xl border px-4 py-3 text-sm ${isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'}`}>Dashboard error: {errorMessage}</div>}
-          {updateError && <div className={`rounded-xl border px-4 py-3 text-sm ${isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'}`}>{updateError}</div>}
+          {errorMessage && (
+            <div className={`flex items-start gap-2 rounded-xl border px-4 py-3 text-sm ${isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'}`}>
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <span>Dashboard error: {errorMessage}</span>
+            </div>
+          )}
+          {updateError && (
+            <div className={`flex items-start gap-2 rounded-xl border px-4 py-3 text-sm ${isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'}`}>
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <span>{updateError}</span>
+            </div>
+          )}
 
           <section className="space-y-4">
             <div className="flex items-center gap-3">
@@ -1296,8 +947,8 @@ export default function DashboardClient({
           </section>
 
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-            <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${panelClass}`}>
-              <div className={`border-b px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
+            <section className={`flex flex-col overflow-hidden rounded-2xl border shadow-sm ${panelClass}`}>
+              <div className={`flex-shrink-0 border-b px-5 py-3 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="rounded-lg bg-yellow-500/20 p-1.5">
@@ -1311,11 +962,11 @@ export default function DashboardClient({
                   <span className={`text-xs ${mutedText}`}>{allUsers.length} members</span>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto max-h-[320px] sm:max-h-[400px]">
-                {allUsers.length === 0 ? (
-                  <div className="flex items-center justify-center h-full min-h-[200px]">
-                    <div className={`text-center text-sm ${mutedText}`}>No user data available</div>
-                  </div>
+              <div className="max-h-[320px] flex-1 overflow-y-auto sm:max-h-[400px]">
+                {isLoading ? (
+                  <PanelSkeleton isDark={isDark} rows={5} />
+                ) : allUsers.length === 0 ? (
+                  <EmptyState isDark={isDark} icon={<Users className="h-8 w-8" />} message="No user data available" />
                 ) : (
                   <div className="divide-y divide-slate-700/50">
                     {allUsers.map((user, index) => {
@@ -1324,9 +975,14 @@ export default function DashboardClient({
                       const isTopPerformer = index === 0;
 
                       return (
-                        <div key={user.email} className={`group relative transition-all duration-200 p-3 ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-gray-50'} ${isTopPerformer ? (isDark ? 'bg-gradient-to-r from-yellow-500/5 to-transparent' : 'bg-gradient-to-r from-yellow-100/30 to-transparent') : ''}`}>
+                        <div
+                          key={user.email}
+                          className={`group relative p-3 transition-all duration-200 ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-gray-50'} ${
+                            isTopPerformer ? (isDark ? 'bg-gradient-to-r from-yellow-500/5 to-transparent' : 'bg-gradient-to-r from-yellow-100/30 to-transparent') : ''
+                          }`}
+                        >
                           <div className="flex items-center gap-3">
-                            <div className="flex-shrink-0 w-7">
+                            <div className="w-7 flex-shrink-0">
                               {index === 0 && <Crown className="h-4 w-4 text-yellow-500" />}
                               {index === 1 && <Medal className="h-4 w-4 text-gray-400" />}
                               {index === 2 && <Medal className="h-4 w-4 text-amber-600" />}
@@ -1335,34 +991,38 @@ export default function DashboardClient({
 
                             {userImage ? (
                               <div className="relative">
-                                <div className="w-8 h-8 rounded-full overflow-hidden ring-2 ring-emerald-500/30">
-                                  <Image src={userImage} alt={user.name} width={32} height={32} className="w-full h-full object-cover" />
+                                <div className="h-8 w-8 overflow-hidden rounded-full ring-2 ring-emerald-500/30">
+                                  <Image src={userImage} alt={user.name} width={32} height={32} className="h-full w-full object-cover" />
                                 </div>
                                 {isTopPerformer && (
-                                  <div className="absolute -top-1 -right-1">
-                                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse" />
+                                  <div className="absolute -right-1 -top-1">
+                                    <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-yellow-400 motion-reduce:animate-none" />
                                   </div>
                                 )}
                               </div>
                             ) : (
-                              <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${isTopPerformer ? 'bg-gradient-to-br from-yellow-500 to-yellow-600 text-white' : (isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}`}>
+                              <div
+                                className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
+                                  isTopPerformer ? 'bg-gradient-to-br from-yellow-500 to-yellow-600 text-white' : isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                                }`}
+                              >
                                 {user.name[0]?.toUpperCase()}
                               </div>
                             )}
 
-                            <div className="flex-1 min-w-0">
+                            <div className="min-w-0 flex-1">
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex min-w-0 items-center gap-2">
-                                  <p className={`text-sm font-semibold truncate ${pageText}`}>{user.name}</p>
+                                  <p className={`truncate text-sm font-semibold ${pageText}`}>{user.name}</p>
                                   {user.role === 'Team Manager' && (
-                                    <span className={`hidden sm:inline-flex flex-shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-bold ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+                                    <span className={`hidden flex-shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-bold sm:inline-flex ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
                                       Manager
                                     </span>
                                   )}
                                 </div>
                                 <span className={`flex-shrink-0 text-sm font-bold tabular-nums ${isTopPerformer ? 'text-yellow-400' : 'text-emerald-400'}`}>{user.totalRuns}</span>
                               </div>
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+                              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
                                 <div className="flex items-center gap-1">
                                   <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />
                                   <span className={`text-[9px] ${mutedText}`}>{user.completedRuns} completed</span>
@@ -1377,7 +1037,9 @@ export default function DashboardClient({
                               <div className="mt-1.5">
                                 <div className={`h-1 overflow-hidden rounded-full ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
                                   <div
-                                    className={`h-full rounded-full transition-all duration-700 ${isTopPerformer ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' : 'bg-emerald-500'}`}
+                                    className={`h-full rounded-full transition-all duration-700 motion-reduce:transition-none ${
+                                      isTopPerformer ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' : 'bg-emerald-500'
+                                    }`}
                                     style={{ width: `${percentage}%` }}
                                   />
                                 </div>
@@ -1392,8 +1054,8 @@ export default function DashboardClient({
               </div>
             </section>
 
-            <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${panelClass}`}>
-              <div className={`border-b px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
+            <section className={`flex flex-col overflow-hidden rounded-2xl border shadow-sm ${panelClass}`}>
+              <div className={`flex-shrink-0 border-b px-5 py-3 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="rounded-lg bg-orange-500/20 p-1.5">
@@ -1407,24 +1069,26 @@ export default function DashboardClient({
                   <span className={`text-xs ${mutedText}`}>last {recentRuns.length}</span>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto max-h-[320px] sm:max-h-[400px]">
+              <div className="max-h-[320px] flex-1 overflow-y-auto sm:max-h-[400px]">
                 {isLoading ? (
-                  <div className="flex items-center justify-center h-full min-h-[200px]"><Loader2 className={`h-6 w-6 animate-spin ${mutedText}`} /></div>
+                  <PanelSkeleton isDark={isDark} rows={5} />
                 ) : recentRuns.length === 0 ? (
-                  <div className="flex items-center justify-center h-full min-h-[200px]"><div className={`text-center text-sm ${mutedText}`}>No activity yet</div></div>
+                  <EmptyState isDark={isDark} icon={<Flame className="h-8 w-8" />} message="No activity yet" />
                 ) : (
                   <div className="divide-y divide-slate-700/50">
                     {recentRuns.map(run => (
                       <div key={run.id} className={`group flex items-center gap-3 px-4 py-2.5 transition-colors ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-gray-50'}`}>
                         <StatusDot status={run.status} />
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-medium truncate ${pageText}`}>{run.title}</p>
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                        <div className="min-w-0 flex-1">
+                          <p className={`truncate text-sm font-medium ${pageText}`}>{run.title}</p>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                             <span className={`text-xs ${run.status === 'completed' ? 'text-emerald-400' : run.status === 'warning' ? 'text-yellow-400' : 'text-red-400'}`}>{run.status}</span>
-                            <span className={`text-[10px] ${mutedText}`}>{toolLabel[run.tool_type]} {run.total_count > 0 && `· ${run.total_count.toLocaleString()} items`}</span>
+                            <span className={`text-[10px] ${mutedText}`}>
+                              {toolLabel[run.tool_type]} {run.total_count > 0 && `· ${run.total_count.toLocaleString()} items`}
+                            </span>
                           </div>
                         </div>
-                        <div className={`text-[10px] flex-shrink-0 ${mutedText}`}>{relativeTime(run.created_at)}</div>
+                        <div className={`flex-shrink-0 text-[10px] ${mutedText}`}>{relativeTime(run.created_at)}</div>
                       </div>
                     ))}
                   </div>
@@ -1432,8 +1096,8 @@ export default function DashboardClient({
               </div>
             </section>
 
-            <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col md:col-span-2 xl:col-span-1 ${panelClass}`}>
-              <div className={`border-b px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
+            <section className={`flex flex-col overflow-hidden rounded-2xl border shadow-sm md:col-span-2 xl:col-span-1 ${panelClass}`}>
+              <div className={`flex-shrink-0 border-b px-5 py-3 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <div className="rounded-lg bg-emerald-500/20 p-1.5">
@@ -1446,10 +1110,10 @@ export default function DashboardClient({
                   </div>
                   <button
                     onClick={() => setIsRouletteOpen(true)}
-                    className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all transform hover:scale-105 ${
+                    className={`inline-flex transform items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 ${
                       isDark
-                        ? 'bg-gradient-to-r from-purple-600/20 to-pink-600/20 text-purple-400 hover:from-purple-600/30 hover:to-pink-600/30 border border-purple-500/30'
-                        : 'bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 hover:from-purple-200 hover:to-pink-200 border border-purple-300'
+                        ? 'border-purple-500/30 bg-gradient-to-r from-purple-600/20 to-pink-600/20 text-purple-400 hover:from-purple-600/30 hover:to-pink-600/30'
+                        : 'border-purple-300 bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 hover:from-purple-200 hover:to-pink-200'
                     }`}
                   >
                     <Sparkles className="h-3.5 w-3.5" />
@@ -1458,17 +1122,17 @@ export default function DashboardClient({
                 </div>
               </div>
               <div className="relative overflow-hidden">
-                <div className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${currentSlide * 100}%)` }}>
+                <div className="flex transition-transform duration-500 ease-out motion-reduce:transition-none" style={{ transform: `translateX(-${currentSlide * 100}%)` }}>
                   {defaultTeamMembers.map((member, idx) => (
                     <div key={idx} className="w-full flex-shrink-0 px-6 py-6">
                       <div className="flex flex-col items-center text-center">
-                        <div className="relative group">
-                          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden ring-4 ring-emerald-500/30 group-hover:ring-emerald-500 transition-all duration-300 shadow-xl">
-                            <Image src={member.image} alt={member.name} width={112} height={112} className="w-full h-full object-cover" priority unoptimized />
+                        <div className="group relative">
+                          <div className="h-24 w-24 overflow-hidden rounded-full shadow-xl ring-4 ring-emerald-500/30 transition-all duration-300 group-hover:ring-emerald-500 sm:h-28 sm:w-28">
+                            <Image src={member.image} alt={member.name} width={112} height={112} className="h-full w-full object-cover" priority unoptimized />
                           </div>
                           <div className="absolute -bottom-1 -right-1">
-                            <div className="w-5 h-5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 flex items-center justify-center shadow-md">
-                              <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                            <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-emerald-500 shadow-md dark:border-slate-900">
+                              <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-white motion-reduce:animate-none" />
                             </div>
                           </div>
                         </div>
@@ -1476,7 +1140,7 @@ export default function DashboardClient({
                         <p className={`text-[10px] ${mutedText}`}>{member.role}</p>
                         <div className="mt-2">
                           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400 motion-reduce:animate-none" />
                             Active
                           </span>
                         </div>
@@ -1490,10 +1154,9 @@ export default function DashboardClient({
                   <button
                     key={idx}
                     onClick={() => goToSlide(idx)}
-                    className={`h-1.5 rounded-full transition-all ${
-                      currentSlide === idx
-                        ? 'w-4 bg-emerald-500'
-                        : `w-1.5 ${isDark ? 'bg-slate-600' : 'bg-gray-300'}`
+                    aria-label={`Show team member ${idx + 1}`}
+                    className={`h-1.5 rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                      currentSlide === idx ? 'w-4 bg-emerald-500' : `w-1.5 ${isDark ? 'bg-slate-600' : 'bg-gray-300'}`
                     }`}
                   />
                 ))}
@@ -1505,44 +1168,51 @@ export default function DashboardClient({
 
       {/* ─── TASK DETAIL MODAL ─────────────────────────────────────────────────── */}
       {showTaskModal && selectedTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200">
-          <div className={`relative w-full max-w-2xl rounded-2xl border shadow-2xl ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'} animate-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto`}>
-            {/* Header */}
-            <div className={`sticky top-0 z-10 flex items-center justify-between border-b p-3 sm:p-4 backdrop-blur-md ${isDark ? 'border-slate-700 bg-slate-900/95' : 'border-gray-200 bg-white/95'}`}>
+        <div className="fixed inset-0 z-50 flex animate-in items-center justify-center fade-in bg-black/70 p-3 backdrop-blur-sm duration-200 motion-reduce:animate-none sm:p-4">
+          <div
+            className={`relative max-h-[92vh] w-full max-w-2xl animate-in overflow-y-auto rounded-2xl border shadow-2xl zoom-in-95 duration-200 motion-reduce:animate-none ${
+              isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-white'
+            }`}
+          >
+            <div className={`sticky top-0 z-10 flex items-center justify-between border-b p-3 backdrop-blur-md sm:p-4 ${isDark ? 'border-slate-700 bg-slate-900/95' : 'border-gray-200 bg-white/95'}`}>
               <div className="flex min-w-0 items-center gap-2">
                 <div className="flex-shrink-0 rounded-lg bg-emerald-500/20 p-1.5">
                   <CheckCircle2 className="h-5 w-5 text-emerald-400" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className={`font-semibold truncate ${pageText}`}>Task Details</h3>
+                  <h3 className={`truncate font-semibold ${pageText}`}>Task Details</h3>
                   <p className={`hidden text-xs sm:block ${mutedText}`}>View and manage task information</p>
                 </div>
               </div>
               <div className="flex flex-shrink-0 items-center gap-2">
                 {isTaskAdmin && (
                   <button
-                    onClick={() => { setTaskFormError(null); setShowEditTaskModal(true); }}
-                    className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    onClick={() => {
+                      setTaskFormError(null);
+                      setShowEditTaskModal(true);
+                    }}
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                      isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                   >
                     <Edit2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Edit</span>
                   </button>
                 )}
-                <button onClick={closeTaskModal} className={`rounded-lg p-1 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
+                <button onClick={closeTaskModal} className={`rounded-lg p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`} aria-label="Close">
                   <X className={`h-5 w-5 ${mutedText}`} />
                 </button>
               </div>
             </div>
 
-            {/* Task Content */}
-            <div className="p-4 sm:p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-4 p-4 sm:p-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Row #</label>
                   <p className={`text-base font-semibold ${pageText}`}>{selectedTask.rowIndex}</p>
                 </div>
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Task</label>
-                  <p className={`text-base font-semibold break-words ${pageText}`}>{selectedTask.task}</p>
+                  <p className={`break-words text-base font-semibold ${pageText}`}>{selectedTask.task}</p>
                 </div>
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Brand</label>
@@ -1586,7 +1256,7 @@ export default function DashboardClient({
               {selectedTask.remarks && (
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Remarks</label>
-                  <p className={`text-sm ${pageText} mt-1 break-words`}>{selectedTask.remarks}</p>
+                  <p className={`mt-1 break-words text-sm ${pageText}`}>{selectedTask.remarks}</p>
                 </div>
               )}
 
@@ -1595,8 +1265,8 @@ export default function DashboardClient({
                   <label className={`text-xs font-medium ${mutedText}`}>Reason for Pending</label>
                   <div className={`mt-1 rounded-lg border p-3 ${isDark ? 'border-yellow-500/30 bg-yellow-500/10' : 'border-yellow-300 bg-yellow-50'}`}>
                     <div className="flex items-start gap-2">
-                      <Clock className={`h-4 w-4 mt-0.5 flex-shrink-0 ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`} />
-                      <p className={`text-sm break-words ${pageText}`}>{selectedTask.reason_for_pending}</p>
+                      <Clock className={`mt-0.5 h-4 w-4 flex-shrink-0 ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`} />
+                      <p className={`break-words text-sm ${pageText}`}>{selectedTask.reason_for_pending}</p>
                     </div>
                   </div>
                 </div>
@@ -1605,14 +1275,14 @@ export default function DashboardClient({
               {selectedTask.reason_for_cancel && (
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Reason for Cancel</label>
-                  <p className={`text-sm ${pageText} mt-1 break-words`}>{selectedTask.reason_for_cancel}</p>
+                  <p className={`mt-1 break-words text-sm ${pageText}`}>{selectedTask.reason_for_cancel}</p>
                 </div>
               )}
 
               {selectedTask.date_completed && (
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Date Completed</label>
-                  <p className={`text-sm ${pageText} mt-1`}>{formatDate(selectedTask.date_completed)}</p>
+                  <p className={`mt-1 text-sm ${pageText}`}>{formatDate(selectedTask.date_completed)}</p>
                 </div>
               )}
 
@@ -1629,10 +1299,8 @@ export default function DashboardClient({
                             href={trimmedLink}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className={`inline-flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300 underline-offset-2 hover:underline transition-colors ${
-                              isDark ? 'hover:text-blue-300' : 'hover:text-blue-600'
-                            }`}
-                            onClick={(e) => e.stopPropagation()}
+                            className={`inline-flex items-center gap-1 text-sm text-blue-400 underline-offset-2 transition-colors hover:underline ${isDark ? 'hover:text-blue-300' : 'hover:text-blue-600'}`}
+                            onClick={e => e.stopPropagation()}
                           >
                             <MessageSquare className="h-3 w-3" />
                             Basecamp Link {index + 1}
@@ -1651,31 +1319,38 @@ export default function DashboardClient({
               )}
             </div>
 
-            {/* Footer with actions */}
-            <div className={`sticky bottom-0 border-t p-3 sm:p-4 backdrop-blur-md ${isDark ? 'border-slate-700 bg-slate-900/95' : 'border-gray-200 bg-white/95'} flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between`}>
+            <div
+              className={`sticky bottom-0 flex flex-col-reverse gap-3 border-t p-3 backdrop-blur-md sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-4 ${
+                isDark ? 'border-slate-700 bg-slate-900/95' : 'border-gray-200 bg-white/95'
+              }`}
+            >
               <button
                 onClick={closeTaskModal}
-                className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                  isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
               >
                 Close
               </button>
               <div className="flex flex-wrap gap-2">
-                {getStatusOptions(selectedTask.status).map((newStatus) => (
+                {getStatusOptions(selectedTask.status).map(newStatus => (
                   <button
                     key={newStatus}
-                    onClick={() => {
-                      updateTaskStatus(selectedTask.id, newStatus);
-                    }}
+                    onClick={() => updateTaskStatus(selectedTask.id, newStatus)}
                     disabled={updatingTaskId === selectedTask.id}
-                    className={`rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-all ${
-                      updatingTaskId === selectedTask.id ? 'opacity-50 cursor-not-allowed' :
-                      newStatus === 'Completed' ? 'bg-emerald-500 text-white hover:bg-emerald-600' :
-                      newStatus === 'Cancelled' ? 'bg-red-500 text-white hover:bg-red-600' :
-                      newStatus === 'Ongoing' ? 'bg-blue-500 text-white hover:bg-blue-600' :
-                      'bg-yellow-500 text-white hover:bg-yellow-600'
+                    className={`rounded-lg px-3 py-2 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 sm:px-4 sm:text-sm ${
+                      updatingTaskId === selectedTask.id
+                        ? 'cursor-not-allowed opacity-50'
+                        : newStatus === 'Completed'
+                        ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                        : newStatus === 'Cancelled'
+                        ? 'bg-red-500 text-white hover:bg-red-600'
+                        : newStatus === 'Ongoing'
+                        ? 'bg-blue-500 text-white hover:bg-blue-600'
+                        : 'bg-yellow-500 text-white hover:bg-yellow-600'
                     }`}
                   >
-                    {updatingTaskId === selectedTask.id ? <Loader2 className="h-4 w-4 animate-spin" /> : `Mark as ${newStatus}`}
+                    {updatingTaskId === selectedTask.id ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : `Mark as ${newStatus}`}
                   </button>
                 ))}
               </div>
@@ -1685,15 +1360,7 @@ export default function DashboardClient({
       )}
 
       {/* ─── ADD TASK MODAL ─────────────────────────────────────────────────── */}
-      <TaskFormModal
-        isOpen={showAddTaskModal}
-        onClose={() => setShowAddTaskModal(false)}
-        onSubmit={addNewTask}
-        isSubmitting={isSavingTask}
-        theme={theme}
-        mode="add"
-        error={taskFormError}
-      />
+      <TaskFormModal isOpen={showAddTaskModal} onClose={() => setShowAddTaskModal(false)} onSubmit={addNewTask} isSubmitting={isSavingTask} theme={theme} mode="add" error={taskFormError} />
 
       {/* ─── EDIT TASK MODAL (admins only) ─────────────────────────────────── */}
       <TaskFormModal
@@ -1704,27 +1371,26 @@ export default function DashboardClient({
         theme={theme}
         mode="edit"
         error={taskFormError}
-        initialValues={selectedTask ? {
-          dateRequested: selectedTask.date_requested ? new Date(selectedTask.date_requested).toISOString().split('T')[0] : '',
-          type: selectedTask.type,
-          task: selectedTask.task,
-          brand: BRAND_OPTIONS.includes(selectedTask.brand) ? selectedTask.brand : '__OTHER__',
-          customBrand: BRAND_OPTIONS.includes(selectedTask.brand) ? '' : selectedTask.brand,
-          agent: selectedTask.agent,
-          dueDate: selectedTask.due_date ? new Date(selectedTask.due_date).toISOString().split('T')[0] : '',
-          status: selectedTask.status,
-          remarks: selectedTask.remarks,
-          bcLinks: selectedTask.bc_links || '',
-        } : undefined}
+        initialValues={
+          selectedTask
+            ? {
+                dateRequested: selectedTask.date_requested ? new Date(selectedTask.date_requested).toISOString().split('T')[0] : '',
+                type: selectedTask.type,
+                task: selectedTask.task,
+                brand: BRAND_OPTIONS.includes(selectedTask.brand) ? selectedTask.brand : '__OTHER__',
+                customBrand: BRAND_OPTIONS.includes(selectedTask.brand) ? '' : selectedTask.brand,
+                agent: selectedTask.agent,
+                dueDate: selectedTask.due_date ? new Date(selectedTask.due_date).toISOString().split('T')[0] : '',
+                status: selectedTask.status,
+                remarks: selectedTask.remarks,
+                bcLinks: selectedTask.bc_links || '',
+              }
+            : undefined
+        }
       />
 
       {/* ─── TASK NAME GENERATOR MODAL ────────────────────────────────────── */}
-      <TaskNameGeneratorModal
-        isOpen={showTaskGenerator}
-        onClose={() => setShowTaskGenerator(false)}
-        task={selectedTaskForGenerator}
-        theme={theme}
-      />
+      <TaskNameGeneratorModal isOpen={showTaskGenerator} onClose={() => setShowTaskGenerator(false)} task={selectedTaskForGenerator} theme={theme} />
 
       {/* ─── REASON FOR PENDING MODAL ────────────────────────────────────── */}
       {showPendingReasonModal && pendingTaskId && (
@@ -1746,90 +1412,33 @@ export default function DashboardClient({
   );
 }
 
-function useAnimatedCounter(target: number, duration: number = 800) {
-  const [count, setCount] = useState(0);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const prevTargetRef = useRef(target);
+// ─── Small presentational helpers ──────────────────────────────────────────
 
-  useEffect(() => {
-    // Only animate if the target value changed
-    if (prevTargetRef.current === target) return;
-    
-    setIsAnimating(true);
-    const startTime = performance.now();
-    const startValue = count;
-    const endValue = target;
-    
-    const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      
-      // Ease out cubic for smooth animation
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const currentValue = Math.round(startValue + (endValue - startValue) * eased);
-      
-      setCount(currentValue);
-      
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        setCount(endValue);
-        setIsAnimating(false);
-      }
-    };
-    
-    requestAnimationFrame(animate);
-    prevTargetRef.current = target;
-  }, [target, duration]);
-
-  return count;
-}
-
-// Add this after useAnimatedCounter and before ToolCard
-function Sparkline({ data, color = '#10b981', height = 16, width = 40 }: { 
-  data: number[]; 
-  color?: string; 
-  height?: number; 
-  width?: number;
-}) {
-  const max = Math.max(...data, 1);
-  const min = Math.min(...data, 0);
-  const range = max - min || 1;
-  
-  const points = data.map((value, index) => {
-    const x = (index / (data.length - 1 || 1)) * width;
-    const y = height - ((value - min) / range) * height;
-    return `${x},${y}`;
-  }).join(' ');
-  
-  const pathData = data.map((value, index) => {
-    const x = (index / (data.length - 1 || 1)) * width;
-    const y = height - ((value - min) / range) * height;
-    return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
-  }).join(' ');
-  
+function EmptyState({ isDark, icon, message }: { isDark: boolean; icon: React.ReactNode; message: string }) {
   return (
-    <svg width={width} height={height} className="flex-shrink-0" viewBox={`0 0 ${width} ${height}`}>
-      <polyline
-        points={points}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="opacity-70"
-      />
-      {/* Area fill under the line */}
-      <polygon
-        points={`0,${height} ${points} ${width},${height}`}
-        fill={color}
-        opacity="0.1"
-      />
-    </svg>
+    <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-2 px-4 text-center">
+      <div className={isDark ? 'text-slate-700' : 'text-gray-300'}>{icon}</div>
+      <div className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>{message}</div>
+    </div>
   );
 }
 
-// Then the ToolCard component follows...
+function PanelSkeleton({ isDark, rows = 4 }: { isDark: boolean; rows?: number }) {
+  return (
+    <div className="space-y-0 divide-y divide-slate-700/30 motion-safe:animate-pulse motion-reduce:animate-none" aria-hidden="true">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 p-3">
+          <div className={`h-8 w-8 flex-shrink-0 rounded-full ${isDark ? 'bg-slate-800' : 'bg-gray-200'}`} />
+          <div className="flex-1 space-y-1.5">
+            <div className={`h-3 w-1/3 rounded ${isDark ? 'bg-slate-800' : 'bg-gray-200'}`} />
+            <div className={`h-2.5 w-1/2 rounded ${isDark ? 'bg-slate-800/70' : 'bg-gray-100'}`} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── ToolCard Component (defined OUTSIDE DashboardClient) ─────────────────────
 
 function ToolCard({ tool, theme, runCount, sparkline, onOpen }: any) {
@@ -1838,22 +1447,40 @@ function ToolCard({ tool, theme, runCount, sparkline, onOpen }: any) {
 
   const getAccentConfig = () => {
     if (tool.accent === 'purple') {
-      return { card: isDark ? 'border-violet-500/25 bg-violet-950/40 hover:bg-violet-900/40' : 'border-violet-200 bg-violet-50 hover:bg-violet-100', spark: '#8b5cf6', count: 'text-violet-400' };
+      return {
+        card: isDark ? 'border-violet-500/25 bg-violet-950/40 hover:bg-violet-900/40' : 'border-violet-200 bg-violet-50 hover:bg-violet-100',
+        spark: '#8b5cf6',
+        count: 'text-violet-400',
+      };
     } else if (tool.accent === 'green') {
-      return { card: isDark ? 'border-emerald-500/25 bg-emerald-950/40 hover:bg-emerald-900/40' : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100', spark: '#10b981', count: 'text-emerald-400' };
+      return {
+        card: isDark ? 'border-emerald-500/25 bg-emerald-950/40 hover:bg-emerald-900/40' : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100',
+        spark: '#10b981',
+        count: 'text-emerald-400',
+      };
     } else if (tool.accent === 'orange') {
-      return { card: isDark ? 'border-orange-500/25 bg-orange-950/40 hover:bg-orange-900/40' : 'border-orange-200 bg-orange-50 hover:bg-orange-100', spark: '#f97316', count: 'text-orange-400' };
-    } else {
-      return { card: isDark ? 'border-cyan-500/25 bg-cyan-950/40 hover:bg-cyan-900/40' : 'border-cyan-200 bg-cyan-50 hover:bg-cyan-100', spark: '#06b6d4', count: 'text-cyan-400' };
+      return {
+        card: isDark ? 'border-orange-500/25 bg-orange-950/40 hover:bg-orange-900/40' : 'border-orange-200 bg-orange-50 hover:bg-orange-100',
+        spark: '#f97316',
+        count: 'text-orange-400',
+      };
     }
+    return {
+      card: isDark ? 'border-cyan-500/25 bg-cyan-950/40 hover:bg-cyan-900/40' : 'border-cyan-200 bg-cyan-50 hover:bg-cyan-100',
+      spark: '#06b6d4',
+      count: 'text-cyan-400',
+    };
   };
 
   const accentConfig = getAccentConfig();
-  const statusBadge = tool.status === 'Active' ? (isDark ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-100 text-emerald-700') : (isDark ? 'bg-cyan-500/20 text-cyan-300' : 'bg-cyan-100 text-cyan-700');
+  const statusBadge = tool.status === 'Active' ? (isDark ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-100 text-emerald-700') : isDark ? 'bg-cyan-500/20 text-cyan-300' : 'bg-cyan-100 text-cyan-700';
   const mutedText = isDark ? 'text-slate-400' : 'text-gray-500';
 
   return (
-    <button onClick={onOpen} className={`group relative flex min-h-[170px] sm:min-h-[180px] w-full flex-col rounded-xl border p-3 text-left shadow-sm transition-all duration-200 hover:shadow-md active:scale-[0.98] ${accentConfig.card}`}>
+    <button
+      onClick={onOpen}
+      className={`group relative flex min-h-[170px] w-full flex-col rounded-xl border p-3 text-left shadow-sm transition-all duration-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 active:scale-[0.98] sm:min-h-[180px] ${accentConfig.card}`}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold ${isDark ? 'bg-slate-900/50 text-slate-300' : 'bg-white/70 text-gray-600'}`}>
           <span className="flex-shrink-0">{tool.icon}</span>
@@ -1872,7 +1499,7 @@ function ToolCard({ tool, theme, runCount, sparkline, onOpen }: any) {
             <p className={`text-[9px] ${mutedText}`}>Runs</p>
             <p className={`text-base font-bold tabular-nums ${accentConfig.count}`}>{animCount.toLocaleString()}</p>
           </div>
-          <div className="rounded-full bg-black/40 p-1 text-white transition-all group-hover:translate-x-0.5">
+          <div className="rounded-full bg-black/40 p-1 text-white transition-transform group-hover:translate-x-0.5">
             <ArrowRight className="h-3 w-3" />
           </div>
         </div>

@@ -1,4 +1,4 @@
-// app/page.tsx (Floating Sidebar - Properly Centered Content)
+// app/page.tsx - Redesigned with 2026 UI/UX Principles - LARGER FONTS
 'use client';
 
 import React, { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
@@ -7,8 +7,6 @@ import {
   BellOff,
   AlertCircle,
   BookOpen,
-  ChevronLeft,
-  ChevronRight,
   Command,
   Download,
   FileText,
@@ -16,7 +14,6 @@ import {
   Menu,
   MessageSquare,
   Search,
-  Settings,
   User as UserIcon,
   X,
   GitBranch,
@@ -32,19 +29,32 @@ import {
   ChevronDown,
   ChevronUp,
   LayoutGrid,
-  List,
   Grid3x3,
+  List,
   Maximize2,
   Minimize2,
   PanelLeftClose,
   PanelLeftOpen,
+  Info,
+  XCircle,
+  FolderKanban,
+  Sparkles,
+  Clock,
+  BarChart3,
+  ArrowUpRight,
+  Pin,
+  PinOff,
+  MoreHorizontal,
+  Check,
+  AlertTriangle,
+  Clock as ClockIcon,
 } from 'lucide-react';
 
 import { MaintenanceProvider } from '../contexts/MaintenanceContext';
 import MaintenanceGuard from './components/MaintenanceGuard';
 import { NotificationProvider, useNotifications } from '@/contexts/NotificationContext';
 
-// Lazy load components for better performance
+// Lazy load components
 const SkuProcessor = lazy(() => import('./components/SkuProcessor'));
 const AsinConflictChecker = lazy(() => import('./components/AsinConflictChecker'));
 const BasecampGenerator = lazy(() => import('./components/BasecampGenerator'));
@@ -61,6 +71,61 @@ type Theme = 'light' | 'dark';
 type ToolId = 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer' | 'get-brand';
 type MainMenuId = 'Dashboard' | 'TaskManagement' | 'Tools' | 'Downloads' | 'Documentation' | 'Terms' | 'Admin';
 type ViewMode = 'grid' | 'list' | 'compact';
+type ToastType = 'info' | 'error' | 'success';
+
+// --- Modern 2026 Design System Tokens ---
+const DESIGN = {
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 24,
+    '2xl': 32,
+    '3xl': 48,
+    '4xl': 64,
+  },
+  radius: {
+    sm: 6,
+    md: 8,
+    lg: 12,
+    xl: 16,
+    full: 9999,
+  },
+  font: {
+    mono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+    sans: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  },
+  transition: {
+    fast: '150ms',
+    base: '200ms',
+    slow: '300ms',
+  },
+  elevation: {
+    sm: '0 1px 2px rgba(0,0,0,0.05)',
+    md: '0 4px 12px rgba(0,0,0,0.08)',
+    lg: '0 8px 32px rgba(0,0,0,0.12)',
+    xl: '0 16px 48px rgba(0,0,0,0.16)',
+  },
+};
+
+// --- Status Badge Component ---
+const StatusBadge = ({ status, theme }: { status: 'completed' | 'pending' | 'ongoing' | 'cancelled'; theme: Theme }) => {
+  const isDark = theme === 'dark';
+  const config = {
+    completed: { label: 'Completed', icon: Check, bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50', text: isDark ? 'text-emerald-400' : 'text-emerald-700', border: isDark ? 'border-emerald-500/20' : 'border-emerald-200' },
+    pending: { label: 'Pending', icon: ClockIcon, bg: isDark ? 'bg-amber-500/10' : 'bg-amber-50', text: isDark ? 'text-amber-400' : 'text-amber-700', border: isDark ? 'border-amber-500/20' : 'border-amber-200' },
+    ongoing: { label: 'Ongoing', icon: Sparkles, bg: isDark ? 'bg-blue-500/10' : 'bg-blue-50', text: isDark ? 'text-blue-400' : 'text-blue-700', border: isDark ? 'border-blue-500/20' : 'border-blue-200' },
+    cancelled: { label: 'Cancelled', icon: X, bg: isDark ? 'bg-gray-500/10' : 'bg-gray-50', text: isDark ? 'text-gray-400' : 'text-gray-600', border: isDark ? 'border-gray-500/20' : 'border-gray-200' },
+  };
+  const { label, icon: Icon, bg, text, border } = config[status];
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium ${bg} ${text} ${border}`}>
+      <Icon className="h-4 w-4" />
+      {label}
+    </span>
+  );
+};
 
 interface MenuItem {
   id: MainMenuId;
@@ -89,17 +154,35 @@ interface AppUser {
   email: string;
 }
 
+interface ToastItem {
+  id: number;
+  message: string;
+  type: ToastType;
+}
+
 const STORAGE_THEME_KEY = 'theme';
 const STORAGE_VIEW_MODE_KEY = 'viewMode';
 const STORAGE_SIDEBAR_COLLAPSED_KEY = 'sidebarCollapsed';
 const STORAGE_TOOLS_EXPANDED_KEY = 'toolsExpanded';
+const STORAGE_PINNED_TOOLS_KEY = 'pinnedTools';
+
+const ACCENT_STYLES: Record<
+  ToolItem['accent'],
+  { border: string; bg: string; text: string; dot: string; iconBgDark: string; iconBgLight: string }
+> = {
+  emerald: { border: 'border-emerald-500/30', bg: 'bg-emerald-500/8', text: 'text-emerald-400', dot: 'bg-emerald-400', iconBgDark: 'bg-emerald-500/12 text-emerald-400', iconBgLight: 'bg-emerald-50 text-emerald-600' },
+  cyan: { border: 'border-cyan-500/30', bg: 'bg-cyan-500/8', text: 'text-cyan-400', dot: 'bg-cyan-400', iconBgDark: 'bg-cyan-500/12 text-cyan-400', iconBgLight: 'bg-cyan-50 text-cyan-600' },
+  violet: { border: 'border-violet-500/30', bg: 'bg-violet-500/8', text: 'text-violet-400', dot: 'bg-violet-400', iconBgDark: 'bg-violet-500/12 text-violet-400', iconBgLight: 'bg-violet-50 text-violet-600' },
+  orange: { border: 'border-orange-500/30', bg: 'bg-orange-500/8', text: 'text-orange-400', dot: 'bg-orange-400', iconBgDark: 'bg-orange-500/12 text-orange-400', iconBgLight: 'bg-orange-50 text-orange-600' },
+  blue: { border: 'border-blue-500/30', bg: 'bg-blue-500/8', text: 'text-blue-400', dot: 'bg-blue-400', iconBgDark: 'bg-blue-500/12 text-blue-400', iconBgLight: 'bg-blue-50 text-blue-600' },
+};
 
 const toolsSubItems: ToolItem[] = [
   {
     id: 'sku',
     name: 'Shopkeep Consolidated Tool',
     description: 'Process and consolidate SKU data efficiently.',
-    icon: <Search className="h-4 w-4" />,
+    icon: <Search className="h-5 w-5" />,
     accent: 'cyan',
     category: 'processing',
     tags: ['SKU', 'Consolidation', 'Data Processing'],
@@ -108,7 +191,7 @@ const toolsSubItems: ToolItem[] = [
     id: 'asin',
     name: 'Multiple Parent ASIN Checker',
     description: 'Detect styles with multiple parent ASINs automatically.',
-    icon: <GitBranch className="h-4 w-4" />,
+    icon: <GitBranch className="h-5 w-5" />,
     accent: 'emerald',
     category: 'analysis',
     tags: ['ASIN', 'Validation', 'Conflict Detection'],
@@ -117,7 +200,7 @@ const toolsSubItems: ToolItem[] = [
     id: 'basecamp',
     name: 'Basecamp Response Generator',
     description: 'Generate formatted Basecamp messages with templates.',
-    icon: <MessageSquare className="h-4 w-4" />,
+    icon: <MessageSquare className="h-5 w-5" />,
     accent: 'violet',
     category: 'generation',
     tags: ['Basecamp', 'Messages', 'Templates'],
@@ -126,7 +209,7 @@ const toolsSubItems: ToolItem[] = [
     id: 'bulk-analyzer',
     name: 'File Generator',
     description: 'Generate Listing Data, Pre-approval, Excluded, and For Fixing files.',
-    icon: <FileSpreadsheet className="h-4 w-4" />,
+    icon: <FileSpreadsheet className="h-5 w-5" />,
     accent: 'orange',
     category: 'generation',
     tags: ['Files', 'Export', 'Bulk'],
@@ -135,7 +218,7 @@ const toolsSubItems: ToolItem[] = [
     id: 'get-brand',
     name: 'Get Brand',
     description: 'Look up brand names and information.',
-    icon: <Building2 className="h-4 w-4" />,
+    icon: <Building2 className="h-5 w-5" />,
     accent: 'blue',
     category: 'utility',
     tags: ['Brand', 'Lookup', 'Info'],
@@ -157,8 +240,9 @@ const ALL_COMMANDS = [
 ];
 
 const LoadingSpinner = () => (
-  <div className="flex h-64 items-center justify-center">
-    <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+  <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
+    <Loader2 className="h-10 w-10 animate-spin text-emerald-400 motion-reduce:animate-none" />
+    <span className="sr-only">Loading…</span>
   </div>
 );
 
@@ -235,19 +319,19 @@ export default function HomePage() {
   );
 }
 
-function HomePageContent({ 
-  theme, 
-  user, 
+function HomePageContent({
+  theme,
+  user,
   isAdmin,
   setTheme,
   userName,
   viewMode,
   setViewMode,
   isFullscreen,
-  toggleFullscreen
-}: { 
-  theme: Theme; 
-  user: AppUser; 
+  toggleFullscreen,
+}: {
+  theme: Theme;
+  user: AppUser;
   isAdmin: boolean;
   setTheme: (theme: Theme) => void;
   userName: string;
@@ -259,28 +343,38 @@ function HomePageContent({
   const [activeTool, setActiveTool] = useState<ToolId>('sku');
   const [activeMainMenu, setActiveMainMenu] = useState<MainMenuId>('Dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
     const saved = localStorage.getItem(STORAGE_SIDEBAR_COLLAPSED_KEY);
     return saved ? JSON.parse(saved) : false;
   });
   const [isToolsExpanded, setIsToolsExpanded] = useState(() => {
+    if (typeof window === 'undefined') return true;
     const saved = localStorage.getItem(STORAGE_TOOLS_EXPANDED_KEY);
     return saved ? JSON.parse(saved) : true;
+  });
+  const [pinnedTools, setPinnedTools] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    const saved = localStorage.getItem(STORAGE_PINNED_TOOLS_KEY);
+    return saved ? JSON.parse(saved) : [];
   });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [cmdQuery, setCmdQuery] = useState('');
+  const [cmdHighlight, setCmdHighlight] = useState(0);
   const cmdInputRef = useRef<HTMLInputElement>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const prevMenuRef = useRef<MainMenuId>('Dashboard');
   const mainContentRef = useRef<HTMLDivElement>(null);
+  const notifPanelRef = useRef<HTMLDivElement>(null);
+  const userPanelRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  const { 
-    notifications, 
-    unreadCount, 
-    markAsRead, 
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
     markAllAsRead,
     permission,
     requestPermission,
@@ -290,11 +384,19 @@ function HomePageContent({
 
   const isDark = theme === 'dark';
 
-  const [toast, setToast] = useState<{ message: string; type: 'info' | 'error' | 'success' } | null>(null);
-  
-  const showNotification = useCallback((message: string, type: 'info' | 'error' | 'success' = 'info') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastIdRef = useRef(0);
+
+  const showNotification = useCallback((message: string, type: ToastType = 'info') => {
+    const id = ++toastIdRef.current;
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  }, []);
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
   const toggleToolsExpanded = useCallback(() => {
@@ -305,14 +407,24 @@ function HomePageContent({
     });
   }, []);
 
+  const togglePinTool = useCallback((toolId: string) => {
+    setPinnedTools(prev => {
+      const newPinned = prev.includes(toolId)
+        ? prev.filter(id => id !== toolId)
+        : [...prev, toolId];
+      localStorage.setItem(STORAGE_PINNED_TOOLS_KEY, JSON.stringify(newPinned));
+      return newPinned;
+    });
+  }, []);
+
   const mainMenuItems = useMemo<MenuItem[]>(() => {
     const items: MenuItem[] = [
       { id: 'Dashboard', label: 'Dashboard', icon: <Home className="h-5 w-5" />, shortcut: '⌘1' },
-      { id: 'TaskManagement', label: 'Task Management', icon: <CheckCircle2 className="h-5 w-5" />, shortcut: '⌘T', badge: 0 },
-      { 
-        id: 'Tools', 
-        label: 'Tools', 
-        icon: <LayoutGrid className="h-5 w-5" />, 
+      { id: 'TaskManagement', label: 'Task Management', icon: <FolderKanban className="h-5 w-5" />, shortcut: '⌘T', badge: 0 },
+      {
+        id: 'Tools',
+        label: 'Tools',
+        icon: <LayoutGrid className="h-5 w-5" />,
         shortcut: '⌘2',
         isExpandable: true,
         children: toolsSubItems,
@@ -332,6 +444,19 @@ function HomePageContent({
     { id: 'Terms', label: 'Terms & Conditions', icon: <FileText className="h-5 w-5" /> },
   ], []);
 
+  const navigateTo = useCallback((menuId: MainMenuId, toolId?: ToolId) => {
+    if (menuId === 'Tools' && activeMainMenu === 'Tools' && !toolId) return;
+
+    setIsLoading(true);
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setActiveMainMenu(menuId);
+      if (toolId) setActiveTool(toolId);
+      setIsTransitioning(false);
+      setTimeout(() => setIsLoading(false), 100);
+    }, 120);
+  }, [activeMainMenu]);
+
   useEffect(() => {
     const handler = (event: Event) => {
       const e = event as CustomEvent<{ toolId: ToolId }>;
@@ -344,7 +469,20 @@ function HomePageContent({
     };
     window.addEventListener('navigateToTool', handler);
     return () => window.removeEventListener('navigateToTool', handler);
-  }, []);
+  }, [navigateTo]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notifOpen && notifPanelRef.current && !notifPanelRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+      if (userOpen && userPanelRef.current && !userPanelRef.current.contains(e.target as Node)) {
+        setUserOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [notifOpen, userOpen]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -365,13 +503,22 @@ function HomePageContent({
         e.preventDefault();
         toggleFullscreen();
       }
+      // Focus search with Ctrl+/
+      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [toggleFullscreen]);
+  }, [toggleFullscreen, navigateTo]);
 
   useEffect(() => {
-    if (cmdOpen) { setCmdQuery(''); setTimeout(() => cmdInputRef.current?.focus(), 50); }
+    if (cmdOpen) {
+      setCmdQuery('');
+      setCmdHighlight(0);
+      setTimeout(() => cmdInputRef.current?.focus(), 50);
+    }
   }, [cmdOpen]);
 
   const toggleSidebar = useCallback(() => {
@@ -381,20 +528,6 @@ function HomePageContent({
       return newState;
     });
   }, []);
-
-  const navigateTo = useCallback((menuId: MainMenuId, toolId?: ToolId) => {
-    if (menuId === 'Tools' && activeMainMenu === 'Tools' && !toolId) return;
-
-    setIsLoading(true);
-    setIsTransitioning(true);
-    setTimeout(() => {
-      setActiveMainMenu(menuId);
-      if (toolId) setActiveTool(toolId);
-      prevMenuRef.current = menuId;
-      setIsTransitioning(false);
-      setTimeout(() => setIsLoading(false), 100);
-    }, 120);
-  }, [activeMainMenu]);
 
   const toggleTheme = useCallback(() => {
     setTheme(cur => {
@@ -425,7 +558,6 @@ function HomePageContent({
       setTimeout(() => {
         setActiveMainMenu('Tools');
         setActiveTool(toolId);
-        prevMenuRef.current = 'Tools';
         setIsTransitioning(false);
       }, 120);
     } else {
@@ -435,18 +567,69 @@ function HomePageContent({
     setIsMobileSidebarOpen(false);
   };
 
-  const filteredCmds = ALL_COMMANDS.filter(c => {
-    if (c.adminOnly && !isAdmin) return false;
-    return c.label.toLowerCase().includes(cmdQuery.toLowerCase());
-  });
+  const filteredCmds = useMemo(
+    () =>
+      ALL_COMMANDS.filter(c => {
+        if (c.adminOnly && !isAdmin) return false;
+        return c.label.toLowerCase().includes(cmdQuery.toLowerCase());
+      }),
+    [cmdQuery, isAdmin]
+  );
+
+  useEffect(() => {
+    setCmdHighlight(0);
+  }, [cmdQuery]);
+
+  const runCommand = useCallback((cmd: (typeof ALL_COMMANDS)[number]) => {
+    if (cmd.adminOnly && !isAdmin) {
+      showNotification('Access denied. Only admins can access the admin panel.', 'error');
+      setCmdOpen(false);
+      return;
+    }
+    if (cmd.toolId) {
+      const tool = toolsSubItems.find(t => t.id === cmd.toolId);
+      if (tool?.comingSoon) {
+        showNotification(`${tool.name} is coming soon!`, 'info');
+        setCmdOpen(false);
+        return;
+      }
+    }
+    navigateTo(cmd.menuId, cmd.toolId ?? undefined);
+    setCmdOpen(false);
+  }, [isAdmin, navigateTo, showNotification]);
+
+  const handleCmdKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setCmdHighlight(prev => Math.min(prev + 1, filteredCmds.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setCmdHighlight(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const cmd = filteredCmds[cmdHighlight];
+      if (cmd) runCommand(cmd);
+    }
+  };
 
   const selectedTool = toolsSubItems.find(t => t.id === activeTool);
+
+  // Sort tools: pinned first, then alphabetically
+  const sortedTools = useMemo(() => {
+    return [...toolsSubItems].sort((a, b) => {
+      const aPinned = pinnedTools.includes(a.id);
+      const bPinned = pinnedTools.includes(b.id);
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [pinnedTools]);
 
   const pageMeta = useMemo(() => {
     if (activeMainMenu === 'Dashboard') return {
       title: 'Dashboard',
       breadcrumb: 'Overview / Dashboard',
-      description: 'Monitor operation tools and launch listing workflows.',
+      description: 'Monitor operations and launch listing workflows.',
       icon: <Home className="h-5 w-5" />,
     };
     if (activeMainMenu === 'TaskManagement') {
@@ -454,7 +637,7 @@ function HomePageContent({
         title: 'Task Management',
         breadcrumb: 'Tasks / Management',
         description: 'Manage and track your tasks efficiently.',
-        icon: <CheckCircle2 className="h-5 w-5" />,
+        icon: <FolderKanban className="h-5 w-5" />,
       };
     }
     if (activeMainMenu === 'Tools') {
@@ -462,7 +645,7 @@ function HomePageContent({
       return {
         title: t?.name ?? 'Tools',
         breadcrumb: `Tools / ${t?.name ?? 'Selected Tool'}`,
-        description: t?.description ?? '',
+        description: t?.description ?? 'Select a tool to get started.',
         icon: t?.icon || <LayoutGrid className="h-5 w-5" />,
       };
     }
@@ -514,7 +697,7 @@ function HomePageContent({
     if (activeMainMenu === 'TaskManagement') {
       return (
         <Suspense fallback={<LoadingSpinner />}>
-          <div className="h-[calc(100vh-8rem)]">
+          <div className="h-[calc(100vh-12rem)]">
             <TaskManagement
               theme={theme}
               currentUserEmail={user?.email || ''}
@@ -550,15 +733,17 @@ function HomePageContent({
     if (activeMainMenu === 'Admin') {
       if (!isAdmin) {
         return (
-          <div className={`rounded-xl border border-red-500/30 bg-red-500/10 p-8 text-center`}>
-            <Shield className="mx-auto h-16 w-16 text-red-400 opacity-50" />
-            <h3 className={`mt-4 text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Access Denied</h3>
-            <p className={`mt-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-              Only admins can access the admin panel.
+          <div className={`rounded-2xl border border-red-500/20 bg-red-500/5 p-8 text-center sm:p-10`}>
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
+              <Shield className="h-8 w-8 text-red-400" />
+            </div>
+            <h3 className={`mt-4 text-xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Access Denied</h3>
+            <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+              Only administrators can access the admin panel.
             </p>
             <button
               onClick={() => navigateTo('Dashboard')}
-              className="mt-4 rounded-lg bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500 transition-colors"
+              className="mt-5 rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
             >
               Return to Dashboard
             </button>
@@ -593,89 +778,121 @@ function HomePageContent({
     return null;
   };
 
+  const toastIcon = (type: ToastType) => {
+    if (type === 'error') return <XCircle className="h-4 w-4 flex-shrink-0" />;
+    if (type === 'success') return <CheckCircle2 className="h-4 w-4 flex-shrink-0" />;
+    return <Info className="h-4 w-4 flex-shrink-0" />;
+  };
+
   return (
     <div className={`relative flex h-screen overflow-hidden transition-colors duration-200 ${
-      isDark ? 'bg-[#0F172A] text-slate-100' : 'bg-gray-100 text-gray-900'
+      isDark ? 'bg-[#0A0F1F] text-slate-100' : 'bg-[#F6F8FA] text-gray-900'
     }`}>
-      {/* Toast Notification */}
-      {toast && (
-        <div className={`fixed top-20 right-4 z-[200] max-w-sm rounded-xl border p-4 shadow-2xl animate-slide-in ${
-          toast.type === 'error' 
-            ? isDark ? 'border-red-500/30 bg-red-900/90 text-red-100' : 'border-red-500/30 bg-red-50 text-red-900'
-            : toast.type === 'success'
-            ? isDark ? 'border-emerald-500/30 bg-emerald-900/90 text-emerald-100' : 'border-emerald-500/30 bg-emerald-50 text-emerald-900'
-            : isDark ? 'border-blue-500/30 bg-blue-900/90 text-blue-100' : 'border-blue-500/30 bg-blue-50 text-blue-900'
-        }`}>
-          <p className="text-sm font-medium">{toast.message}</p>
-        </div>
-      )}
+      {/* Skip link */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[300] focus:rounded-lg focus:bg-emerald-600 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white"
+      >
+        Skip to content
+      </a>
+
+      {/* Toast Notifications */}
+      <div className="pointer-events-none fixed top-20 right-4 z-[200] flex w-full max-w-sm flex-col gap-2">
+        {toasts.map(toast => (
+          <div
+            key={toast.id}
+            role="status"
+            className={`pointer-events-auto flex items-start gap-2.5 rounded-xl border p-3.5 shadow-lg backdrop-blur-md animate-in slide-in-from-top-2 fade-in duration-300 motion-reduce:animate-none ${
+              toast.type === 'error'
+                ? isDark ? 'border-red-500/20 bg-red-900/80 text-red-100' : 'border-red-500/20 bg-red-50 text-red-900'
+                : toast.type === 'success'
+                ? isDark ? 'border-emerald-500/20 bg-emerald-900/80 text-emerald-100' : 'border-emerald-500/20 bg-emerald-50 text-emerald-900'
+                : isDark ? 'border-blue-500/20 bg-blue-900/80 text-blue-100' : 'border-blue-500/20 bg-blue-50 text-blue-900'
+            }`}
+          >
+            <span className="mt-0.5">{toastIcon(toast.type)}</span>
+            <p className="flex-1 text-sm font-medium leading-snug">{toast.message}</p>
+            <button
+              type="button"
+              onClick={() => dismissToast(toast.id)}
+              className="flex-shrink-0 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current"
+              aria-label="Dismiss notification"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
 
       {/* Command Palette */}
       {cmdOpen && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center px-4 pt-[15vh]">
           <button
             type="button"
             onClick={() => setCmdOpen(false)}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150"
             aria-label="Close command palette"
           />
-          <div className={`relative z-10 w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden ${
-            isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-white'
-          }`}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Command palette"
+            className={`relative z-10 w-full max-w-2xl overflow-hidden rounded-xl border shadow-xl animate-in fade-in zoom-in-95 duration-150 ${
+              isDark ? 'border-slate-700/60 bg-slate-900' : 'border-gray-200 bg-white'
+            }`}
+          >
             <div className={`flex items-center gap-3 border-b px-4 py-3 ${
-              isDark ? 'border-slate-700/60' : 'border-gray-200'
+              isDark ? 'border-slate-700/40' : 'border-gray-200'
             }`}>
-              <Search className={`h-4 w-4 flex-shrink-0 ${isDark ? 'text-slate-400' : 'text-gray-400'}`} />
+              <Search className={`h-5 w-5 flex-shrink-0 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
               <input
                 ref={cmdInputRef}
                 type="text"
                 placeholder="Search commands…"
                 value={cmdQuery}
                 onChange={e => setCmdQuery(e.target.value)}
-                className={`flex-1 bg-transparent text-sm outline-none placeholder:text-slate-500 ${
+                onKeyDown={handleCmdKeyDown}
+                className={`flex-1 bg-transparent text-base outline-none placeholder:text-slate-500 ${
                   isDark ? 'text-white' : 'text-gray-900'
                 }`}
                 aria-label="Search commands"
+                aria-activedescendant={filteredCmds[cmdHighlight] ? `cmd-${cmdHighlight}` : undefined}
+                role="combobox"
+                aria-expanded="true"
+                aria-controls="cmd-list"
               />
-              <kbd className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+              <kbd className={`rounded px-1.5 py-0.5 text-xs font-medium ${
                 isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-100 text-gray-500'
               }`}>ESC</kbd>
             </div>
-            <div className="max-h-64 overflow-y-auto py-2">
+            <div id="cmd-list" role="listbox" className="max-h-64 overflow-y-auto py-2">
               {filteredCmds.length === 0 ? (
-                <p className={`px-4 py-3 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                  No commands found.
-                </p>
+                <div className="px-4 py-8 text-center">
+                  <Search className={`mx-auto h-6 w-6 opacity-30 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
+                  <p className={`mt-2 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                    No commands match “{cmdQuery}”.
+                  </p>
+                </div>
               ) : (
                 filteredCmds.map((cmd, i) => (
                   <button
-                    key={i}
+                    key={cmd.label}
+                    id={`cmd-${i}`}
+                    role="option"
+                    aria-selected={cmdHighlight === i}
                     type="button"
-                    onClick={() => {
-                      if (cmd.adminOnly && !isAdmin) {
-                        showNotification('Access denied. Only admins can access the admin panel.', 'error');
-                        setCmdOpen(false);
-                        return;
-                      }
-                      if (cmd.toolId) {
-                        const tool = toolsSubItems.find(t => t.id === cmd.toolId);
-                        if (tool?.comingSoon) { 
-                          showNotification(`${tool.name} is coming soon!`, 'info');
-                          setCmdOpen(false); 
-                          return;
-                        }
-                      }
-                      navigateTo(cmd.menuId, cmd.toolId ?? undefined);
-                      setCmdOpen(false);
-                    }}
-                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
-                      isDark ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-50'
+                    onMouseEnter={() => setCmdHighlight(i)}
+                    onClick={() => runCommand(cmd)}
+                    className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors ${
+                      cmdHighlight === i
+                        ? isDark ? 'bg-slate-800/80 text-white' : 'bg-gray-100 text-gray-900'
+                        : isDark ? 'text-slate-200' : 'text-gray-700'
                     }`}
                   >
-                    <Command className="h-3.5 w-3.5 flex-shrink-0 opacity-50" />
+                    <Command className="h-4 w-4 flex-shrink-0 opacity-40" />
                     {cmd.label}
                     {cmd.adminOnly && (
-                      <span className="ml-auto rounded bg-amber-500/20 px-1.5 py-0.5 text-[8px] font-semibold text-amber-400">
+                      <span className="ml-auto rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
                         ADMIN
                       </span>
                     )}
@@ -683,9 +900,14 @@ function HomePageContent({
                 ))
               )}
             </div>
-            <div className={`border-t px-4 py-2 ${isDark ? 'border-slate-700/60' : 'border-gray-100'}`}>
-              <p className={`text-[10px] ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
-                Press <kbd className="rounded px-1 py-0.5 text-[10px] font-semibold bg-slate-800 text-slate-400">⌘K</kbd> to toggle
+            <div className={`flex items-center justify-between border-t px-4 py-2 ${isDark ? 'border-slate-700/40' : 'border-gray-100'}`}>
+              <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                <kbd className="rounded bg-slate-800 px-1 py-0.5 text-xs font-medium text-slate-400">↑↓</kbd> navigate
+                {'  '}
+                <kbd className="rounded bg-slate-800 px-1 py-0.5 text-xs font-medium text-slate-400">↵</kbd> select
+              </p>
+              <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                Press <kbd className="rounded px-1 py-0.5 text-xs font-medium bg-slate-800 text-slate-400">⌘K</kbd> to toggle
               </p>
             </div>
           </div>
@@ -696,58 +918,50 @@ function HomePageContent({
       <button
         type="button"
         onClick={() => setIsMobileSidebarOpen(false)}
-        className={`fixed inset-0 z-30 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ease-out lg:hidden ${
+        className={`fixed inset-0 z-30 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ease-out lg:hidden ${
           isMobileSidebarOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
         }`}
         aria-label="Close sidebar"
+        tabIndex={-1}
       />
 
-      {/* Floating Sidebar - Left Side Centered */}
-      <aside 
-        className={`fixed left-6 top-1/2 z-40 flex -translate-y-1/2 flex-col rounded-2xl border shadow-2xl backdrop-blur-xl
-          transition-all duration-300 ease-out
+      {/* Sidebar - Floating, minimal, centered */}
+      <aside
+        className={`fixed left-6 top-1/2 z-40 flex -translate-y-1/2 flex-col rounded-xl border shadow-lg backdrop-blur-xl
+          transition-all duration-300 ease-out motion-reduce:transition-none
           ${isMobileSidebarOpen ? 'translate-x-0 opacity-100' : '-translate-x-[calc(100%+1.5rem)] opacity-0'}
           lg:translate-x-0 lg:opacity-100
           ${isSidebarCollapsed ? 'lg:w-16' : 'lg:w-72'}
           w-80 max-h-[90vh]
-          ${isDark ? 'border-slate-700/60 bg-[#172235]/95' : 'border-gray-200/60 bg-white/95'}`}
+          ${isDark ? 'border-slate-700/40 bg-[#141B2D]/95' : 'border-gray-200/60 bg-white/95'}`}
       >
-        {/* Sidebar Header */}
-        <div className={`border-b p-4 ${isDark ? 'border-slate-700/60' : 'border-gray-200/60'}`}>
-          <div className="flex items-center justify-between gap-3">
-            <div className={`min-w-0 overflow-hidden transition-[width,opacity] duration-300 ease-out ${
+        {/* Sidebar Header - Simplified */}
+        <div className={`border-b px-4 py-3.5 ${isDark ? 'border-slate-700/40' : 'border-gray-200/60'}`}>
+          <div className="flex items-center justify-between gap-2">
+            <div className={`flex items-center gap-3 overflow-hidden transition-[width,opacity] duration-300 ease-out ${
               isSidebarCollapsed ? 'lg:w-0 lg:opacity-0' : 'w-auto opacity-100'
             }`}>
-              <div className="flex items-center gap-3">
-                <div className={`relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl shadow-lg ${
-                  isAdmin ? 'bg-gradient-to-r from-amber-500 to-orange-600' : 'bg-gradient-to-r from-emerald-500 to-teal-600'
-                }`}>
-                  {isAdmin ? (
-                    <Shield className="h-5 w-5 text-white" />
-                  ) : (
-                    <span className="text-lg font-bold text-white">LOT</span>
-                  )}
-                  <span className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 ${
-                    isAdmin ? 'border-amber-500 bg-amber-400' : 'border-[#172235] bg-emerald-400'
-                  }`} />
-                </div>
-                <div className="min-w-0">
-                  <h1 className={`truncate text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    {isAdmin ? 'Admin Panel' : 'LOT'}
-                  </h1>
-                  <p className={`truncate text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                    {isAdmin ? 'Administration' : 'Listing Operations Tools'}
-                  </p>
-                </div>
+              <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${
+                isAdmin ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'
+              }`}>
+                {isAdmin ? <Shield className="h-5 w-5" /> : <span className="text-base font-bold">LOT</span>}
+              </div>
+              <div className="min-w-0">
+                <h1 className={`truncate text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  {isAdmin ? 'Admin Panel' : 'LOT'}
+                </h1>
+                <p className={`truncate text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                  {isAdmin ? 'Administration' : 'v1.0'}
+                </p>
               </div>
             </div>
 
-            <div className="flex flex-shrink-0 items-center gap-1">
+            <div className="flex flex-shrink-0 items-center gap-0.5">
               <button
                 type="button"
                 onClick={toggleSidebar}
-                className={`hidden rounded-lg p-2 transition-colors lg:block ${
-                  isDark ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                className={`hidden rounded-md p-1.5 transition-colors lg:block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
+                  isDark ? 'text-slate-500 hover:bg-slate-800 hover:text-white' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-900'
                 }`}
                 aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               >
@@ -756,7 +970,7 @@ function HomePageContent({
               <button
                 type="button"
                 onClick={() => setIsMobileSidebarOpen(false)}
-                className={`rounded-lg p-2 transition-colors lg:hidden ${
+                className={`rounded-md p-1.5 transition-colors lg:hidden focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
                   isDark ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
                 }`}
                 aria-label="Close sidebar"
@@ -767,22 +981,22 @@ function HomePageContent({
           </div>
         </div>
 
-        {/* Command palette hint */}
+        {/* Quick search */}
         {!isSidebarCollapsed && (
           <div className="px-4 pt-3">
             <button
               type="button"
               onClick={() => setCmdOpen(true)}
-              className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors ${
+              className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
                 isDark
-                  ? 'border-slate-700/60 bg-slate-800/50 text-slate-500 hover:border-slate-600 hover:text-slate-300'
-                  : 'border-gray-200/60 bg-gray-50/50 text-gray-400 hover:text-gray-600'
+                  ? 'border-slate-700/40 bg-slate-800/30 text-slate-400 hover:border-slate-600'
+                  : 'border-gray-200 bg-gray-50/50 text-gray-400 hover:text-gray-600'
               }`}
             >
-              <Search className="h-3.5 w-3.5" />
-              <span className="flex-1 text-left">Search commands…</span>
-              <kbd className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                isDark ? 'bg-slate-900 text-slate-500' : 'bg-white text-gray-400'
+              <Search className="h-4 w-4" />
+              <span className="flex-1 text-left">Search…</span>
+              <kbd className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                isDark ? 'bg-slate-800 text-slate-500' : 'bg-white text-gray-400'
               }`}>⌘K</kbd>
             </button>
           </div>
@@ -790,209 +1004,202 @@ function HomePageContent({
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4" role="navigation" aria-label="Main navigation">
-          <div className="mb-3 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            {isSidebarCollapsed ? <span className="mx-auto block h-1 w-1 rounded-full bg-slate-600" /> : "MENU"}
+          <div className={`mb-3 px-2 text-[10px] font-medium uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+            {isSidebarCollapsed ? <span className="mx-auto block h-0.5 w-0.5 rounded-full bg-slate-600" /> : "Menu"}
           </div>
 
-          <div className="space-y-1">
-            {mainMenuItems.map(item => (
-              <React.Fragment key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (item.adminOnly && !isAdmin) {
-                      showNotification('Access denied. Only admins can access the admin panel.', 'error');
-                      return;
-                    }
-                    if (item.isExpandable) {
-                      toggleToolsExpanded();
-                      if (activeMainMenu !== 'Tools') {
-                        navigateTo('Tools');
+          <div className="space-y-0.5">
+            {mainMenuItems.map(item => {
+              const isActive = activeMainMenu === item.id || (item.isExpandable && activeMainMenu === 'Tools');
+              return (
+                <React.Fragment key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (item.adminOnly && !isAdmin) {
+                        showNotification('Access denied. Only admins can access the admin panel.', 'error');
+                        return;
                       }
-                    } else {
-                      handleMainMenuClick(item.id);
-                    }
-                  }}
-                  title={isSidebarCollapsed ? item.label : undefined}
-                  aria-current={activeMainMenu === item.id || (item.isExpandable && activeMainMenu === 'Tools') ? 'page' : undefined}
-                  className={`group relative flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-all duration-150 ${
-                    activeMainMenu === item.id || (item.isExpandable && activeMainMenu === 'Tools')
-                      ? item.adminOnly
-                        ? 'border-amber-500/50 bg-amber-500/10 text-white shadow-lg shadow-amber-500/5'
-                        : 'border-emerald-500/50 bg-emerald-500/10 text-white shadow-lg shadow-emerald-500/5'
-                      : isDark
-                        ? 'border-transparent text-slate-400 hover:bg-slate-800/60 hover:text-white'
-                        : 'border-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                  }`}
-                >
-                  <span className={`flex-shrink-0 transition-colors ${
-                    activeMainMenu === item.id || (item.isExpandable && activeMainMenu === 'Tools')
-                      ? item.adminOnly ? 'text-amber-400' : 'text-emerald-400'
-                      : 'group-hover:text-emerald-400'
-                  }`}>
-                    {item.icon}
-                  </span>
-                  <span className={`${isSidebarCollapsed ? 'hidden' : 'block'} min-w-0 flex-1 truncate font-medium`}>
-                    {item.label}
-                  </span>
-                  {!isSidebarCollapsed && item.shortcut && (
-                    <kbd className={`hidden rounded px-1.5 py-0.5 text-[10px] font-semibold lg:block ${
-                      isDark ? 'bg-slate-800 text-slate-500' : 'bg-gray-100 text-gray-400'
-                    }`}>{item.shortcut}</kbd>
-                  )}
-                  {item.badge !== undefined && item.badge > 0 && !isSidebarCollapsed && (
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                      {item.badge > 9 ? '9+' : item.badge}
+                      if (item.isExpandable) {
+                        toggleToolsExpanded();
+                        if (activeMainMenu !== 'Tools') {
+                          navigateTo('Tools');
+                        }
+                      } else {
+                        handleMainMenuClick(item.id);
+                      }
+                    }}
+                    title={isSidebarCollapsed ? item.label : undefined}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
+                      isActive
+                        ? isDark
+                          ? 'bg-emerald-500/10 text-emerald-400'
+                          : 'bg-emerald-50 text-emerald-700'
+                        : isDark
+                          ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white'
+                          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                    }`}
+                  >
+                    <span className={`flex-shrink-0 transition-colors ${
+                      isActive
+                        ? 'text-emerald-400'
+                        : 'group-hover:text-emerald-400'
+                    }`}>
+                      {item.icon}
                     </span>
-                  )}
-                  {item.isExpandable && !isSidebarCollapsed && (
-                    <span className="ml-1">
-                      {isToolsExpanded ? (
-                        <ChevronUp className="h-4 w-4 text-slate-400" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4 text-slate-400" />
-                      )}
-                    </span>
-                  )}
-                  {(activeMainMenu === item.id || (item.isExpandable && activeMainMenu === 'Tools')) && !isSidebarCollapsed && (
-                    <span className={`ml-1 h-6 w-1 rounded-full ${
-                      item.adminOnly ? 'bg-amber-400' : 'bg-emerald-400'
-                    }`} />
-                  )}
-                  {item.adminOnly && activeMainMenu !== item.id && !isSidebarCollapsed && (
-                    <span className="ml-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[8px] font-semibold text-amber-400">
-                      ADMIN
-                    </span>
-                  )}
-                  {isSidebarCollapsed && (
-                    <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+                    <span className={`${isSidebarCollapsed ? 'hidden' : 'block'} min-w-0 flex-1 truncate font-medium`}>
                       {item.label}
                     </span>
-                  )}
-                </button>
+                    {!isSidebarCollapsed && item.shortcut && (
+                      <kbd className={`hidden rounded px-1.5 py-0.5 text-[10px] font-medium lg:block ${
+                        isDark ? 'bg-slate-800 text-slate-500' : 'bg-gray-100 text-gray-400'
+                      }`}>{item.shortcut}</kbd>
+                    )}
+                    {item.badge !== undefined && item.badge > 0 && !isSidebarCollapsed && (
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+                        {item.badge > 9 ? '9+' : item.badge}
+                      </span>
+                    )}
+                    {item.isExpandable && !isSidebarCollapsed && (
+                      <span className="ml-0.5 transition-transform duration-150">
+                        {isToolsExpanded ? (
+                          <ChevronUp className="h-4 w-4 text-slate-400" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-slate-400" />
+                        )}
+                      </span>
+                    )}
+                    {isActive && !isSidebarCollapsed && (
+                      <span className="ml-0.5 h-5 w-0.5 rounded-full bg-emerald-400" />
+                    )}
+                    {item.adminOnly && activeMainMenu !== item.id && !isSidebarCollapsed && (
+                      <span className="ml-0.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+                        ADMIN
+                      </span>
+                    )}
+                    {isSidebarCollapsed && (
+                      <span className={`pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm opacity-0 shadow-lg transition-opacity group-hover:opacity-100 ${
+                        isDark ? 'border-slate-700 bg-slate-900 text-white' : 'border-gray-200 bg-white text-gray-900'
+                      }`}>
+                        {item.label}
+                      </span>
+                    )}
+                  </button>
 
-                {/* Tools Dropdown */}
-                {item.isExpandable && isToolsExpanded && !isSidebarCollapsed && (
-                  <div className={`ml-4 space-y-1 border-l-2 pl-3 ${
-                    isDark ? 'border-emerald-500/25' : 'border-emerald-500/30'
-                  }`}>
-                    {toolsSubItems.map(tool => (
-                      <button
-                        key={tool.id}
-                        type="button"
-                        onClick={() => handleToolClick(tool.id, tool.comingSoon)}
-                        disabled={tool.comingSoon}
-                        className={`group w-full rounded-xl border px-3 py-2 text-left transition-all duration-150 ${
-                          tool.comingSoon ? 'cursor-not-allowed opacity-50'
-                          : activeTool === tool.id && activeMainMenu === 'Tools'
-                            ? tool.accent === 'violet' ? 'border-violet-500/40 bg-violet-500/10'
-                            : tool.accent === 'cyan' ? 'border-cyan-500/40 bg-cyan-500/10'
-                            : tool.accent === 'orange' ? 'border-orange-500/40 bg-orange-500/10'
-                            : tool.accent === 'blue' ? 'border-blue-500/40 bg-blue-500/10'
-                            : 'border-emerald-500/40 bg-emerald-500/10'
-                          : isDark ? 'border-transparent hover:bg-slate-800/50'
-                          : 'border-transparent hover:bg-gray-50'
-                        }`}
-                      >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <span className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg transition-colors ${
-                            activeTool === tool.id && activeMainMenu === 'Tools'
-                              ? tool.accent === 'violet'
-                                ? isDark ? 'bg-violet-500/15 text-violet-400' : 'bg-violet-50 text-violet-600'
-                                : tool.accent === 'cyan'
-                                  ? isDark ? 'bg-cyan-500/15 text-cyan-400' : 'bg-cyan-50 text-cyan-600'
-                                  : tool.accent === 'orange'
-                                    ? isDark ? 'bg-orange-500/15 text-orange-400' : 'bg-orange-50 text-orange-600'
-                                    : tool.accent === 'blue'
-                                      ? isDark ? 'bg-blue-500/15 text-blue-400' : 'bg-blue-50 text-blue-600'
-                                      : isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-600'
-                              : isDark ? 'bg-slate-800 text-slate-500 group-hover:text-slate-300' : 'bg-gray-100 text-gray-400 group-hover:text-gray-600'
-                          }`}>
-                            {tool.icon}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <span className={`block truncate text-sm font-semibold transition-colors ${
-                              activeTool === tool.id && activeMainMenu === 'Tools'
-                                ? tool.accent === 'violet' ? 'text-violet-300'
-                                : tool.accent === 'cyan' ? 'text-cyan-300'
-                                : tool.accent === 'orange' ? 'text-orange-300'
-                                : tool.accent === 'blue' ? 'text-blue-300'
-                                : 'text-emerald-300'
-                                : isDark ? 'text-slate-300 group-hover:text-white' : 'text-gray-700 group-hover:text-gray-900'
-                            }`}>
-                              {tool.name}
-                            </span>
-                            <span className={`block truncate text-xs leading-tight mt-0.5 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                              {tool.description}
-                            </span>
-                            {tool.tags && tool.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {tool.tags.map(tag => (
-                                  <span key={tag} className={`text-[8px] px-1.5 py-0.5 rounded-full ${
-                                    isDark ? 'bg-slate-700/50 text-slate-400' : 'bg-gray-100 text-gray-500'
-                                  }`}>
-                                    {tag}
-                                  </span>
-                                ))}
+                  {/* Tools Dropdown */}
+                  {item.isExpandable && isToolsExpanded && !isSidebarCollapsed && (
+                    <div className={`ml-7 space-y-0.5 border-l-2 pl-3 ${
+                      isDark ? 'border-emerald-500/20' : 'border-emerald-500/30'
+                    }`}>
+                      {sortedTools.map(tool => {
+                        const accent = ACCENT_STYLES[tool.accent];
+                        const toolActive = activeTool === tool.id && activeMainMenu === 'Tools';
+                        const isPinned = pinnedTools.includes(tool.id);
+                        return (
+                          <button
+                            key={tool.id}
+                            type="button"
+                            onClick={() => handleToolClick(tool.id, tool.comingSoon)}
+                            disabled={tool.comingSoon}
+                            className={`group w-full rounded-lg px-3 py-2 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
+                              tool.comingSoon ? 'cursor-not-allowed opacity-40'
+                              : toolActive ? `${accent.bg} ${accent.text}`
+                              : isDark ? 'hover:bg-slate-800/50' : 'hover:bg-gray-100'
+                            }`}
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <span className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md transition-colors ${
+                                toolActive
+                                  ? isDark ? accent.iconBgDark : accent.iconBgLight
+                                  : isDark ? 'text-slate-500' : 'text-gray-400'
+                              }`}>
+                                {tool.icon}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <span className={`block truncate text-sm font-medium transition-colors ${
+                                  toolActive
+                                    ? accent.text
+                                    : isDark ? 'text-slate-300' : 'text-gray-700'
+                                }`}>
+                                  {tool.name}
+                                </span>
                               </div>
-                            )}
-                          </div>
-                          {activeTool === tool.id && activeMainMenu === 'Tools' && (
-                            <span className={`h-2 w-2 flex-shrink-0 rounded-full ${
-                              tool.accent === 'violet' ? 'bg-violet-400'
-                              : tool.accent === 'cyan' ? 'bg-cyan-400'
-                              : tool.accent === 'orange' ? 'bg-orange-400'
-                              : tool.accent === 'blue' ? 'bg-blue-400'
-                              : 'bg-emerald-400'
-                            }`} />
-                          )}
-                          {tool.comingSoon && (
-                            <span className="ml-auto rounded-full bg-orange-500/20 px-2 py-0.5 text-[10px] font-semibold text-orange-400">Soon</span>
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); togglePinTool(tool.id); }}
+                                className={`rounded p-0.5 transition-colors ${
+                                  isPinned
+                                    ? isDark ? 'text-emerald-400' : 'text-emerald-600'
+                                    : isDark ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600'
+                                }`}
+                                aria-label={isPinned ? 'Unpin tool' : 'Pin tool'}
+                              >
+                                {isPinned ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
+                              </button>
+                              {toolActive && (
+                                <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${accent.dot}`} />
+                              )}
+                              {tool.comingSoon && (
+                                <span className="ml-auto rounded bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-medium text-orange-400">Soon</span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                {/* Collapsed tools icons */}
-                {item.isExpandable && isSidebarCollapsed && (
-                  <div className="my-1 hidden space-y-1 lg:block">
-                    {toolsSubItems.map(tool => (
-                      <button
-                        key={tool.id}
-                        type="button"
-                        onClick={() => handleToolClick(tool.id, tool.comingSoon)}
-                        disabled={tool.comingSoon}
-                        title={tool.comingSoon ? `${tool.name} (Coming Soon)` : tool.name}
-                        className={`group relative mx-auto flex h-10 w-10 items-center justify-center rounded-xl border transition-colors duration-150 ${
-                          activeTool === tool.id && activeMainMenu === 'Tools'
-                            ? tool.accent === 'violet' ? 'border-violet-500/50 bg-violet-500/10 text-violet-300'
-                            : tool.accent === 'cyan' ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-300'
-                            : tool.accent === 'orange' ? 'border-orange-500/50 bg-orange-500/10 text-orange-300'
-                            : tool.accent === 'blue' ? 'border-blue-500/50 bg-blue-500/10 text-blue-300'
-                            : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
-                          : isDark ? 'border-transparent text-slate-400 hover:bg-slate-800/60 hover:text-white'
-                          : 'border-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                        } ${tool.comingSoon ? 'cursor-not-allowed opacity-60' : ''}`}
-                      >
-                        {tool.icon}
-                        <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
-                          {tool.name}{tool.comingSoon ? ' (Coming Soon)' : ''}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </React.Fragment>
-            ))}
+                  {/* Collapsed tools icons */}
+                  {item.isExpandable && isSidebarCollapsed && (
+                    <div className="my-1 hidden space-y-0.5 lg:block">
+                      {sortedTools.slice(0, 4).map(tool => {
+                        const accent = ACCENT_STYLES[tool.accent];
+                        const toolActive = activeTool === tool.id && activeMainMenu === 'Tools';
+                        return (
+                          <button
+                            key={tool.id}
+                            type="button"
+                            onClick={() => handleToolClick(tool.id, tool.comingSoon)}
+                            disabled={tool.comingSoon}
+                            title={tool.comingSoon ? `${tool.name} (Coming Soon)` : tool.name}
+                            className={`group relative mx-auto flex h-8 w-8 items-center justify-center rounded-md border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
+                              toolActive
+                                ? `${accent.border} ${accent.bg} ${accent.text}`
+                                : isDark ? 'border-transparent text-slate-400 hover:bg-slate-800/50 hover:text-white'
+                                : 'border-transparent text-gray-400 hover:bg-gray-100 hover:text-gray-900'
+                            } ${tool.comingSoon ? 'cursor-not-allowed opacity-40' : ''}`}
+                          >
+                            {tool.icon}
+                            <span className={`pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm opacity-0 shadow-lg transition-opacity group-hover:opacity-100 ${
+                              isDark ? 'border-slate-700 bg-slate-900 text-white' : 'border-gray-200 bg-white text-gray-900'
+                            }`}>
+                              {tool.name}{tool.comingSoon ? ' (Coming Soon)' : ''}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      {sortedTools.length > 4 && (
+                        <button
+                          type="button"
+                          onClick={() => { setIsSidebarCollapsed(false); }}
+                          className="mx-auto flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium text-slate-500 hover:bg-slate-800/50 hover:text-white"
+                        >
+                          +{sortedTools.length - 4}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </React.Fragment>
+              );
+            })}
           </div>
 
-          <div className="mt-6">
-            <div className="mb-3 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              {isSidebarCollapsed ? <span className="mx-auto block h-1 w-1 rounded-full bg-slate-600" /> : "RESOURCES"}
+          <div className="mt-4">
+            <div className={`mb-3 px-2 text-[10px] font-medium uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+              {isSidebarCollapsed ? <span className="mx-auto block h-0.5 w-0.5 rounded-full bg-slate-600" /> : "Resources"}
             </div>
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {resourceMenuItems.map(item => (
                 <button
                   key={item.id}
@@ -1000,12 +1207,14 @@ function HomePageContent({
                   onClick={() => handleMainMenuClick(item.id)}
                   title={isSidebarCollapsed ? item.label : undefined}
                   aria-current={activeMainMenu === item.id ? 'page' : undefined}
-                  className={`group relative flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-all duration-150 ${
+                  className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
                     activeMainMenu === item.id
-                      ? 'border-emerald-500/50 bg-emerald-500/10 text-white shadow-lg shadow-emerald-500/5'
+                      ? isDark
+                        ? 'bg-emerald-500/10 text-emerald-400'
+                        : 'bg-emerald-50 text-emerald-700'
                       : isDark
-                        ? 'border-transparent text-slate-400 hover:bg-slate-800/60 hover:text-white'
-                        : 'border-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white'
+                        : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
                   }`}
                 >
                   <span className={`flex-shrink-0 transition-colors ${
@@ -1017,10 +1226,12 @@ function HomePageContent({
                     {item.label}
                   </span>
                   {activeMainMenu === item.id && !isSidebarCollapsed && (
-                    <span className="ml-1 h-6 w-1 rounded-full bg-emerald-400" />
+                    <span className="ml-0.5 h-5 w-0.5 rounded-full bg-emerald-400" />
                   )}
                   {isSidebarCollapsed && (
-                    <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+                    <span className={`pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm opacity-0 shadow-lg transition-opacity group-hover:opacity-100 ${
+                      isDark ? 'border-slate-700 bg-slate-900 text-white' : 'border-gray-200 bg-white text-gray-900'
+                    }`}>
                       {item.label}
                     </span>
                   )}
@@ -1030,204 +1241,198 @@ function HomePageContent({
           </div>
         </nav>
 
-        {/* Sidebar Footer */}
-        <div className={`border-t p-4 ${isDark ? 'border-slate-700/60' : 'border-gray-200/60'}`}>
+        {/* Sidebar Footer - Minimal */}
+        <div className={`border-t px-4 py-3 ${isDark ? 'border-slate-700/40' : 'border-gray-200/60'}`}>
           {!isSidebarCollapsed ? (
-            <div className={`rounded-xl border p-3 ${
-              isAdmin ? 'border-amber-500/30 bg-amber-500/10' : 'border-emerald-500/30 bg-emerald-500/10'
-            }`}>
-              <div className="flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full ${
-                  isAdmin ? 'bg-amber-400' : 'bg-emerald-400'
-                } animate-pulse`} />
-                <span className={`text-sm font-semibold ${
-                  isAdmin ? 'text-amber-400' : 'text-emerald-400'
-                }`}>
-                  {isAdmin ? 'Admin Mode' : 'Tools ready'}
-                </span>
-              </div>
-              <p className={`mt-0.5 text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
-                {isAdmin ? 'Managing system settings' : 'Beta v1.0 · Auto-refreshes every 60s'}
-              </p>
+            <div className="flex items-center gap-2">
+              <span className={`h-1.5 w-1.5 rounded-full ${
+                isAdmin ? 'bg-amber-400' : 'bg-emerald-400'
+              } animate-pulse motion-reduce:animate-none`} />
+              <span className={`text-sm font-medium ${
+                isAdmin ? 'text-amber-400' : 'text-emerald-400'
+              }`}>
+                {isAdmin ? 'Admin Mode' : 'Ready'}
+              </span>
+              <span className={`ml-auto text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                {isAdmin ? 'v2.0' : 'v1.0'}
+              </span>
             </div>
           ) : (
-            <div className={`mx-auto h-2.5 w-2.5 rounded-full ${
+            <div className={`mx-auto h-1.5 w-1.5 rounded-full ${
               isAdmin ? 'bg-amber-400' : 'bg-emerald-400'
-            } animate-pulse`} />
+            } animate-pulse motion-reduce:animate-none`} />
           )}
         </div>
       </aside>
 
-      {/* Main Content - With container for proper centering */}
-      <div 
+      {/* Main Content */}
+      <div
         ref={mainContentRef}
         className="flex h-full min-w-0 flex-1 flex-col"
       >
-        {/* Top Header */}
-        <header className={`sticky top-0 z-20 border-b px-4 py-3 shadow-lg backdrop-blur-md sm:px-6 lg:px-8 ${
-          isDark ? 'border-slate-700/50 bg-[#172235]/85' : 'border-gray-200 bg-white/85'
+        {/* Top Header - Clean, minimal, with search */}
+        <header className={`sticky top-0 z-20 border-b px-4 py-3 shadow-sm backdrop-blur-md sm:px-6 lg:px-8 ${
+          isDark ? 'border-slate-700/40 bg-[#0A0F1F]/90' : 'border-gray-200/60 bg-white/90'
         }`}>
-          <div className="flex min-w-0 items-center justify-between gap-3 max-w-7xl mx-auto">
+          <div className="mx-auto flex max-w-7xl min-w-0 items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
                 onClick={() => setIsMobileSidebarOpen(true)}
-                className={`flex-shrink-0 rounded-lg p-2 transition-colors lg:hidden ${
+                className={`flex-shrink-0 rounded-md p-2 transition-colors lg:hidden focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
                   isDark ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
                 }`}
                 aria-label="Open sidebar"
               >
-                <Menu className="h-5 w-5" />
+                <Menu className="h-6 w-6" />
               </button>
 
               <div className="min-w-0">
-                <p className="truncate text-xs text-slate-400">{pageMeta.breadcrumb}</p>
                 <div className="flex items-center gap-2">
-                  <span className={`hidden sm:inline-block ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                  <span className={`hidden sm:inline-flex ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
                     {pageMeta.icon}
                   </span>
-                  <h2 className={`truncate text-lg font-semibold sm:text-xl ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  <h2 className={`truncate text-xl font-semibold sm:text-2xl ${isDark ? 'text-white' : 'text-gray-900'}`}>
                     {pageMeta.title}
                   </h2>
+                  <span className={`hidden text-sm sm:inline ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                    {pageMeta.breadcrumb}
+                  </span>
                 </div>
-                <p className="hidden truncate text-sm text-slate-500 sm:block">{pageMeta.description}</p>
+                <p className={`hidden truncate text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} sm:block`}>
+                  {pageMeta.description}
+                </p>
               </div>
             </div>
 
-            <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2">
+            <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
+              {/* Search Bar - Always visible */}
+              <div className={`hidden items-center rounded-lg border px-3 py-2 md:flex ${
+                isDark ? 'border-slate-700/40 bg-slate-800/30' : 'border-gray-200 bg-gray-50/50'
+              }`}>
+                <Search className={`h-4 w-4 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
+                <input
+                  ref={searchRef}
+                  type="text"
+                  placeholder="Search tools, tasks..."
+                  className={`w-48 bg-transparent px-2 text-sm outline-none placeholder:text-slate-500 lg:w-64 ${
+                    isDark ? 'text-white' : 'text-gray-900'
+                  }`}
+                  aria-label="Global search"
+                />
+                <kbd className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                  isDark ? 'bg-slate-800 text-slate-500' : 'bg-white text-gray-400'
+                }`}>⌘/</kbd>
+              </div>
+
               {isAdmin && (
-                <span className="hidden rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 px-3 py-1 text-xs font-semibold text-amber-400 md:inline-flex items-center">
-                  <Shield className="mr-1 h-3 w-3" />
+                <span className="hidden items-center rounded-full bg-amber-500/15 px-3 py-1 text-xs font-medium text-amber-400 md:inline-flex">
+                  <Shield className="mr-1.5 h-4 w-4" />
                   Admin
                 </span>
               )}
 
               {user && (
-                <span className="hidden rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-400 md:inline-flex items-center">
-                  <UserIcon className="mr-1 h-3 w-3" />
-                  {user.email}
+                <span className="hidden items-center rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-400 md:inline-flex">
+                  <UserIcon className="mr-1.5 h-4 w-4" />
+                  {user.email.split('@')[0]}
                 </span>
               )}
 
-              {activeMainMenu === 'Tools' && selectedTool && (
-                <span className={`hidden rounded-full border px-3 py-1 text-xs font-semibold md:inline-flex items-center ${
-                  selectedTool.accent === 'violet'
-                    ? 'border-violet-500/30 bg-violet-500/10 text-violet-300'
-                    : selectedTool.accent === 'cyan'
-                      ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
-                      : selectedTool.accent === 'orange'
-                        ? 'border-orange-500/30 bg-orange-500/10 text-orange-300'
-                        : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                }`}>
-                  {selectedTool.icon}
-                  <span className="ml-1">{selectedTool.name}</span>
-                </span>
-              )}
-
-              {/* View Mode Toggle */}
-              <div className={`hidden sm:flex items-center gap-0.5 rounded-lg border p-0.5 ${
-                isDark ? 'border-slate-700 bg-slate-800' : 'border-gray-200 bg-white'
+              {/* View Mode Toggle - Compact */}
+              <div className={`hidden items-center gap-0.5 rounded-lg border p-0.5 sm:flex ${
+                isDark ? 'border-slate-700/40 bg-slate-800/30' : 'border-gray-200 bg-white'
               }`}>
                 <button
                   type="button"
                   onClick={() => { setViewMode('grid'); localStorage.setItem(STORAGE_VIEW_MODE_KEY, 'grid'); }}
-                  className={`rounded-md p-1.5 transition-colors ${
-                    viewMode === 'grid' 
+                  className={`rounded p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
+                    viewMode === 'grid'
                       ? isDark ? 'bg-slate-700 text-white' : 'bg-gray-200 text-gray-900'
-                      : isDark ? 'text-slate-400 hover:text-white' : 'text-gray-400 hover:text-gray-900'
+                      : isDark ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-900'
                   }`}
                   aria-label="Grid view"
+                  aria-pressed={viewMode === 'grid'}
                 >
                   <Grid3x3 className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
                   onClick={() => { setViewMode('list'); localStorage.setItem(STORAGE_VIEW_MODE_KEY, 'list'); }}
-                  className={`rounded-md p-1.5 transition-colors ${
-                    viewMode === 'list' 
+                  className={`rounded p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
+                    viewMode === 'list'
                       ? isDark ? 'bg-slate-700 text-white' : 'bg-gray-200 text-gray-900'
-                      : isDark ? 'text-slate-400 hover:text-white' : 'text-gray-400 hover:text-gray-900'
+                      : isDark ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-900'
                   }`}
                   aria-label="List view"
+                  aria-pressed={viewMode === 'list'}
                 >
                   <List className="h-4 w-4" />
                 </button>
               </div>
 
-              {/* Fullscreen toggle */}
+              {/* Fullscreen */}
               <button
                 type="button"
                 onClick={toggleFullscreen}
-                className={`hidden sm:flex rounded-lg border p-2 transition-colors ${
-                  isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+                className={`hidden rounded-md border p-2 transition-colors sm:flex focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
+                  isDark ? 'border-slate-700/40 bg-slate-800/30 text-slate-400 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-100'
                 }`}
                 aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
               >
                 {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </button>
 
-              <button
-                type="button"
-                onClick={() => setCmdOpen(true)}
-                title="Command Palette (⌘K)"
-                className={`rounded-lg border p-2 text-sm font-medium transition-colors ${
-                  isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
-                }`}
-                aria-label="Open command palette"
-              >
-                <Command className="h-4 w-4" />
-              </button>
-
               {/* Theme toggle */}
               <button
                 type="button"
                 onClick={toggleTheme}
-                className={`rounded-lg border p-2 transition-colors ${
-                  isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+                className={`rounded-md border p-2 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
+                  isDark ? 'border-slate-700/40 bg-slate-800/30 text-slate-400 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-100'
                 }`}
                 aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
               >
-                {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                <span className="block transition-transform duration-300">
+                  {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </span>
               </button>
 
               {/* Notification Bell */}
-              <div className="relative">
+              <div className="relative" ref={notifPanelRef}>
                 <button
                   type="button"
                   onClick={() => { setNotifOpen(o => !o); setUserOpen(false); }}
-                  className={`relative rounded-lg border p-2 transition-colors ${
-                    isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+                  className={`relative rounded-md border p-2 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
+                    isDark ? 'border-slate-700/40 bg-slate-800/30 text-slate-400 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-100'
                   }`}
-                  title={isSupported && permission === 'granted' ? 'Desktop notifications enabled' :
-                         isSupported && permission === 'denied' ? 'Desktop notifications blocked' :
-                         'Notifications'}
                   aria-label="Toggle notifications"
+                  aria-expanded={notifOpen}
                 >
                   {isSupported && permission === 'granted' ? (
                     <Bell className="h-4 w-4" />
                   ) : isSupported && permission === 'denied' ? (
-                    <BellOff className="h-4 w-4 text-yellow-400" />
+                    <BellOff className="h-4 w-4 text-amber-400" />
                   ) : (
                     <Bell className="h-4 w-4" />
                   )}
                   {unreadCount > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white animate-pulse">
+                    <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
                       {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                   )}
                 </button>
 
                 {notifOpen && (
-                  <div className={`absolute right-0 top-full z-50 mt-2 w-80 max-h-[400px] rounded-2xl border shadow-2xl overflow-hidden ${
-                    isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-white'
+                  <div className={`absolute right-0 top-full z-50 mt-1.5 max-h-[400px] w-80 overflow-hidden rounded-xl border shadow-lg animate-in fade-in slide-in-from-top-2 duration-150 ${
+                    isDark ? 'border-slate-700/40 bg-slate-900' : 'border-gray-200 bg-white'
                   }`}>
-                    <div className={`flex items-center justify-between border-b px-4 py-3 ${isDark ? 'border-slate-700/60' : 'border-gray-100'}`}>
+                    <div className={`flex items-center justify-between border-b px-3 py-2.5 ${isDark ? 'border-slate-700/40' : 'border-gray-100'}`}>
                       <div className="flex items-center gap-2">
-                        <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
                           Notifications
                         </span>
                         {isSupported && permission === 'denied' && (
-                          <span className="text-xs text-yellow-400" title="Desktop notifications are blocked">
+                          <span className="text-xs text-amber-400" title="Desktop notifications are blocked">
                             <AlertCircle className="inline h-3 w-3" />
                           </span>
                         )}
@@ -1236,8 +1441,7 @@ function HomePageContent({
                         <button
                           type="button"
                           onClick={refreshNotifications}
-                          className="text-xs text-emerald-400 hover:underline flex items-center gap-1"
-                          title="Refresh notifications"
+                          className="flex items-center gap-1 text-xs text-emerald-400 hover:underline"
                         >
                           <RefreshCw className="h-3 w-3" />
                           Refresh
@@ -1252,9 +1456,9 @@ function HomePageContent({
                           </button>
                         )}
                         {unreadCount > 0 && (
-                          <button 
-                            type="button" 
-                            onClick={markAllAsRead} 
+                          <button
+                            type="button"
+                            onClick={markAllAsRead}
                             className="text-xs text-emerald-400 hover:underline"
                           >
                             Mark all read
@@ -1262,18 +1466,18 @@ function HomePageContent({
                         )}
                       </div>
                     </div>
-                    <div className="overflow-y-auto max-h-[300px] divide-y divide-slate-800/60">
+                    <div className="max-h-[300px] divide-y divide-slate-800/40 overflow-y-auto">
                       {notifications.length === 0 ? (
-                        <div className="px-4 py-8 text-center">
-                          <Bell className="mx-auto h-8 w-8 opacity-20" />
-                          <p className={`mt-2 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                        <div className="px-3 py-6 text-center">
+                          <Bell className="mx-auto h-6 w-6 opacity-20" />
+                          <p className={`mt-1.5 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
                             No notifications yet
                           </p>
                           {isSupported && permission === 'default' && (
                             <button
                               type="button"
                               onClick={requestPermission}
-                              className="mt-3 text-xs text-emerald-400 hover:underline"
+                              className="mt-2 text-xs text-emerald-400 hover:underline"
                             >
                               Enable desktop notifications
                             </button>
@@ -1283,14 +1487,17 @@ function HomePageContent({
                         notifications.map(n => (
                           <div
                             key={n.id}
-                            className={`flex items-start gap-3 px-4 py-3 transition-colors cursor-pointer hover:bg-opacity-50 ${
-                              !n.read ? (isDark ? 'bg-slate-800/40' : 'bg-blue-50/40') : ''
-                            } ${isDark ? 'hover:bg-slate-800/30' : 'hover:bg-gray-50'}`}
+                            role="button"
+                            tabIndex={0}
+                            className={`flex cursor-pointer items-start gap-2.5 px-3 py-2.5 transition-colors ${
+                              !n.read ? (isDark ? 'bg-slate-800/30' : 'bg-blue-50/30') : ''
+                            } ${isDark ? 'hover:bg-slate-800/20' : 'hover:bg-gray-50'}`}
                             onClick={() => markAsRead(n.id)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') markAsRead(n.id); }}
                           >
-                            <span className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${
+                            <span className={`mt-0.5 h-1.5 w-1.5 flex-shrink-0 rounded-full ${
                               n.type === 'success' ? 'bg-emerald-400'
-                              : n.type === 'warning' ? 'bg-yellow-400'
+                              : n.type === 'warning' ? 'bg-amber-400'
                               : n.type === 'error' ? 'bg-red-400'
                               : 'bg-blue-400'
                             }`} />
@@ -1300,7 +1507,7 @@ function HomePageContent({
                                   {n.title}
                                 </p>
                                 {n.agent_name && n.agent_name !== 'System' && (
-                                  <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${
+                                  <span className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${
                                     isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-100 text-gray-600'
                                   }`}>
                                     @{n.agent_name}
@@ -1310,26 +1517,21 @@ function HomePageContent({
                               <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                                 {n.message}
                               </p>
-                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <div className="mt-0.5 flex flex-wrap items-center gap-2">
                                 <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
                                   {new Date(n.created_at).toLocaleString()}
                                 </p>
                                 {n.tool_name && (
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                                    isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${
+                                    isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
                                   }`}>
                                     {n.tool_name.replace('_', ' ')}
-                                  </span>
-                                )}
-                                {n.agent_email && n.agent_name !== 'System' && (
-                                  <span className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                                    by {n.agent_email}
                                   </span>
                                 )}
                               </div>
                             </div>
                             {!n.read && (
-                              <span className="h-2 w-2 rounded-full bg-blue-500 flex-shrink-0 mt-1" />
+                              <span className="mt-0.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
                             )}
                           </div>
                         ))
@@ -1340,45 +1542,46 @@ function HomePageContent({
               </div>
 
               {/* User Menu */}
-              <div className="relative">
+              <div className="relative" ref={userPanelRef}>
                 <button
                   type="button"
                   onClick={() => { setUserOpen(o => !o); setNotifOpen(false); }}
-                  className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-colors ${
-                    isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+                  className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
+                    isDark ? 'border-slate-700/40 bg-slate-800/30 text-slate-400 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-100'
                   }`}
                   aria-label="User menu"
+                  aria-expanded={userOpen}
                 >
                   <UserIcon className="h-4 w-4" />
                 </button>
 
                 {userOpen && (
-                  <div className={`absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl border shadow-2xl overflow-hidden ${
-                    isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-white'
+                  <div className={`absolute right-0 top-full z-50 mt-1.5 w-48 overflow-hidden rounded-xl border shadow-lg animate-in fade-in slide-in-from-top-2 duration-150 ${
+                    isDark ? 'border-slate-700/40 bg-slate-900' : 'border-gray-200 bg-white'
                   }`}>
-                    <div className={`border-b px-4 py-3 ${isDark ? 'border-slate-700/60' : 'border-gray-100'}`}>
-                      <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    <div className={`border-b px-3 py-2.5 ${isDark ? 'border-slate-700/40' : 'border-gray-100'}`}>
+                      <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
                         {user?.email || 'LOT User'}
                       </p>
                       <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                        {isAdmin ? 'Admin Access' : 'Beta Access · v1.0'}
+                        {isAdmin ? 'Admin Access' : 'Beta Access'}
                       </p>
                     </div>
                     <div className="py-1">
                       <button
                         type="button"
                         onClick={toggleTheme}
-                        className={`flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
                           isDark ? 'text-slate-300 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-50'
                         }`}
                       >
                         {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                        Switch to {isDark ? 'Light' : 'Dark'} Mode
+                        {isDark ? 'Light' : 'Dark'} Mode
                       </button>
                       <button
                         type="button"
                         onClick={toggleFullscreen}
-                        className={`flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
                           isDark ? 'text-slate-300 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-50'
                         }`}
                       >
@@ -1392,7 +1595,7 @@ function HomePageContent({
                           await supabase.auth.signOut();
                           window.location.reload();
                         }}
-                        className={`flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
                           isDark ? 'text-red-400 hover:bg-slate-800' : 'text-red-600 hover:bg-gray-50'
                         }`}
                       >
@@ -1407,12 +1610,12 @@ function HomePageContent({
           </div>
         </header>
 
-        {/* Page Content - With container for centering */}
-        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 w-full">
+        {/* Page Content */}
+        <main id="main-content" className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
             <div
-              className={`transition-opacity duration-150 ${
-                isTransitioning ? 'opacity-0' : 'opacity-100'
+              className={`transition-all duration-150 motion-reduce:transition-none ${
+                isTransitioning ? 'translate-y-0.5 opacity-0' : 'translate-y-0 opacity-100'
               }`}
             >
               {renderContent()}

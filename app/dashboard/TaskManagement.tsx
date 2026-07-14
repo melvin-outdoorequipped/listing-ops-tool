@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
@@ -32,7 +31,26 @@ import {
   ArrowRight,
   Copy,
   BarChart3,
+  TrendingUp,
+  TrendingDown,
+  Target,
+  Activity,
+  Download,
+  Printer,
+  Maximize2,
+  Minus,
+  GripVertical,
+  ChevronsUpDown,
+  ExternalLink,
+  Link,
+  Hash,
+  Tag,
+  Briefcase,
+  Users,
+  Zap,
+  Clock as ClockIcon,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Task, TaskViewMode, getStatusColor, formatDate } from '../components/dashboard-utils';
 import { VALID_TASK_STATUSES, isTaskAdminEmail, AGENT_OPTIONS, BRAND_OPTIONS, TYPE_OPTIONS, TASK_OPTIONS } from '../../lib/task-option';
 import {
@@ -127,10 +145,13 @@ function ToastContainer({
         const style = TOAST_STYLES[msg.type];
         const Icon = style.Icon;
         return (
-          <div
+          <motion.div
             key={msg.id}
+            initial={{ opacity: 0, x: 50, scale: 0.95 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 50, scale: 0.95 }}
             className={cn(
-              'relative overflow-hidden flex items-start gap-3 rounded-xl border p-4 shadow-lg animate-in slide-in-from-right-4 fade-in duration-300',
+              'relative overflow-hidden flex items-start gap-3 rounded-2xl border p-4 shadow-2xl backdrop-blur-sm',
               isDark ? style.dark : style.light
             )}
           >
@@ -149,7 +170,7 @@ function ToastContainer({
             <span className={cn('absolute bottom-0 left-0 h-0.5 w-full origin-left animate-[shrink_var(--dur)_linear_forwards]', style.bar)}
               style={{ ['--dur' as any]: `${msg.duration || 4000}ms` }}
             />
-          </div>
+          </motion.div>
         );
       })}
       <style>{`@keyframes shrink { from { transform: scaleX(1); } to { transform: scaleX(0); } }`}</style>
@@ -175,6 +196,689 @@ function useToast(theme: 'light' | 'dark') {
     removeToast,
     toastContainer: <ToastContainer messages={messages} onRemove={removeToast} theme={theme} />,
   };
+}
+
+// ─── ANIMATED COUNTER ─────────────────────────────────────────────────────
+
+function AnimatedCounter({ value, duration = 800, className = '' }: { value: number; duration?: number; className?: string }) {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    let startTime: number;
+    let animationFrame: number;
+
+    const animate = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(eased * value));
+
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(animate);
+      }
+    };
+
+    animationFrame = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+    };
+  }, [value, duration]);
+
+  return <span className={className}>{count}</span>;
+}
+
+// ─── DASHBOARD HEADER ────────────────────────────────────────────────────
+
+interface DashboardHeaderProps {
+  isDark: boolean;
+  totalTasks: number;
+  completedToday: number;
+  pendingCount: number;
+  overdueCount: number;
+  completionRate: number;
+  userName?: string;
+  onRefresh: () => void;
+  isLoading: boolean;
+}
+
+function DashboardHeader({
+  isDark,
+  totalTasks,
+  completedToday,
+  pendingCount,
+  overdueCount,
+  completionRate,
+  userName,
+  onRefresh,
+  isLoading,
+}: DashboardHeaderProps) {
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [greeting, setGreeting] = useState('Good Morning');
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    const hour = new Date().getHours();
+    if (hour < 12) setGreeting('Good Morning');
+    else if (hour < 17) setGreeting('Good Afternoon');
+    else setGreeting('Good Evening');
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        'relative overflow-hidden rounded-3xl border p-6 sm:p-8',
+        isDark
+          ? 'border-slate-700/50 bg-gradient-to-br from-slate-800/80 via-slate-800/60 to-slate-900/80'
+          : 'border-gray-200 bg-gradient-to-br from-white via-gray-50/80 to-white'
+      )}
+    >
+      {/* Glass overlay */}
+      <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-purple-500/5 rounded-3xl" />
+      
+      <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 p-2.5 shadow-lg shadow-emerald-500/20">
+              <Zap className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className={cn('text-2xl sm:text-3xl font-bold tracking-tight', isDark ? 'text-white' : 'text-gray-900')}>
+                Task Management
+              </h1>
+              <p className={cn('text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
+                {greeting}{userName ? `, ${userName}` : ''} · {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 mt-3">
+            <div className={cn('flex items-center gap-1.5 text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
+              <Calendar className="h-4 w-4" />
+              {currentTime.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+            </div>
+            <div className={cn('flex items-center gap-1.5 text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
+              <Users className="h-4 w-4" />
+              {totalTasks} total tasks
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-6">
+            <div className="text-center">
+              <p className={cn('text-2xl font-bold', isDark ? 'text-emerald-400' : 'text-emerald-600')}>
+                <AnimatedCounter value={completionRate} />%
+              </p>
+              <p className={cn('text-[10px] uppercase tracking-wider', isDark ? 'text-slate-400' : 'text-gray-500')}>
+                Completion Rate
+              </p>
+            </div>
+            <div className={cn('w-px h-10', isDark ? 'bg-slate-700' : 'bg-gray-200')} />
+            <div className="text-center">
+              <p className={cn('text-2xl font-bold', isDark ? 'text-blue-400' : 'text-blue-600')}>
+                <AnimatedCounter value={completedToday} />
+              </p>
+              <p className={cn('text-[10px] uppercase tracking-wider', isDark ? 'text-slate-400' : 'text-gray-500')}>
+                Completed Today
+              </p>
+            </div>
+            {overdueCount > 0 && (
+              <>
+                <div className={cn('w-px h-10', isDark ? 'bg-slate-700' : 'bg-gray-200')} />
+                <div className="text-center">
+                  <p className={cn('text-2xl font-bold', isDark ? 'text-rose-400' : 'text-rose-600')}>
+                    <AnimatedCounter value={overdueCount} />
+                  </p>
+                  <p className={cn('text-[10px] uppercase tracking-wider', isDark ? 'text-slate-400' : 'text-gray-500')}>
+                    Overdue
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+
+          <Button
+            theme={isDark ? 'dark' : 'light'}
+            variant="outline"
+            icon={RefreshCw}
+            isLoading={isLoading}
+            onClick={onRefresh}
+            className="flex-shrink-0"
+          >
+            Refresh
+          </Button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── ANALYTICS CARDS ────────────────────────────────────────────────────
+
+interface AnalyticsCardProps {
+  title: string;
+  value: number;
+  icon: React.ReactNode;
+  color: string;
+  gradient: string;
+  isDark: boolean;
+  delay?: number;
+  subtitle?: string;
+  trend?: number;
+}
+
+function AnalyticsCard({ title, value, icon, color, gradient, isDark, delay = 0, subtitle, trend }: AnalyticsCardProps) {
+  const isPositive = trend !== undefined && trend >= 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: delay * 0.05 }}
+      whileHover={{ y: -4, transition: { duration: 0.2 } }}
+      className={cn(
+        'relative overflow-hidden rounded-2xl border transition-all duration-300',
+        isDark
+          ? 'border-slate-700/50 bg-slate-800/50 hover:border-slate-600 hover:shadow-2xl hover:shadow-slate-800/20'
+          : 'border-gray-200 bg-white/80 backdrop-blur-sm hover:shadow-xl hover:shadow-gray-200/50'
+      )}
+    >
+      {/* Gradient accent */}
+      <div className={cn('absolute top-0 left-0 right-0 h-1', gradient)} />
+
+      <div className="p-5">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className={cn('text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>{title}</p>
+            <p className="text-3xl font-bold tracking-tight mt-1">
+              <AnimatedCounter value={value} className={isDark ? 'text-white' : 'text-gray-900'} />
+            </p>
+            {subtitle && (
+              <p className={cn('text-xs mt-1', isDark ? 'text-slate-400' : 'text-gray-500')}>{subtitle}</p>
+            )}
+            {trend !== undefined && (
+              <div className="flex items-center gap-1 mt-1.5">
+                {isPositive ? (
+                  <TrendingUp className="h-3 w-3 text-emerald-500" />
+                ) : (
+                  <TrendingDown className="h-3 w-3 text-rose-500" />
+                )}
+                <span className={cn('text-xs font-medium', isPositive ? 'text-emerald-500' : 'text-rose-500')}>
+                  {isPositive ? '+' : ''}{trend}%
+                </span>
+                <span className={cn('text-xs', isDark ? 'text-slate-400' : 'text-gray-500')}>from yesterday</span>
+              </div>
+            )}
+          </div>
+          <div className={cn('rounded-2xl p-3 flex-shrink-0', gradient, 'bg-opacity-10')}>
+            <div className={color}>{icon}</div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+
+
+// ─── TASK NAME GENERATOR MODAL ───────────────────────────────────────────
+
+interface TaskNameGeneratorModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  task: Task | null;
+  theme: 'light' | 'dark';
+}
+
+function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGeneratorModalProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [copiedTemplate, setCopiedTemplate] = useState<string | null>(null);
+  const [copiedText, setCopiedText] = useState<string | null>(null);
+  const [recentTasks, setRecentTasks] = useState<RecentTaskName[]>([]);
+  
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [customBrand, setCustomBrand] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [isEditingBrand, setIsEditingBrand] = useState(false);
+  const [showRecentTasks, setShowRecentTasks] = useState(true);
+
+  const isDark = theme === 'dark';
+
+  const allCategories = useMemo(() => {
+    return TD_TASK_CATEGORIES.map(cat => cat.category);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen && task) {
+      setRecentTasks(loadRecentTaskNames(task.agent || 'default'));
+      setSelectedBrand(task.brand || '');
+      setCustomBrand('');
+      setIsEditingBrand(false);
+      
+      const category = findCategoryByTaskName(task.task);
+      setSelectedCategory(category?.category || '');
+    }
+  }, [isOpen, task]);
+
+  if (!isOpen || !task) return null;
+
+  const category = selectedCategory 
+    ? TD_TASK_CATEGORIES.find(cat => cat.category === selectedCategory) 
+    : findCategoryByTaskName(task.task);
+    
+  const templates = category?.templates || [];
+
+  const filteredTemplates = searchQuery.trim()
+    ? templates.filter((t) =>
+        generateTaskName(t, { brand: selectedBrand || task.brand, agent: task.agent }).toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : templates;
+
+  const handleCopy = (template: string) => {
+    const brandToUse = selectedBrand || task.brand;
+    const generated = generateTaskName(template, { 
+      brand: brandToUse, 
+      agent: task.agent 
+    });
+
+    navigator.clipboard.writeText(generated);
+    setCopiedTemplate(template);
+    setCopiedText(generated);
+    setTimeout(() => {
+      setCopiedTemplate(null);
+      setCopiedText(null);
+    }, 2000);
+
+    pushRecentTaskName(task.agent || 'default', { 
+      text: generated, 
+      category: category?.category || task.task, 
+      timestamp: Date.now() 
+    });
+    setRecentTasks(loadRecentTaskNames(task.agent || 'default'));
+  };
+
+  const handleCopyRecent = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedText(text);
+    setTimeout(() => setCopiedText(null), 2000);
+  };
+
+  const handleBrandChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    if (value === '__CUSTOM__') {
+      setIsEditingBrand(true);
+      setSelectedBrand('');
+      setCustomBrand('');
+    } else {
+      setSelectedBrand(value);
+      setIsEditingBrand(false);
+      setCustomBrand('');
+    }
+  };
+
+  const handleCustomBrandSubmit = () => {
+    if (customBrand.trim()) {
+      setSelectedBrand(customBrand.trim());
+      setIsEditingBrand(false);
+    }
+  };
+
+  const handleBrandInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleCustomBrandSubmit();
+    }
+    if (e.key === 'Escape') {
+      setIsEditingBrand(false);
+      setCustomBrand('');
+      setSelectedBrand(task.brand || '');
+    }
+  };
+
+  const handleReset = () => {
+    setSelectedBrand(task.brand || '');
+    setSelectedCategory('');
+    setIsEditingBrand(false);
+    setCustomBrand('');
+    setSearchQuery('');
+  };
+
+  const mutedText = isDark ? 'text-slate-400' : 'text-gray-500';
+  const inputCls = isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400';
+  const labelCls = cn('text-xs sm:text-sm font-medium', mutedText);
+  const selectCls = cn(
+    'w-full rounded-lg border px-3 py-2 text-sm transition-colors',
+    focusRing,
+    inputCls
+  );
+
+  const brandToUse = selectedBrand || task.brand;
+  const isBrandInOptions = brandToUse && BRAND_OPTIONS.includes(brandToUse);
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} theme={theme} maxWidth="max-w-3xl" labelledBy="generator-title">
+      <ModalHeader
+        icon={Sparkles}
+        iconClassName="bg-gradient-to-r from-blue-500 to-purple-500"
+        title="Task Name Generator"
+        subtitle={`Generate task names for ${brandToUse} · ${category?.category || task.task}`}
+        onClose={onClose}
+        theme={theme}
+        titleId="generator-title"
+      />
+
+      <div className={cn('p-4 sm:p-5 border-b', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className={labelCls}>
+              Brand <span className="text-amber-400">*</span>
+            </label>
+            {!isEditingBrand ? (
+              <div className="flex gap-2">
+                <select
+                  value={isBrandInOptions ? brandToUse : '__CUSTOM__'}
+                  onChange={handleBrandChange}
+                  className={selectCls}
+                >
+                  <option value={brandToUse}>
+                    {brandToUse || 'Select brand...'}
+                  </option>
+                  {BRAND_OPTIONS
+                    .filter(b => b !== brandToUse)
+                    .slice(0, 10)
+                    .map((brand) => (
+                      <option key={brand} value={brand}>{brand}</option>
+                    ))}
+                  {BRAND_OPTIONS.length > 10 && (
+                    <option disabled>───</option>
+                  )}
+                  {BRAND_OPTIONS
+                    .filter(b => b !== brandToUse)
+                    .slice(10)
+                    .map((brand) => (
+                      <option key={brand} value={brand}>{brand}</option>
+                    ))}
+                  <option value="__CUSTOM__">✏️ Custom Brand</option>
+                </select>
+                {!isBrandInOptions && brandToUse && (
+                  <span className={cn('inline-flex items-center px-2 text-xs rounded', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
+                    Custom
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Enter brand name..."
+                  value={customBrand}
+                  onChange={(e) => setCustomBrand(e.target.value)}
+                  onKeyDown={handleBrandInputKeyDown}
+                  className={cn('flex-1 rounded-lg border px-3 py-2 text-sm', focusRing, inputCls)}
+                  autoFocus
+                />
+                <Button
+                  theme={theme}
+                  variant="primary"
+                  size="sm"
+                  onClick={handleCustomBrandSubmit}
+                  disabled={!customBrand.trim()}
+                  className="px-3"
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button
+                  theme={theme}
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setIsEditingBrand(false);
+                    setCustomBrand('');
+                    setSelectedBrand(task.brand || '');
+                  }}
+                  className="px-3"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            <p className={cn('text-[10px]', mutedText)}>
+              {isEditingBrand ? 'Type a brand name and press Enter' : 'Select a brand or choose "Custom Brand"'}
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className={labelCls}>
+              Category
+            </label>
+            <div className="flex gap-2">
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className={selectCls}
+              >
+                <option value="">Auto-detect</option>
+                {allCategories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              {selectedCategory && (
+                <Button
+                  theme={theme}
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setSelectedCategory('')}
+                  className="px-3 flex-shrink-0"
+                  title="Reset to auto-detect"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            <p className={cn('text-[10px]', mutedText)}>
+              {selectedCategory ? `Using: ${selectedCategory}` : 'Auto-detected from task name'}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <div className="relative">
+            <Search className={cn('absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4', mutedText)} />
+            <input
+              type="text"
+              placeholder="Search templates..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={cn(
+                'w-full rounded-lg border pl-9 pr-3 py-2 text-sm',
+                focusRing,
+                inputCls
+              )}
+            />
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className={cn('text-[10px] font-medium', mutedText)}>Context:</span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
+            <User className="h-3 w-3" />
+            {task.agent || 'Unassigned'}
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-medium text-blue-400">
+            <span className="font-mono">{filteredTemplates.length}</span> templates
+          </span>
+          {brandToUse && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/20 px-2.5 py-0.5 text-xs font-medium text-purple-400">
+              {brandToUse}
+            </span>
+          )}
+          {selectedCategory && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-400">
+              {selectedCategory}
+            </span>
+          )}
+          <button
+            onClick={handleReset}
+            className={cn(
+              'ml-auto text-xs font-medium transition-colors',
+              focusRing,
+              isDark ? 'text-slate-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'
+            )}
+          >
+            Reset All
+          </button>
+        </div>
+      </div>
+
+      {recentTasks.length > 0 && (
+        <div className={cn('border-b', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
+          <button
+            onClick={() => setShowRecentTasks(!showRecentTasks)}
+            className={cn(
+              'w-full flex items-center justify-between px-4 sm:p-5 py-2 text-xs font-medium transition-colors',
+              focusRing,
+              isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800/50' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+            )}
+          >
+            <span>📋 Recent</span>
+            <span className="text-[10px]">
+              {showRecentTasks ? '▼' : '▶'} {recentTasks.length}
+            </span>
+          </button>
+          {showRecentTasks && (
+            <div className="px-4 sm:px-5 pb-3 flex flex-wrap gap-2">
+              {recentTasks.slice(0, 5).map((recent, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleCopyRecent(recent.text)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-all group',
+                    focusRing,
+                    isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600 hover:bg-slate-700' : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                  )}
+                >
+                  <span className="truncate max-w-[120px]">{recent.text}</span>
+                  {copiedText === recent.text ? (
+                    <Check className="h-3 w-3 text-emerald-400" />
+                  ) : (
+                    <Copy className="h-3 w-3 opacity-50 group-hover:opacity-100" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="p-4 sm:p-5 max-h-[400px] overflow-y-auto">
+        {filteredTemplates.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <Search className={cn('h-12 w-12 mb-4', mutedText)} />
+            <p className={cn('text-sm font-medium', isDark ? 'text-white' : 'text-gray-900')}>
+              {searchQuery ? 'No templates match your search' : 'No templates available'}
+            </p>
+            <p className={cn('text-xs mt-1', mutedText)}>
+              {searchQuery ? 'Try adjusting your search terms' : 'Try selecting a different category'}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredTemplates.map((template, idx) => {
+              const generated = generateTaskName(template, { 
+                brand: brandToUse, 
+                agent: task.agent 
+              });
+              const isCopied = copiedTemplate === template;
+              const usesBrandToken = template.includes('{brand}');
+              const usesAgentToken = template.includes('{agent}');
+              const hasPlaceholder = template.includes('[specify what file]');
+
+              return (
+                <button
+                  key={idx}
+                  onClick={() => handleCopy(template)}
+                  className={cn(
+                    'group w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 rounded-lg border p-3 sm:p-4 text-left transition-all hover:shadow-md',
+                    focusRing,
+                    isCopied
+                      ? isDark
+                        ? 'border-emerald-500/50 bg-emerald-500/10'
+                        : 'border-emerald-300 bg-emerald-50'
+                      : isDark
+                      ? 'border-slate-700 bg-slate-800/50 hover:border-slate-600 hover:bg-slate-800'
+                      : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                  )}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className={cn(
+                      'text-sm font-medium break-all',
+                      isCopied ? 'text-emerald-400' : isDark ? 'text-white' : 'text-gray-900'
+                    )}>
+                      {generated}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {hasPlaceholder && (
+                        <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
+                          <AlertTriangle className="h-2.5 w-2.5" />
+                          Editable
+                        </span>
+                      )}
+                      {!usesBrandToken && (
+                        <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium', isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-500')}>
+                          No brand
+                        </span>
+                      )}
+                      {!usesAgentToken && (
+                        <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium', isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-500')}>
+                          No agent
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+                    {isCopied ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400">
+                        <Check className="h-4 w-4" /> Copied!
+                      </span>
+                    ) : (
+                      <Copy className={cn('h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100', mutedText)} />
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <ModalFooter theme={theme} align="between">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className={mutedText}>
+            {filteredTemplates.length} template{filteredTemplates.length !== 1 ? 's' : ''}
+          </span>
+          <span className={cn('w-px h-4', isDark ? 'bg-slate-700' : 'bg-gray-200')} />
+          <span className={mutedText}>
+            {brandToUse && `Brand: ${brandToUse}`}
+            {selectedCategory && ` · ${selectedCategory}`}
+          </span>
+          <span className={cn('text-[10px]', mutedText)}>
+            · Esc to close
+          </span>
+        </div>
+        <div className="flex gap-2">
+          <Button theme={theme} variant="secondary" size="sm" onClick={handleReset}>
+            Reset
+          </Button>
+          <Button theme={theme} variant="secondary" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </ModalFooter>
+    </Modal>
+  );
 }
 
 // ─── REASON FOR PENDING MODAL ─────────────────────────────────────────────
@@ -443,473 +1147,6 @@ function TaskFormModal({
         <Button theme={theme} variant="primary" icon={Check} isLoading={isSubmitting} disabled={!canSubmit} onClick={() => onSubmit(form)}>
           {mode === 'add' ? 'Add Task' : 'Save Changes'}
         </Button>
-      </ModalFooter>
-    </Modal>
-  );
-}
-
-// ─── TASK NAME GENERATOR MODAL ───────────────────────────────────────────
-
-interface TaskNameGeneratorModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  task: Task | null;
-  theme: 'light' | 'dark';
-}
-
-function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGeneratorModalProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [copiedTemplate, setCopiedTemplate] = useState<string | null>(null);
-  const [copiedText, setCopiedText] = useState<string | null>(null);
-  const [recentTasks, setRecentTasks] = useState<RecentTaskName[]>([]);
-  
-  // State for editing brand and category
-  const [selectedBrand, setSelectedBrand] = useState('');
-  const [customBrand, setCustomBrand] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [isEditingBrand, setIsEditingBrand] = useState(false);
-  const [showRecentTasks, setShowRecentTasks] = useState(true);
-
-  const isDark = theme === 'dark';
-
-  // Get all unique categories
-  const allCategories = useMemo(() => {
-    return TD_TASK_CATEGORIES.map(cat => cat.category);
-  }, []);
-
-  useEffect(() => {
-    if (isOpen && task) {
-      setRecentTasks(loadRecentTaskNames(task.agent || 'default'));
-      setSelectedBrand(task.brand || '');
-      setCustomBrand('');
-      setIsEditingBrand(false);
-      
-      const category = findCategoryByTaskName(task.task);
-      setSelectedCategory(category?.category || '');
-    }
-  }, [isOpen, task]);
-
-  if (!isOpen || !task) return null;
-
-  const category = selectedCategory 
-    ? TD_TASK_CATEGORIES.find(cat => cat.category === selectedCategory) 
-    : findCategoryByTaskName(task.task);
-    
-  const templates = category?.templates || [];
-
-  const filteredTemplates = searchQuery.trim()
-    ? templates.filter((t) =>
-        generateTaskName(t, { brand: selectedBrand || task.brand, agent: task.agent }).toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : templates;
-
-  const handleCopy = (template: string) => {
-    const brandToUse = selectedBrand || task.brand;
-    const generated = generateTaskName(template, { 
-      brand: brandToUse, 
-      agent: task.agent 
-    });
-
-    navigator.clipboard.writeText(generated);
-    setCopiedTemplate(template);
-    setCopiedText(generated);
-    setTimeout(() => {
-      setCopiedTemplate(null);
-      setCopiedText(null);
-    }, 2000);
-
-    pushRecentTaskName(task.agent || 'default', { 
-      text: generated, 
-      category: category?.category || task.task, 
-      timestamp: Date.now() 
-    });
-    setRecentTasks(loadRecentTaskNames(task.agent || 'default'));
-  };
-
-  const handleCopyRecent = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedText(text);
-    setTimeout(() => setCopiedText(null), 2000);
-  };
-
-  const handleBrandChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
-    if (value === '__CUSTOM__') {
-      setIsEditingBrand(true);
-      setSelectedBrand('');
-      setCustomBrand('');
-    } else {
-      setSelectedBrand(value);
-      setIsEditingBrand(false);
-      setCustomBrand('');
-    }
-  };
-
-  const handleCustomBrandSubmit = () => {
-    if (customBrand.trim()) {
-      setSelectedBrand(customBrand.trim());
-      setIsEditingBrand(false);
-    }
-  };
-
-  const handleBrandInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleCustomBrandSubmit();
-    }
-    if (e.key === 'Escape') {
-      setIsEditingBrand(false);
-      setCustomBrand('');
-      setSelectedBrand(task.brand || '');
-    }
-  };
-
-  const handleReset = () => {
-    setSelectedBrand(task.brand || '');
-    setSelectedCategory('');
-    setIsEditingBrand(false);
-    setCustomBrand('');
-    setSearchQuery('');
-  };
-
-  const mutedText = isDark ? 'text-slate-400' : 'text-gray-500';
-  const inputCls = isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400';
-  const labelCls = cn('text-xs sm:text-sm font-medium', mutedText);
-  const selectCls = cn(
-    'w-full rounded-lg border px-3 py-2 text-sm transition-colors',
-    focusRing,
-    inputCls
-  );
-
-  const brandToUse = selectedBrand || task.brand;
-  const isBrandInOptions = brandToUse && BRAND_OPTIONS.includes(brandToUse);
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} theme={theme} maxWidth="max-w-3xl" labelledBy="generator-title">
-      <ModalHeader
-        icon={Sparkles}
-        iconClassName="bg-gradient-to-r from-blue-500 to-purple-500"
-        title="Task Name Generator"
-        subtitle={`Generate task names for ${brandToUse} · ${category?.category || task.task}`}
-        onClose={onClose}
-        theme={theme}
-        titleId="generator-title"
-      />
-
-      {/* Controls Section - Clean 2-column grid */}
-      <div className={cn('p-4 sm:p-5 border-b', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Brand Control */}
-          <div className="space-y-1.5">
-            <label className={labelCls}>
-              Brand <span className="text-amber-400">*</span>
-            </label>
-            {!isEditingBrand ? (
-              <div className="flex gap-2">
-                <select
-                  value={isBrandInOptions ? brandToUse : '__CUSTOM__'}
-                  onChange={handleBrandChange}
-                  className={selectCls}
-                >
-                  <option value={brandToUse}>
-                    {brandToUse || 'Select brand...'}
-                  </option>
-                  {BRAND_OPTIONS
-                    .filter(b => b !== brandToUse)
-                    .slice(0, 10)
-                    .map((brand) => (
-                      <option key={brand} value={brand}>{brand}</option>
-                    ))}
-                  {BRAND_OPTIONS.length > 10 && (
-                    <option disabled>───</option>
-                  )}
-                  {BRAND_OPTIONS
-                    .filter(b => b !== brandToUse)
-                    .slice(10)
-                    .map((brand) => (
-                      <option key={brand} value={brand}>{brand}</option>
-                    ))}
-                  <option value="__CUSTOM__">✏️ Custom Brand</option>
-                </select>
-                {!isBrandInOptions && brandToUse && (
-                  <span className={cn('inline-flex items-center px-2 text-xs rounded', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
-                    Custom
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Enter brand name..."
-                  value={customBrand}
-                  onChange={(e) => setCustomBrand(e.target.value)}
-                  onKeyDown={handleBrandInputKeyDown}
-                  className={cn('flex-1 rounded-lg border px-3 py-2 text-sm', focusRing, inputCls)}
-                  autoFocus
-                />
-                <Button
-                  theme={theme}
-                  variant="primary"
-                  size="sm"
-                  onClick={handleCustomBrandSubmit}
-                  disabled={!customBrand.trim()}
-                  className="px-3"
-                >
-                  <Check className="h-4 w-4" />
-                </Button>
-                <Button
-                  theme={theme}
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    setIsEditingBrand(false);
-                    setCustomBrand('');
-                    setSelectedBrand(task.brand || '');
-                  }}
-                  className="px-3"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-            <p className={cn('text-[10px]', mutedText)}>
-              {isEditingBrand ? 'Type a brand name and press Enter' : 'Select a brand or choose "Custom Brand"'}
-            </p>
-          </div>
-
-          {/* Category Control */}
-          <div className="space-y-1.5">
-            <label className={labelCls}>
-              Category
-            </label>
-            <div className="flex gap-2">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className={selectCls}
-              >
-                <option value="">Auto-detect</option>
-                {allCategories.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-              {selectedCategory && (
-                <Button
-                  theme={theme}
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setSelectedCategory('')}
-                  className="px-3 flex-shrink-0"
-                  title="Reset to auto-detect"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-            <p className={cn('text-[10px]', mutedText)}>
-              {selectedCategory ? `Using: ${selectedCategory}` : 'Auto-detected from task name'}
-            </p>
-          </div>
-        </div>
-
-        {/* Search Bar - Full width */}
-        <div className="mt-4">
-          <div className="relative">
-            <Search className={cn('absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4', mutedText)} />
-            <input
-              type="text"
-              placeholder="Search templates..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={cn(
-                'w-full rounded-lg border pl-9 pr-3 py-2 text-sm',
-                focusRing,
-                inputCls
-              )}
-            />
-          </div>
-        </div>
-
-        {/* Context Chip */}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className={cn('text-[10px] font-medium', mutedText)}>Context:</span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
-            <User className="h-3 w-3" />
-            {task.agent || 'Unassigned'}
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-medium text-blue-400">
-            <span className="font-mono">{filteredTemplates.length}</span> templates
-          </span>
-          {brandToUse && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/20 px-2.5 py-0.5 text-xs font-medium text-purple-400">
-              {brandToUse}
-            </span>
-          )}
-          {selectedCategory && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-400">
-              {selectedCategory}
-            </span>
-          )}
-          <button
-            onClick={handleReset}
-            className={cn(
-              'ml-auto text-xs font-medium transition-colors',
-              focusRing,
-              isDark ? 'text-slate-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'
-            )}
-          >
-            Reset All
-          </button>
-        </div>
-      </div>
-
-      {/* Recent Tasks - Collapsible */}
-      {recentTasks.length > 0 && (
-        <div className={cn('border-b', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
-          <button
-            onClick={() => setShowRecentTasks(!showRecentTasks)}
-            className={cn(
-              'w-full flex items-center justify-between px-4 sm:px-5 py-2 text-xs font-medium transition-colors',
-              focusRing,
-              isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800/50' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-            )}
-          >
-            <span>📋 Recent</span>
-            <span className="text-[10px]">
-              {showRecentTasks ? '▼' : '▶'} {recentTasks.length}
-            </span>
-          </button>
-          {showRecentTasks && (
-            <div className="px-4 sm:px-5 pb-3 flex flex-wrap gap-2">
-              {recentTasks.slice(0, 5).map((recent, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleCopyRecent(recent.text)}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-all group',
-                    focusRing,
-                    isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600 hover:bg-slate-700' : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
-                  )}
-                >
-                  <span className="truncate max-w-[120px]">{recent.text}</span>
-                  {copiedText === recent.text ? (
-                    <Check className="h-3 w-3 text-emerald-400" />
-                  ) : (
-                    <Copy className="h-3 w-3 opacity-50 group-hover:opacity-100" />
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Templates List */}
-      <div className="p-4 sm:p-5 max-h-[400px] overflow-y-auto">
-        {filteredTemplates.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <Search className={cn('h-12 w-12 mb-4', mutedText)} />
-            <p className={cn('text-sm font-medium', isDark ? 'text-white' : 'text-gray-900')}>
-              {searchQuery ? 'No templates match your search' : 'No templates available'}
-            </p>
-            <p className={cn('text-xs mt-1', mutedText)}>
-              {searchQuery ? 'Try adjusting your search terms' : 'Try selecting a different category'}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {filteredTemplates.map((template, idx) => {
-              const generated = generateTaskName(template, { 
-                brand: brandToUse, 
-                agent: task.agent 
-              });
-              const isCopied = copiedTemplate === template;
-              const usesBrandToken = template.includes('{brand}');
-              const usesAgentToken = template.includes('{agent}');
-              const hasPlaceholder = template.includes('[specify what file]');
-
-              return (
-                <button
-                  key={idx}
-                  onClick={() => handleCopy(template)}
-                  className={cn(
-                    'group w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 rounded-lg border p-3 sm:p-4 text-left transition-all hover:shadow-md',
-                    focusRing,
-                    isCopied
-                      ? isDark
-                        ? 'border-emerald-500/50 bg-emerald-500/10'
-                        : 'border-emerald-300 bg-emerald-50'
-                      : isDark
-                      ? 'border-slate-700 bg-slate-800/50 hover:border-slate-600 hover:bg-slate-800'
-                      : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
-                  )}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className={cn(
-                      'text-sm font-medium break-all',
-                      isCopied ? 'text-emerald-400' : isDark ? 'text-white' : 'text-gray-900'
-                    )}>
-                      {generated}
-                    </p>
-                    <div className="flex flex-wrap gap-1.5 mt-1.5">
-                      {hasPlaceholder && (
-                        <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
-                          <AlertTriangle className="h-2.5 w-2.5" />
-                          Editable
-                        </span>
-                      )}
-                      {!usesBrandToken && (
-                        <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium', isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-500')}>
-                          No brand
-                        </span>
-                      )}
-                      {!usesAgentToken && (
-                        <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium', isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-500')}>
-                          No agent
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
-                    {isCopied ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400">
-                        <Check className="h-4 w-4" /> Copied!
-                      </span>
-                    ) : (
-                      <Copy className={cn('h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100', mutedText)} />
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <ModalFooter theme={theme} align="between">
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className={mutedText}>
-            {filteredTemplates.length} template{filteredTemplates.length !== 1 ? 's' : ''}
-          </span>
-          <span className={cn('w-px h-4', isDark ? 'bg-slate-700' : 'bg-gray-200')} />
-          <span className={mutedText}>
-            {brandToUse && `Brand: ${brandToUse}`}
-            {selectedCategory && ` · ${selectedCategory}`}
-          </span>
-          <span className={cn('text-[10px]', mutedText)}>
-            · Esc to close
-          </span>
-        </div>
-        <div className="flex gap-2">
-          <Button theme={theme} variant="secondary" size="sm" onClick={handleReset}>
-            Reset
-          </Button>
-          <Button theme={theme} variant="secondary" size="sm" onClick={onClose}>
-            Close
-          </Button>
-        </div>
       </ModalFooter>
     </Modal>
   );
@@ -1680,6 +1917,25 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
 
   const activeTasks = viewMode === 'all' ? allTasks : tasks;
 
+  // ─── COMPUTED STATISTICS ──────────────────────────────────────────────
+
+  const stats = useMemo(() => {
+    const total = activeTasks.length;
+    const completed = activeTasks.filter(t => t.status === 'Completed').length;
+    const pending = activeTasks.filter(t => t.status === 'Pending').length;
+    const ongoing = activeTasks.filter(t => t.status === 'Ongoing').length;
+    const cancelled = activeTasks.filter(t => t.status === 'Cancelled').length;
+    const overdue = activeTasks.filter(t => {
+      if (!t.due_date) return false;
+      const dueDate = new Date(t.due_date);
+      const today = new Date();
+      return dueDate < today && t.status !== 'Completed' && t.status !== 'Cancelled';
+    }).length;
+    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    return { total, completed, pending, ongoing, cancelled, overdue, completionRate };
+  }, [activeTasks]);
+
   const uniqueBrands = useMemo(() => {
     const brands = new Set<string>();
     activeTasks.forEach((task) => task.brand && brands.add(task.brand));
@@ -1931,7 +2187,11 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
   // ─── RENDER TABLE VIEW ──────────────────────────────────────────────────
 
   const renderTableView = () => (
-    <div className="overflow-x-auto -mx-4 sm:mx-0 rounded-xl border border-transparent">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="overflow-x-auto -mx-4 sm:mx-0 rounded-2xl border border-transparent"
+    >
       <div className="min-w-[800px] sm:min-w-full">
         <table className="w-full text-sm sm:text-base">
           <thead className={cn('sticky top-0 z-10 backdrop-blur', isDark ? 'bg-slate-800/95' : 'bg-gray-50/95')}>
@@ -1956,14 +2216,17 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               const statusOptions = getStatusOptions(task.status);
 
               return (
-                <tr
+                <motion.tr
                   key={task.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, delay: rowIdx * 0.01 }}
                   tabIndex={0}
                   className={cn(
-                    'cursor-pointer transition-colors',
+                    'cursor-pointer transition-all duration-200 group',
                     focusRing,
                     isDark ? (rowIdx % 2 === 0 ? 'bg-transparent' : 'bg-slate-800/20') : rowIdx % 2 === 0 ? 'bg-transparent' : 'bg-gray-50/40',
-                    isDark ? 'hover:bg-slate-800/60' : 'hover:bg-gray-50',
+                    isDark ? 'hover:bg-slate-800/60 hover:scale-[1.002]' : 'hover:bg-gray-50 hover:scale-[1.002]',
                     isNew && (isDark ? 'bg-emerald-500/5 border-l-2 border-emerald-400' : 'bg-emerald-50/50 border-l-2 border-emerald-500')
                   )}
                   onClick={() => onTaskClick(task)}
@@ -2053,13 +2316,13 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                       )}
                     </div>
                   </td>
-                </tr>
+                </motion.tr>
               );
             })}
           </tbody>
         </table>
       </div>
-    </div>
+    </motion.div>
   );
 
   // ─── RENDER CARD VIEW ───────────────────────────────────────────────────
@@ -2073,71 +2336,79 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
         const statusOptions = getStatusOptions(task.status);
 
         return (
-          <Card key={task.id} theme={theme} interactive highlighted={isNew} className="p-3 sm:p-5 cursor-pointer">
-            <div onClick={() => onTaskClick(task)}>
-              <div className="flex items-start justify-between gap-2 mb-2 sm:mb-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
-                    <span className={cn('text-xs sm:text-sm font-mono', isDark ? 'text-slate-500' : 'text-gray-400')}>#{task.rowIndex}</span>
-                    <span className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>{task.brand}</span>
-                    {isNew && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs font-semibold text-emerald-400">
-                        <span className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        NEW
-                      </span>
-                    )}
+          <motion.div
+            key={task.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileHover={{ y: -4 }}
+            className="cursor-pointer"
+          >
+            <Card theme={theme} interactive highlighted={isNew} className="p-3 sm:p-5">
+              <div onClick={() => onTaskClick(task)}>
+                <div className="flex items-start justify-between gap-2 mb-2 sm:mb-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                      <span className={cn('text-xs sm:text-sm font-mono', isDark ? 'text-slate-500' : 'text-gray-400')}>#{task.rowIndex}</span>
+                      <span className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>{task.brand}</span>
+                      {isNew && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs font-semibold text-emerald-400">
+                          <span className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          NEW
+                        </span>
+                      )}
+                    </div>
+                    <h3 className={cn('text-sm sm:text-base font-semibold truncate mt-0.5 sm:mt-1', isDark ? 'text-white' : 'text-gray-900')}>{task.task}</h3>
                   </div>
-                  <h3 className={cn('text-sm sm:text-base font-semibold truncate mt-0.5 sm:mt-1', isDark ? 'text-white' : 'text-gray-900')}>{task.task}</h3>
+                  <StatusBadge status={task.status} theme={theme} size="sm" />
                 </div>
-                <StatusBadge status={task.status} theme={theme} size="sm" />
+
+                <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
+                  <div className={cn('flex items-center gap-1.5 sm:gap-2', isDark ? 'text-slate-400' : 'text-gray-500')}>
+                    <User className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span>{task.agent || 'Unassigned'}</span>
+                  </div>
+                  <div className={cn('flex items-center gap-1.5 sm:gap-2', isDark ? 'text-slate-400' : 'text-gray-500')}>
+                    <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span>Due: {formatDate(task.due_date)}</span>
+                    {isOverdue && <span className="text-rose-500 text-[10px] sm:text-xs font-medium">(Overdue)</span>}
+                  </div>
+                  {hasRemarks && (
+                    <div className={cn('flex items-start gap-1.5 sm:gap-2 truncate', isDark ? 'text-slate-400' : 'text-gray-500')}>
+                      <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 mt-0.5" />
+                      <span className="truncate text-xs sm:text-sm">{task.remarks}</span>
+                      {task.remarks.toLowerCase().includes('sbs') && (
+                        <span className={cn('inline-flex items-center gap-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs font-semibold flex-shrink-0', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
+                          <Eye className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                          SBS
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {task.status === 'Pending' && task.reason_for_pending && (
+                    <div className={cn('flex items-start gap-1.5 sm:gap-2 text-[10px] sm:text-xs', isDark ? 'text-amber-400' : 'text-amber-600')}>
+                      <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 mt-0.5" />
+                      <span className="truncate">Reason: {task.reason_for_pending}</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
-                <div className={cn('flex items-center gap-1.5 sm:gap-2', isDark ? 'text-slate-400' : 'text-gray-500')}>
-                  <User className="h-3 w-3 sm:h-4 sm:w-4" />
-                  <span>{task.agent || 'Unassigned'}</span>
+              <div className={cn('mt-3 sm:mt-4 flex items-center justify-between pt-3 sm:pt-4 border-t', isDark ? 'border-slate-700/50' : 'border-gray-100')} onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <Button theme={theme} variant="outline" size="sm" icon={Sparkles} onClick={(e) => handleOpenGenerator(task, e)} title="Generate Task Name" />
+                  {statusOptions.slice(0, 1).map((newStatus) => (
+                    <StatusActionButton key={newStatus} task={task} newStatus={newStatus} />
+                  ))}
+                  {statusOptions.length > 1 && <span className={cn('text-[10px] sm:text-sm', isDark ? 'text-slate-500' : 'text-gray-400')}>+{statusOptions.length - 1}</span>}
                 </div>
-                <div className={cn('flex items-center gap-1.5 sm:gap-2', isDark ? 'text-slate-400' : 'text-gray-500')}>
-                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
-                  <span>Due: {formatDate(task.due_date)}</span>
-                  {isOverdue && <span className="text-rose-500 text-[10px] sm:text-xs font-medium">(Overdue)</span>}
-                </div>
-                {hasRemarks && (
-                  <div className={cn('flex items-start gap-1.5 sm:gap-2 truncate', isDark ? 'text-slate-400' : 'text-gray-500')}>
-                    <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 mt-0.5" />
-                    <span className="truncate text-xs sm:text-sm">{task.remarks}</span>
-                    {task.remarks.toLowerCase().includes('sbs') && (
-                      <span className={cn('inline-flex items-center gap-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs font-semibold flex-shrink-0', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
-                        <Eye className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                        SBS
-                      </span>
-                    )}
-                  </div>
-                )}
-                {task.status === 'Pending' && task.reason_for_pending && (
-                  <div className={cn('flex items-start gap-1.5 sm:gap-2 text-[10px] sm:text-xs', isDark ? 'text-amber-400' : 'text-amber-600')}>
-                    <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 mt-0.5" />
-                    <span className="truncate">Reason: {task.reason_for_pending}</span>
-                  </div>
+                {isTaskAdmin && (
+                  <Button theme={theme} variant="ghost" size="icon" ariaLabel="Edit task" title="Edit Task" onClick={() => onEditTask(task)}>
+                    <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  </Button>
                 )}
               </div>
-            </div>
-
-            <div className={cn('mt-3 sm:mt-4 flex items-center justify-between pt-3 sm:pt-4 border-t', isDark ? 'border-slate-700/50' : 'border-gray-100')} onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center gap-1 flex-wrap">
-                <Button theme={theme} variant="outline" size="sm" icon={Sparkles} onClick={(e) => handleOpenGenerator(task, e)} title="Generate Task Name" />
-                {statusOptions.slice(0, 1).map((newStatus) => (
-                  <StatusActionButton key={newStatus} task={task} newStatus={newStatus} />
-                ))}
-                {statusOptions.length > 1 && <span className={cn('text-[10px] sm:text-sm', isDark ? 'text-slate-500' : 'text-gray-400')}>+{statusOptions.length - 1}</span>}
-              </div>
-              {isTaskAdmin && (
-                <Button theme={theme} variant="ghost" size="icon" ariaLabel="Edit task" title="Edit Task" onClick={() => onEditTask(task)}>
-                  <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                </Button>
-              )}
-            </div>
-          </Card>
+            </Card>
+          </motion.div>
         );
       })}
     </div>
@@ -2154,59 +2425,66 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
         const statusOptions = getStatusOptions(task.status);
 
         return (
-          <Card key={task.id} theme={theme} interactive highlighted={isNew} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-3 sm:p-4 cursor-pointer">
-            <div className="flex-1 min-w-0 w-full" onClick={() => onTaskClick(task)}>
-              <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
-                <span className={cn('text-xs sm:text-sm font-mono', isDark ? 'text-slate-500' : 'text-gray-400')}>#{task.rowIndex}</span>
-                <span className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>{task.brand}</span>
-                {isNew && <span className="inline-flex h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-emerald-400 animate-pulse" />}
-              </div>
-              <p className={cn('text-sm sm:text-base font-medium truncate mt-0.5', isDark ? 'text-white' : 'text-gray-900')}>{task.task}</p>
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm mt-1">
-                <span className={isDark ? 'text-slate-400' : 'text-gray-500'}>
-                  <User className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                  {task.agent || 'Unassigned'}
-                </span>
-                <span className={isDark ? 'text-slate-400' : 'text-gray-500'}>
-                  <Calendar className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                  {formatDate(task.due_date)}
-                  {isOverdue && <span className="ml-1 text-rose-500 font-medium">(Overdue)</span>}
-                </span>
-                {hasRemarks && (
-                  <span className={cn('truncate max-w-[120px] sm:max-w-[200px]', isDark ? 'text-slate-500' : 'text-gray-400')}>
-                    <MessageSquare className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                    {task.remarks}
-                    {task.remarks.toLowerCase().includes('sbs') && (
-                      <span className={cn('ml-1 inline-flex items-center gap-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs font-semibold', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
-                        <Eye className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                        SBS
-                      </span>
-                    )}
+          <motion.div
+            key={task.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileHover={{ scale: 1.002 }}
+          >
+            <Card theme={theme} interactive highlighted={isNew} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-3 sm:p-4 cursor-pointer">
+              <div className="flex-1 min-w-0 w-full" onClick={() => onTaskClick(task)}>
+                <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                  <span className={cn('text-xs sm:text-sm font-mono', isDark ? 'text-slate-500' : 'text-gray-400')}>#{task.rowIndex}</span>
+                  <span className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>{task.brand}</span>
+                  {isNew && <span className="inline-flex h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-emerald-400 animate-pulse" />}
+                </div>
+                <p className={cn('text-sm sm:text-base font-medium truncate mt-0.5', isDark ? 'text-white' : 'text-gray-900')}>{task.task}</p>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm mt-1">
+                  <span className={isDark ? 'text-slate-400' : 'text-gray-500'}>
+                    <User className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    {task.agent || 'Unassigned'}
                   </span>
-                )}
-                {task.status === 'Pending' && task.reason_for_pending && (
-                  <span className={cn('truncate max-w-[120px] sm:max-w-[200px] text-[10px] sm:text-xs', isDark ? 'text-amber-400' : 'text-amber-600')}>
-                    <AlertCircle className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                    Reason: {task.reason_for_pending}
+                  <span className={isDark ? 'text-slate-400' : 'text-gray-500'}>
+                    <Calendar className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    {formatDate(task.due_date)}
+                    {isOverdue && <span className="ml-1 text-rose-500 font-medium">(Overdue)</span>}
                   </span>
-                )}
+                  {hasRemarks && (
+                    <span className={cn('truncate max-w-[120px] sm:max-w-[200px]', isDark ? 'text-slate-500' : 'text-gray-400')}>
+                      <MessageSquare className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                      {task.remarks}
+                      {task.remarks.toLowerCase().includes('sbs') && (
+                        <span className={cn('ml-1 inline-flex items-center gap-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs font-semibold', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
+                          <Eye className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                          SBS
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  {task.status === 'Pending' && task.reason_for_pending && (
+                    <span className={cn('truncate max-w-[120px] sm:max-w-[200px] text-[10px] sm:text-xs', isDark ? 'text-amber-400' : 'text-amber-600')}>
+                      <AlertCircle className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                      Reason: {task.reason_for_pending}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 w-full sm:w-auto justify-end" onClick={(e) => e.stopPropagation()}>
-              <StatusBadge status={task.status} theme={theme} size="sm" />
-              <Button theme={theme} variant="outline" size="sm" icon={Sparkles} onClick={(e) => handleOpenGenerator(task, e)} title="Generate Task Name" />
-              {statusOptions.slice(0, 1).map((newStatus) => (
-                <StatusActionButton key={newStatus} task={task} newStatus={newStatus} />
-              ))}
-              {statusOptions.length > 1 && <span className={cn('text-[10px] sm:text-sm', isDark ? 'text-slate-500' : 'text-gray-400')}>+{statusOptions.length - 1}</span>}
-              {isTaskAdmin && (
-                <Button theme={theme} variant="ghost" size="icon" ariaLabel="Edit task" title="Edit Task" onClick={() => onEditTask(task)}>
-                  <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                </Button>
-              )}
-            </div>
-          </Card>
+              <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 w-full sm:w-auto justify-end" onClick={(e) => e.stopPropagation()}>
+                <StatusBadge status={task.status} theme={theme} size="sm" />
+                <Button theme={theme} variant="outline" size="sm" icon={Sparkles} onClick={(e) => handleOpenGenerator(task, e)} title="Generate Task Name" />
+                {statusOptions.slice(0, 1).map((newStatus) => (
+                  <StatusActionButton key={newStatus} task={task} newStatus={newStatus} />
+                ))}
+                {statusOptions.length > 1 && <span className={cn('text-[10px] sm:text-sm', isDark ? 'text-slate-500' : 'text-gray-400')}>+{statusOptions.length - 1}</span>}
+                {isTaskAdmin && (
+                  <Button theme={theme} variant="ghost" size="icon" ariaLabel="Edit task" title="Edit Task" onClick={() => onEditTask(task)}>
+                    <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  </Button>
+                )}
+              </div>
+            </Card>
+          </motion.div>
         );
       })}
     </div>
@@ -2260,39 +2538,44 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
       {toastContainer}
 
       {/* New Task Notification Banner */}
-      {showNewTaskNotification && newTaskIds.size > 0 && (
-        <div
-          className={cn(
-            'fixed top-4 right-4 z-50 rounded-xl border shadow-2xl p-4 sm:p-5 max-w-[calc(100vw-2rem)] sm:max-w-md animate-in slide-in-from-top-4 duration-300',
-            isDark ? 'bg-slate-800 border-emerald-500/30' : 'bg-white border-emerald-300'
-          )}
-          role="alert"
-        >
-          <div className="flex items-start gap-3 sm:gap-4">
-            <div className="rounded-full bg-emerald-500/20 p-2 sm:p-2.5 flex-shrink-0">
-              <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-400" />
+      <AnimatePresence>
+        {showNewTaskNotification && newTaskIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className={cn(
+              'fixed top-4 right-4 z-50 rounded-2xl border shadow-2xl p-4 sm:p-5 max-w-[calc(100vw-2rem)] sm:max-w-md',
+              isDark ? 'bg-slate-800 border-emerald-500/30' : 'bg-white border-emerald-300'
+            )}
+            role="alert"
+          >
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className="rounded-full bg-emerald-500/20 p-2 sm:p-2.5 flex-shrink-0">
+                <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={cn('text-base sm:text-lg font-semibold', isDark ? 'text-white' : 'text-gray-900')}>
+                  {newTaskIds.size} New Task{newTaskIds.size > 1 ? 's' : ''} Added!
+                </p>
+                <p className={cn('text-xs sm:text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>Click refresh to see them in your list</p>
+              </div>
+              <button
+                onClick={() => setShowNewTaskNotification(false)}
+                aria-label="Dismiss"
+                className={cn('rounded p-1.5 sm:p-2 transition-colors flex-shrink-0', focusRing, isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-100')}
+              >
+                <X className="h-4 w-4 sm:h-5 sm:w-5" />
+              </button>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className={cn('text-base sm:text-lg font-semibold', isDark ? 'text-white' : 'text-gray-900')}>
-                {newTaskIds.size} New Task{newTaskIds.size > 1 ? 's' : ''} Added!
-              </p>
-              <p className={cn('text-xs sm:text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>Click refresh to see them in your list</p>
+            <div className="mt-3">
+              <Button theme={theme} variant="primary" size="sm" icon={RefreshCw} onClick={onRefresh}>
+                Refresh Now
+              </Button>
             </div>
-            <button
-              onClick={() => setShowNewTaskNotification(false)}
-              aria-label="Dismiss"
-              className={cn('rounded p-1.5 sm:p-2 transition-colors flex-shrink-0', focusRing, isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-100')}
-            >
-              <X className="h-4 w-4 sm:h-5 sm:w-5" />
-            </button>
-          </div>
-          <div className="mt-3">
-            <Button theme={theme} variant="primary" size="sm" icon={RefreshCw} onClick={onRefresh}>
-              Refresh Now
-            </Button>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ─── TAB NAVIGATION ────────────────────────────────────────────────── */}
       <div className={cn('border-b flex-shrink-0', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
@@ -2302,7 +2585,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
             aria-selected={activeTab === 'tasks'}
             onClick={() => setActiveTab('tasks')}
             className={cn(
-              'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all',
+              'inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all',
               focusRing,
               activeTab === 'tasks'
                 ? isDark
@@ -2329,7 +2612,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
             aria-selected={activeTab === 'completion'}
             onClick={() => setActiveTab('completion')}
             className={cn(
-              'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all',
+              'inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all',
               focusRing,
               activeTab === 'completion'
                 ? isDark
@@ -2352,321 +2635,380 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
           <AgentCompletionTracker theme={theme} currentUserEmail={currentUserEmail} />
         </div>
       ) : (
-        <>
-          <div className={cn('border-b p-3 sm:p-5 flex-shrink-0', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
-            <div className="flex flex-col gap-3 sm:gap-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                  <div className={cn('rounded-lg p-1.5 sm:p-2 flex-shrink-0', isDark ? 'bg-emerald-500/20' : 'bg-emerald-100')}>
-                    <CheckCircle2 className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-500" />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className={cn('text-xl sm:text-2xl font-bold tracking-tight truncate', isDark ? 'text-white' : 'text-gray-900')}>
-                      {viewMode === 'all' ? 'All Tasks' : 'My Tasks'}
-                      {newTaskIds.size > 0 && viewMode === 'all' && (
-                        <span className="ml-2 sm:ml-3 inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-sm font-semibold text-emerald-500 align-middle">
-                          <Bell className="h-3 w-3 sm:h-4 sm:w-4" />
-                          {newTaskIds.size} new
-                        </span>
-                      )}
-                    </h2>
-                    <p className={cn('text-xs sm:text-base mt-0.5 truncate', isDark ? 'text-slate-400' : 'text-gray-500')}>
-                      {viewMode === 'all' ? `All ${totalCount} tasks in tracker` : currentUserName || currentUserEmail ? `Tasks assigned to ${currentUserName || currentUserEmail}` : 'No user logged in'}
-                    </p>
-                  </div>
-                </div>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
+          {/* ─── DASHBOARD HEADER ────────────────────────────────────────── */}
+          <DashboardHeader
+            isDark={isDark}
+            totalTasks={stats.total}
+            completedToday={stats.completed}
+            pendingCount={stats.pending}
+            overdueCount={stats.overdue}
+            completionRate={stats.completionRate}
+            userName={currentUserName}
+            onRefresh={onRefresh}
+            isLoading={isLoading}
+          />
 
-                <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
-                  <Button theme={theme} variant="outline" isLoading={isLoading} icon={RefreshCw} onClick={onRefresh}>
-                    <span className="hidden xs:inline">Refresh</span>
-                  </Button>
+          {/* ─── ANALYTICS CARDS ─────────────────────────────────────────── */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+            <AnalyticsCard
+              title="Total Tasks"
+              value={stats.total}
+              icon={<List className="h-5 w-5" />}
+              color="text-blue-500"
+              gradient="bg-gradient-to-r from-blue-500 to-blue-400"
+              isDark={isDark}
+              delay={0}
+              subtitle={`${viewMode === 'all' ? 'All' : 'Your'} tasks`}
+            />
+            <AnalyticsCard
+              title="Completed"
+              value={stats.completed}
+              icon={<CheckCircle2 className="h-5 w-5" />}
+              color="text-emerald-500"
+              gradient="bg-gradient-to-r from-emerald-500 to-emerald-400"
+              isDark={isDark}
+              delay={1}
+              subtitle={`${stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}% of total`}
+              trend={5}
+            />
+            <AnalyticsCard
+              title="Pending"
+              value={stats.pending}
+              icon={<Clock className="h-5 w-5" />}
+              color="text-amber-500"
+              gradient="bg-gradient-to-r from-amber-500 to-amber-400"
+              isDark={isDark}
+              delay={2}
+              subtitle="Awaiting action"
+              trend={-2}
+            />
+            <AnalyticsCard
+              title="Overdue"
+              value={stats.overdue}
+              icon={<AlertTriangle className="h-5 w-5" />}
+              color="text-rose-500"
+              gradient="bg-gradient-to-r from-rose-500 to-rose-400"
+              isDark={isDark}
+              delay={3}
+              subtitle="Past due date"
+              trend={3}
+            />
+          </div>
 
-                  <Button
-                    theme={theme}
-                    variant={viewMode === 'all' ? 'primary' : 'outline'}
-                    icon={viewMode === 'all' ? Eye : EyeOff}
-                    onClick={() => onViewModeChange(viewMode === 'all' ? 'mine' : 'all')}
-                    className={viewMode === 'all' ? (isDark ? '!bg-emerald-500/10 !text-emerald-400 !shadow-none border !border-emerald-500/40' : '!bg-emerald-50 !text-emerald-700 !shadow-none border !border-emerald-300') : ''}
-                  >
-                    <span className="hidden xs:inline">{viewMode === 'all' ? 'Viewing All' : 'View All'}</span>
-                  </Button>
 
-                  {isTaskAdmin && (
-                    <Button theme={theme} variant="primary" icon={Plus} onClick={onAddTask}>
-                      <span className="hidden xs:inline">Add Task</span>
-                    </Button>
-                  )}
-                </div>
-              </div>
 
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                <div className="relative flex-1">
-                  <Search className={cn('absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5', isDark ? 'text-slate-400' : 'text-gray-400')} />
-                  <input
-                    type="text"
-                    placeholder="Search by row#, task, brand, agent, due date..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    aria-label="Search tasks"
-                    className={cn('w-full rounded-lg border pl-9 sm:pl-12 pr-3 sm:pr-4 py-2 sm:py-3 text-sm sm:text-base', focusRing, isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400')}
-                  />
-                  <span className={cn('absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-[10px] sm:text-xs hidden md:block', isDark ? 'text-slate-500' : 'text-gray-400')}>
-                    💡 Try: Dec 25, 12/25, 2024-12-25
-                  </span>
-                </div>
-
-                <Button
-                  theme={theme}
-                  variant={showFilters || hasActiveFilters ? 'primary' : 'outline'}
-                  icon={Filter}
-                  onClick={() => setShowFilters(!showFilters)}
-                  className={cn('flex-shrink-0', showFilters || hasActiveFilters ? (isDark ? '!bg-emerald-500/10 !text-emerald-400 !shadow-none border !border-emerald-500/40' : '!bg-emerald-50 !text-emerald-700 !shadow-none border !border-emerald-300') : '')}
-                >
-                  <span className="hidden xs:inline">Filters</span>
-                  {(filterStatus !== 'all' || filterBrand !== 'all' || filterAgent !== 'all') && (
-                    <span className="ml-1 rounded-full bg-emerald-500 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs text-white">
-                      {[filterStatus, filterBrand, filterAgent].filter((f) => f !== 'all').length}
-                    </span>
-                  )}
-                </Button>
-
-                <div className={cn('flex rounded-lg border overflow-hidden flex-shrink-0', isDark ? 'border-slate-700' : 'border-gray-200')}>
-                  {[
-                    { mode: 'table' as const, Icon: Table, label: 'Table View' },
-                    { mode: 'card' as const, Icon: LayoutGrid, label: 'Card View' },
-                    { mode: 'list' as const, Icon: List, label: 'List View' },
-                  ].map(({ mode, Icon, label }, i) => (
-                    <button
-                      key={mode}
-                      onClick={() => setLayoutMode(mode)}
-                      title={label}
-                      aria-label={label}
-                      aria-pressed={layoutMode === mode}
-                      className={cn(
-                        'px-2.5 sm:px-4 py-2 sm:py-3 text-sm transition-all',
-                        focusRing,
-                        i > 0 && (isDark ? 'border-l border-slate-700' : 'border-l border-gray-200'),
-                        layoutMode === mode ? (isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700') : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-white text-gray-500 hover:bg-gray-100'
-                      )}
-                    >
-                      <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <div className="flex gap-1 sm:gap-2 overflow-x-auto pb-1">
-                  <button
-                    onClick={() => {
-                      setFilterStatus('all');
-                      setCurrentPage(1);
-                    }}
-                    className={cn(
-                      'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                      focusRing,
-                      filterStatus === 'all'
-                        ? isDark
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                        : isDark
-                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    All ({taskCounts.all || 0})
-                  </button>
-
-                  {Object.keys(taskCounts)
-                    .filter((k) => k !== 'all')
-                    .sort()
-                    .map((status) => {
-                      const count = taskCounts[status] || 0;
-                      const isActive = filterStatus === status;
-
-                      return (
-                        <button
-                          key={status}
-                          onClick={() => {
-                            setFilterStatus(status);
-                            setCurrentPage(1);
-                          }}
-                          className={cn(
-                            'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                            focusRing,
-                            isActive
-                              ? isDark
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                              : isDark
-                              ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          )}
-                        >
-                          <span>{status}</span>
-                          <span
-                            className={cn(
-                              'ml-1 sm:ml-2 rounded-full px-1 sm:px-2 py-0.5 text-[8px] sm:text-xs',
-                              isActive ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
-                            )}
-                          >
-                            {count}
-                          </span>
-                        </button>
-                      );
-                    })}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
-                  <button
-                    onClick={() => setShowOnlyNew(!showOnlyNew)}
-                    className={cn(
-                      'inline-flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                      focusRing,
-                      showOnlyNew
-                        ? isDark
-                          ? 'bg-emerald-500/30 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                        : isDark
-                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
+          {/* ─── TASK LIST HEADER ─────────────────────────────────────────── */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className={cn('text-lg font-semibold', isDark ? 'text-white' : 'text-gray-900')}>
+                {viewMode === 'all' ? 'All Tasks' : 'My Tasks'}
+                {newTaskIds.size > 0 && viewMode === 'all' && (
+                  <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-sm font-semibold text-emerald-500 align-middle">
                     <Bell className="h-3 w-3 sm:h-4 sm:w-4" />
-                    <span className="hidden xs:inline">{showOnlyNew ? 'Showing New Tasks' : 'Show New Tasks'}</span>
-                    {newTaskIds.size > 0 && (
-                      <span className={cn('ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs', showOnlyNew ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}>
-                        {newTaskIds.size}
-                      </span>
-                    )}
-                  </button>
-
-                  {newTaskIds.size > 0 && (
-                    <button
-                      onClick={onMarkAllViewed}
-                      className={cn(
-                        'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                        focusRing,
-                        isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                      )}
-                    >
-                      <Check className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span className="hidden xs:inline">Mark All Viewed</span>
-                    </button>
-                  )}
-
-                  {dateChips.map((chip) => (
-                    <button
-                      key={chip.key}
-                      onClick={() => {
-                        setFilterDateRange(chip.key);
-                        setCurrentPage(1);
-                      }}
-                      className={cn(
-                        'px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                        focusRing,
-                        filterDateRange === chip.key ? chip.activeClass : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      )}
-                    >
-                      {chip.emoji && <span className="mr-1">{chip.emoji}</span>}
-                      {chip.label}
-                    </button>
-                  ))}
-
-                  <button
-                    onClick={() => setShowDateRangePicker(!showDateRangePicker)}
-                    className={cn(
-                      'px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap inline-flex items-center gap-1',
-                      focusRing,
-                      filterDateRange === 'custom'
-                        ? isDark
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                        : isDark
-                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
-                    <span className="hidden xs:inline">Custom Range</span>
-                    {filterDateRange === 'custom' && (
-                      <span className="ml-1 text-[10px] opacity-70 hidden lg:inline">
-                        ({customDateStart ? new Date(customDateStart).toLocaleDateString() : '...'} - {customDateEnd ? new Date(customDateEnd).toLocaleDateString() : '...'})
-                      </span>
-                    )}
-                  </button>
-
-                  {filterDateRange !== 'all' && (
-                    <button
-                      onClick={clearCustomDateRange}
-                      className={cn('px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap', focusRing, isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300')}
-                    >
-                      <X className="h-3 w-3 sm:h-4 sm:w-4 inline" /> Clear
-                    </button>
-                  )}
-                </div>
-
-                {showDateRangePicker && (
-                  <Card theme={theme} className="mt-1 sm:mt-2 p-3 sm:p-4 shadow-lg">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-                      <div className="flex-1 w-full sm:w-auto">
-                        <FieldLabel theme={theme}>Start Date</FieldLabel>
-                        <input type="date" value={customDateStart} onChange={(e) => setCustomDateStart(e.target.value)} className={inputClasses(theme)} />
-                      </div>
-                      <div className="flex-1 w-full sm:w-auto">
-                        <FieldLabel theme={theme}>End Date</FieldLabel>
-                        <input type="date" value={customDateEnd} onChange={(e) => setCustomDateEnd(e.target.value)} className={inputClasses(theme)} />
-                      </div>
-                      <div className="flex gap-2 sm:gap-3 w-full sm:w-auto mt-2 sm:mt-6">
-                        <Button theme={theme} variant="primary" icon={Check} disabled={!customDateStart || !customDateEnd} onClick={applyCustomDateRange} className="flex-1 sm:flex-none">
-                          Apply
-                        </Button>
-                        <Button theme={theme} variant="secondary" onClick={() => setShowDateRangePicker(false)} className="flex-1 sm:flex-none">
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
+                    {newTaskIds.size} new
+                  </span>
                 )}
-              </div>
+              </h2>
+              <p className={cn('text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
+                {viewMode === 'all' ? `All ${totalCount} tasks in tracker` : currentUserName || currentUserEmail ? `Tasks assigned to ${currentUserName || currentUserEmail}` : 'No user logged in'}
+              </p>
+            </div>
 
-              {showFilters && (
-                <Card theme={theme} className={cn('grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-4', isDark ? 'bg-slate-800/50' : 'bg-gray-50')}>
-                  <div>
-                    <FieldLabel theme={theme}>Brand</FieldLabel>
-                    <select value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)} className={inputClasses(theme)}>
-                      <option value="all">All Brands</option>
-                      {uniqueBrands.map((brand) => (
-                        <option key={brand} value={brand}>
-                          {brand}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <FieldLabel theme={theme}>Agent</FieldLabel>
-                    <select value={filterAgent} onChange={(e) => setFilterAgent(e.target.value)} className={inputClasses(theme)}>
-                      <option value="all">All Agents</option>
-                      {uniqueAgents.map((agent) => (
-                        <option key={agent} value={agent}>
-                          {agent}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex items-end">
-                    <Button theme={theme} variant="secondary" onClick={clearFilters} className="w-full">
-                      Clear All Filters
-                    </Button>
-                  </div>
-                </Card>
+            <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+              <Button theme={theme} variant="outline" isLoading={isLoading} icon={RefreshCw} onClick={onRefresh}>
+                <span className="hidden xs:inline">Refresh</span>
+              </Button>
+
+              <Button
+                theme={theme}
+                variant={viewMode === 'all' ? 'primary' : 'outline'}
+                icon={viewMode === 'all' ? Eye : EyeOff}
+                onClick={() => onViewModeChange(viewMode === 'all' ? 'mine' : 'all')}
+                className={viewMode === 'all' ? (isDark ? '!bg-emerald-500/10 !text-emerald-400 !shadow-none border !border-emerald-500/40' : '!bg-emerald-50 !text-emerald-700 !shadow-none border !border-emerald-300') : ''}
+              >
+                <span className="hidden xs:inline">{viewMode === 'all' ? 'Viewing All' : 'View All'}</span>
+              </Button>
+
+              {isTaskAdmin && (
+                <Button theme={theme} variant="primary" icon={Plus} onClick={onAddTask}>
+                  <span className="hidden xs:inline">Add Task</span>
+                </Button>
               )}
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 sm:p-5">{isLoading && activeTasks.length === 0 ? renderSkeleton() : renderTasks()}</div>
+          {/* ─── FILTER TOOLBAR ───────────────────────────────────────────── */}
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <div className="relative flex-1">
+                <Search className={cn('absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5', isDark ? 'text-slate-400' : 'text-gray-400')} />
+                <input
+                  type="text"
+                  placeholder="Search by row#, task, brand, agent, due date..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  aria-label="Search tasks"
+                  className={cn('w-full rounded-xl border pl-9 sm:pl-12 pr-3 sm:pr-4 py-2 sm:py-3 text-sm sm:text-base transition-all duration-200', focusRing, isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400')}
+                />
+                <span className={cn('absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-[10px] sm:text-xs hidden md:block', isDark ? 'text-slate-500' : 'text-gray-400')}>
+                  💡 Try: Dec 25, 12/25, 2024-12-25
+                </span>
+              </div>
 
-          <div className={cn('border-t p-3 sm:p-4 flex-shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
+              <Button
+                theme={theme}
+                variant={showFilters || hasActiveFilters ? 'primary' : 'outline'}
+                icon={Filter}
+                onClick={() => setShowFilters(!showFilters)}
+                className={cn('flex-shrink-0', showFilters || hasActiveFilters ? (isDark ? '!bg-emerald-500/10 !text-emerald-400 !shadow-none border !border-emerald-500/40' : '!bg-emerald-50 !text-emerald-700 !shadow-none border !border-emerald-300') : '')}
+              >
+                <span className="hidden xs:inline">Filters</span>
+                {(filterStatus !== 'all' || filterBrand !== 'all' || filterAgent !== 'all') && (
+                  <span className="ml-1 rounded-full bg-emerald-500 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs text-white">
+                    {[filterStatus, filterBrand, filterAgent].filter((f) => f !== 'all').length}
+                  </span>
+                )}
+              </Button>
+
+              <div className={cn('flex rounded-xl border overflow-hidden flex-shrink-0', isDark ? 'border-slate-700' : 'border-gray-200')}>
+                {[
+                  { mode: 'table' as const, Icon: Table, label: 'Table View' },
+                  { mode: 'card' as const, Icon: LayoutGrid, label: 'Card View' },
+                  { mode: 'list' as const, Icon: List, label: 'List View' },
+                ].map(({ mode, Icon, label }, i) => (
+                  <button
+                    key={mode}
+                    onClick={() => setLayoutMode(mode)}
+                    title={label}
+                    aria-label={label}
+                    aria-pressed={layoutMode === mode}
+                    className={cn(
+                      'px-2.5 sm:px-4 py-2 sm:py-3 text-sm transition-all',
+                      focusRing,
+                      i > 0 && (isDark ? 'border-l border-slate-700' : 'border-l border-gray-200'),
+                      layoutMode === mode ? (isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700') : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-white text-gray-500 hover:bg-gray-100'
+                    )}
+                  >
+                    <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-1 sm:gap-2 overflow-x-auto pb-1">
+                <button
+                  onClick={() => {
+                    setFilterStatus('all');
+                    setCurrentPage(1);
+                  }}
+                  className={cn(
+                    'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                    focusRing,
+                    filterStatus === 'all'
+                      ? isDark
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                      : isDark
+                      ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  )}
+                >
+                  All ({taskCounts.all || 0})
+                </button>
+
+                {Object.keys(taskCounts)
+                  .filter((k) => k !== 'all')
+                  .sort()
+                  .map((status) => {
+                    const count = taskCounts[status] || 0;
+                    const isActive = filterStatus === status;
+
+                    return (
+                      <button
+                        key={status}
+                        onClick={() => {
+                          setFilterStatus(status);
+                          setCurrentPage(1);
+                        }}
+                        className={cn(
+                          'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                          focusRing,
+                          isActive
+                            ? isDark
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                            : isDark
+                            ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        )}
+                      >
+                        <span>{status}</span>
+                        <span
+                          className={cn(
+                            'ml-1 sm:ml-2 rounded-full px-1 sm:px-2 py-0.5 text-[8px] sm:text-xs',
+                            isActive ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
+                          )}
+                        >
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
+                <button
+                  onClick={() => setShowOnlyNew(!showOnlyNew)}
+                  className={cn(
+                    'inline-flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                    focusRing,
+                    showOnlyNew
+                      ? isDark
+                        ? 'bg-emerald-500/30 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                      : isDark
+                      ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  )}
+                >
+                  <Bell className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline">{showOnlyNew ? 'Showing New Tasks' : 'Show New Tasks'}</span>
+                  {newTaskIds.size > 0 && (
+                    <span className={cn('ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs', showOnlyNew ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}>
+                      {newTaskIds.size}
+                    </span>
+                  )}
+                </button>
+
+                {newTaskIds.size > 0 && (
+                  <button
+                    onClick={onMarkAllViewed}
+                    className={cn(
+                      'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                      focusRing,
+                      isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                    )}
+                  >
+                    <Check className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden xs:inline">Mark All Viewed</span>
+                  </button>
+                )}
+
+                {dateChips.map((chip) => (
+                  <button
+                    key={chip.key}
+                    onClick={() => {
+                      setFilterDateRange(chip.key);
+                      setCurrentPage(1);
+                    }}
+                    className={cn(
+                      'px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                      focusRing,
+                      filterDateRange === chip.key ? chip.activeClass : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    {chip.emoji && <span className="mr-1">{chip.emoji}</span>}
+                    {chip.label}
+                  </button>
+                ))}
+
+                <button
+                  onClick={() => setShowDateRangePicker(!showDateRangePicker)}
+                  className={cn(
+                    'px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap inline-flex items-center gap-1',
+                    focusRing,
+                    filterDateRange === 'custom'
+                      ? isDark
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                      : isDark
+                      ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  )}
+                >
+                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline">Custom Range</span>
+                  {filterDateRange === 'custom' && (
+                    <span className="ml-1 text-[10px] opacity-70 hidden lg:inline">
+                      ({customDateStart ? new Date(customDateStart).toLocaleDateString() : '...'} - {customDateEnd ? new Date(customDateEnd).toLocaleDateString() : '...'})
+                    </span>
+                  )}
+                </button>
+
+                {filterDateRange !== 'all' && (
+                  <button
+                    onClick={clearCustomDateRange}
+                    className={cn('px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap', focusRing, isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300')}
+                  >
+                    <X className="h-3 w-3 sm:h-4 sm:w-4 inline" /> Clear
+                  </button>
+                )}
+              </div>
+
+              {showDateRangePicker && (
+                <Card theme={theme} className="mt-1 sm:mt-2 p-3 sm:p-4 shadow-lg">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+                    <div className="flex-1 w-full sm:w-auto">
+                      <FieldLabel theme={theme}>Start Date</FieldLabel>
+                      <input type="date" value={customDateStart} onChange={(e) => setCustomDateStart(e.target.value)} className={inputClasses(theme)} />
+                    </div>
+                    <div className="flex-1 w-full sm:w-auto">
+                      <FieldLabel theme={theme}>End Date</FieldLabel>
+                      <input type="date" value={customDateEnd} onChange={(e) => setCustomDateEnd(e.target.value)} className={inputClasses(theme)} />
+                    </div>
+                    <div className="flex gap-2 sm:gap-3 w-full sm:w-auto mt-2 sm:mt-6">
+                      <Button theme={theme} variant="primary" icon={Check} disabled={!customDateStart || !customDateEnd} onClick={applyCustomDateRange} className="flex-1 sm:flex-none">
+                        Apply
+                      </Button>
+                      <Button theme={theme} variant="secondary" onClick={() => setShowDateRangePicker(false)} className="flex-1 sm:flex-none">
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              )}
+            </div>
+
+            {showFilters && (
+              <Card theme={theme} className={cn('grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-4', isDark ? 'bg-slate-800/50' : 'bg-gray-50')}>
+                <div>
+                  <FieldLabel theme={theme}>Brand</FieldLabel>
+                  <select value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)} className={inputClasses(theme)}>
+                    <option value="all">All Brands</option>
+                    {uniqueBrands.map((brand) => (
+                      <option key={brand} value={brand}>
+                        {brand}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <FieldLabel theme={theme}>Agent</FieldLabel>
+                  <select value={filterAgent} onChange={(e) => setFilterAgent(e.target.value)} className={inputClasses(theme)}>
+                    <option value="all">All Agents</option>
+                    {uniqueAgents.map((agent) => (
+                      <option key={agent} value={agent}>
+                        {agent}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <Button theme={theme} variant="secondary" onClick={clearFilters} className="w-full">
+                    Clear All Filters
+                  </Button>
+                </div>
+              </Card>
+            )}
+          </div>
+
+          {/* ─── TASK LIST ────────────────────────────────────────────────── */}
+          {isLoading && activeTasks.length === 0 ? renderSkeleton() : renderTasks()}
+
+          {/* ─── PAGINATION ────────────────────────────────────────────────── */}
+          <div className={cn('border-t pt-3 sm:pt-4 flex-shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
             <span className={cn('text-xs sm:text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
               Showing {paginatedTasks.length} of {activeCount} tasks
               {filteredAndSortedTasks.length !== activeTasks.length && ` (filtered from ${activeTasks.length})`}
@@ -2747,7 +3089,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               <span className={cn('text-[10px] sm:text-sm', isDark ? 'text-slate-500' : 'text-gray-400')}>{isLoading ? 'Refreshing...' : `Updated: ${new Date().toLocaleTimeString()}`}</span>
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {/* ─── MODALS ────────────────────────────────────────────────────────── */}
