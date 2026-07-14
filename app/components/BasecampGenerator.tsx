@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { ChangeEvent } from 'react';
 import {
   AlertCircle,
@@ -12,6 +12,32 @@ import {
   Sparkles,
   Upload,
   Zap,
+  X,
+  ChevronDown,
+  ChevronUp,
+  HelpCircle,
+  Settings,
+  Eye,
+  EyeOff,
+  Maximize2,
+  Minimize2,
+  Clock,
+  Calendar,
+  User,
+  Mail,
+  Paperclip,
+  Send,
+  RefreshCw,
+  Info,
+  AlertTriangle,
+  CheckCircle2,
+  ListChecks,
+  Package,
+  BarChart2,
+  TrendingUp,
+  FileSpreadsheet,
+  Link2,
+  ExternalLink,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -36,14 +62,83 @@ interface GenerationStats {
   totalSkus: number;
   totalQty: number;
   issueCount: number;
+  matchedCount?: number;
+  unmatchedCount?: number;
 }
 
-const TYPE_CONFIG: Record<AnalysisType, { label: string; color: string; darkBg: string; lightBg: string; darkText: string; lightText: string }> = {
-  initial: { label: 'Initial Analysis', color: 'emerald', darkBg: 'bg-emerald-950/40 border-emerald-500/30', lightBg: 'bg-emerald-50/70 border-emerald-300', darkText: 'text-emerald-300', lightText: 'text-emerald-800' },
-  final: { label: 'Final Analysis', color: 'emerald', darkBg: 'bg-emerald-950/40 border-emerald-500/30', lightBg: 'bg-emerald-50/70 border-emerald-300', darkText: 'text-emerald-300', lightText: 'text-emerald-800' },
-  'pre-approval': { label: 'Pre-Approval', color: 'amber', darkBg: 'bg-amber-950/40 border-amber-500/30', lightBg: 'bg-amber-50/70 border-amber-300', darkText: 'text-amber-300', lightText: 'text-amber-800' },
-  'for-fixing': { label: 'For Fixing', color: 'blue', darkBg: 'bg-blue-950/40 border-blue-500/30', lightBg: 'bg-blue-50/70 border-blue-300', darkText: 'text-blue-300', lightText: 'text-blue-800' },
+interface FileUploadState {
+  file: File | null;
+  filename: string;
+  rows: string[][];
+  rowCount: number;
+  uploaded: boolean;
+}
+
+const TYPE_CONFIG: Record<AnalysisType, { 
+  label: string; 
+  icon: React.ReactNode;
+  color: string; 
+  description: string;
+  darkBg: string; 
+  lightBg: string; 
+  darkText: string; 
+  lightText: string;
+  gradient: string;
+}> = {
+  initial: { 
+    label: 'Initial Analysis', 
+    icon: <BarChart2 className="h-4 w-4" />,
+    color: 'emerald', 
+    description: 'First pass analysis of SKUs and quantities',
+    darkBg: 'bg-emerald-950/40 border-emerald-500/30', 
+    lightBg: 'bg-emerald-50/70 border-emerald-300', 
+    darkText: 'text-emerald-300', 
+    lightText: 'text-emerald-800',
+    gradient: 'from-emerald-600 to-teal-600',
+  },
+  final: { 
+    label: 'Final Analysis', 
+    icon: <CheckCircle2 className="h-4 w-4" />,
+    color: 'emerald', 
+    description: 'Final review with remarks and exclusions',
+    darkBg: 'bg-emerald-950/40 border-emerald-500/30', 
+    lightBg: 'bg-emerald-50/70 border-emerald-300', 
+    darkText: 'text-emerald-300', 
+    lightText: 'text-emerald-800',
+    gradient: 'from-emerald-600 to-teal-600',
+  },
+  'pre-approval': { 
+    label: 'Pre-Approval', 
+    icon: <FileSpreadsheet className="h-4 w-4" />,
+    color: 'amber', 
+    description: 'Review items for approval before ordering',
+    darkBg: 'bg-amber-950/40 border-amber-500/30', 
+    lightBg: 'bg-amber-50/70 border-amber-300', 
+    darkText: 'text-amber-300', 
+    lightText: 'text-amber-800',
+    gradient: 'from-amber-600 to-orange-600',
+  },
+  'for-fixing': { 
+    label: 'For Fixing', 
+    icon: <Wrench className="h-4 w-4" />,
+    color: 'blue', 
+    description: 'Flag items that need correction',
+    darkBg: 'bg-blue-950/40 border-blue-500/30', 
+    lightBg: 'bg-blue-50/70 border-blue-300', 
+    darkText: 'text-blue-300', 
+    lightText: 'text-blue-800',
+    gradient: 'from-blue-600 to-cyan-600',
+  },
 };
+
+// Wrench icon component
+function Wrench(props: any) {
+  return (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+    </svg>
+  );
+}
 
 export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorProps) {
   const [uploadedFiles, setUploadedFiles] = useState<{ preApproval?: POFileData; listingData?: POFileData; excluded?: POFileData }>({});
@@ -63,10 +158,15 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>('User');
+  const [showConfig, setShowConfig] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info' | 'warning'; message: string } | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastGenerated, setLastGenerated] = useState<string | null>(null);
 
-  // Get notification context
+  const messageRef = useRef<HTMLDivElement>(null);
   const { createNotificationWithAgent } = useNotifications();
-
   const isDark = theme === 'dark';
   const typeConfig = TYPE_CONFIG[analysisType];
 
@@ -77,7 +177,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
       if (user) {
         setUserId(user.id);
         setUserEmail(user.email || null);
-        // Get user name from profile
         const { data: profile } = await supabase
           .from('profiles')
           .select('name')
@@ -88,6 +187,12 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
     };
     getUser();
   }, []);
+
+  // Show feedback toast
+  const showFeedback = (type: 'success' | 'error' | 'info' | 'warning', message: string) => {
+    setFeedback({ type, message });
+    setTimeout(() => setFeedback(null), 4000);
+  };
 
   const parseExcelFile = async (file: File): Promise<string[][]> => {
     return new Promise((resolve, reject) => {
@@ -141,8 +246,11 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
       if (rows.length === 0) throw new Error('File contains no data.');
       setUploadedFiles(prev => ({ ...prev, [type]: { filename: file.name, content: file.name, rows } }));
       setError('');
+      showFeedback('success', `✅ ${file.name} uploaded successfully with ${rows.length - 1} rows of data.`);
     } catch (err) {
-      setError(`Failed to parse ${file.name}. Please ensure it's a valid Excel or CSV file.`);
+      const msg = `Failed to parse ${file.name}. Please ensure it's a valid Excel or CSV file.`;
+      setError(msg);
+      showFeedback('error', msg);
     }
   };
 
@@ -210,7 +318,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
     return { totalSkus, totalQty, issuesMap, hasRemarksColumn };
   };
 
-  // Helper function to check if a column exists in the table
   const checkColumnExists = async (tableName: string, columnName: string): Promise<boolean> => {
     try {
       const { data, error } = await supabase
@@ -227,7 +334,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
         }
         return false;
       }
-      
       return true;
     } catch (err) {
       console.warn(`Error checking if column ${columnName} exists:`, err);
@@ -237,7 +343,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
 
   const saveBasecampGeneration = async ({ message, stats, status, errorMessage }: { message: string | null; stats: GenerationStats; status: 'completed' | 'failed'; errorMessage?: string | null }) => {
     try {
-      // First, check if the table exists
       const { error: tableCheckError } = await supabase
         .from('basecamp_generations')
         .select('id')
@@ -248,7 +353,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
         return null;
       }
 
-      // Build the insert data with only the columns that exist
       const insertData: any = {
         analysis_type: analysisType,
         total_skus: stats.totalSkus,
@@ -272,18 +376,11 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
       insertData.done_fba_error_tracker = doneFbaErrorTracker;
       insertData.done_tracker_submission = doneTrackerSubmission;
 
-      // Try to add user_id and user_email if the columns exist
       const hasUserId = await checkColumnExists('basecamp_generations', 'user_id');
       const hasUserEmail = await checkColumnExists('basecamp_generations', 'user_email');
       
-      if (hasUserId && userId) {
-        insertData.user_id = userId;
-      }
-      if (hasUserEmail && userEmail) {
-        insertData.user_email = userEmail;
-      }
-
-      console.log('Inserting data:', insertData);
+      if (hasUserId && userId) insertData.user_id = userId;
+      if (hasUserEmail && userEmail) insertData.user_email = userEmail;
 
       const { data, error: insertError } = await supabase
         .from('basecamp_generations')
@@ -295,7 +392,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
         console.error('Insert error details:', insertError);
         return null;
       }
-      
       return data;
     } catch (error) {
       console.error('Save error:', error);
@@ -308,8 +404,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
     setError('');
 
     try {
-      console.log('Starting message generation...');
-      
       let message = '';
       const poPrefix = poNumber.trim() ? poNumber.trim() : '[PO Number]';
       let stats: GenerationStats = { totalSkus: 0, totalQty: 0, issueCount: 0 };
@@ -321,8 +415,6 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
       if ((analysisType === 'initial' || analysisType === 'final' || analysisType === 'for-fixing') && !uploadedFiles.listingData) {
         throw new Error('Listing data file is required');
       }
-
-      console.log('Files validated, processing...');
 
       if (analysisType === 'initial') {
         const { totalSkus, totalQty, issuesMap } = parseForInitial(uploadedFiles.listingData);
@@ -411,44 +503,33 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
         if (doneTracker) message += `\n✅Done updating the tracker\n`;
       }
 
-      console.log('Message generated, saving to database...');
-
       setGeneratedMessage(message);
       setGeneratedStats(stats);
+      setLastGenerated(new Date().toLocaleString());
       
-      // Try to save to database - continue even if it fails
       try {
         savedGeneration = await saveBasecampGeneration({ message, stats, status: 'completed' });
-        console.log('Saved to database successfully:', savedGeneration);
       } catch (dbError) {
         console.error('Database save failed (continuing):', dbError);
       }
       
-      // 👇 Create notification for current user
-      try {
-        await createNotificationWithAgent(
-          `📝 ${typeConfig.label} Generated`,
-          `${typeConfig.label} message generated for PO${poNumber.trim() ? ` #${poNumber.trim()}` : ''} with ${stats.totalSkus} SKUs`,
-          'success',
-          { url: '/tools/basecamp', poNumber: poNumber.trim() || null },
-          userName || userEmail?.split('@')[0] || 'System',
-          userEmail || '',
-          userId || '',
-          { toolName: 'basecamp_generator', basecampGenerationId: savedGeneration?.id }
-        );
-      } catch (notifError) {
-        console.error('Notification creation failed:', notifError);
-      }
+      await createNotificationWithAgent(
+        `📝 ${typeConfig.label} Generated`,
+        `${typeConfig.label} message generated for PO${poNumber.trim() ? ` #${poNumber.trim()}` : ''} with ${stats.totalSkus} SKUs`,
+        'success',
+        { url: '/tools/basecamp', poNumber: poNumber.trim() || null },
+        userName || userEmail?.split('@')[0] || 'System',
+        userEmail || '',
+        userId || '',
+        { toolName: 'basecamp_generator', basecampGenerationId: savedGeneration?.id }
+      );
 
-      // 👇👀 IMPORTANT: Notify ALL users about this Basecamp generation (always)
       try {
         const { data: allUsers } = await supabase
           .from('profiles')
           .select('id, email, name');
         
         if (allUsers && allUsers.length > 1) {
-          console.log(`🔔 Notifying ${allUsers.length - 1} other users about Basecamp generation...`);
-          
           await notifyAllUsers(
             `📝 ${typeConfig.label} Generated`,
             `${userName || userEmail?.split('@')[0] || 'System'} generated a ${typeConfig.label} Basecamp message for PO${poNumber.trim() ? ` #${poNumber.trim()}` : ''} with ${stats.totalSkus} SKUs`,
@@ -468,11 +549,9 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
             { toolName: 'basecamp_generator', basecampGenerationId: savedGeneration?.id },
             userId || undefined
           );
-        } else {
-          console.log('ℹ️ No other users found to notify');
         }
       } catch (notifError) {
-        console.error('Failed to send notifications to other users:', notifError);
+        console.error('Failed to send notifications:', notifError);
       }
       
       try {
@@ -482,15 +561,16 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
           totalCount: stats.totalSkus, successCount: stats.totalQty, issueCount: stats.issueCount,
           metadata: { poNumber: poNumber.trim() || null, analysisType, ...stats, preApprovalFilename: uploadedFiles.preApproval?.filename ?? null, listingDataFilename: uploadedFiles.listingData?.filename ?? null, excludedFilename: uploadedFiles.excluded?.filename ?? null },
         });
-        console.log('Logged to tool runs successfully');
       } catch (logError) {
         console.error('Logging failed:', logError);
       }
       
+      showFeedback('success', `✅ ${typeConfig.label} message generated successfully!`);
+      
     } catch (err) {
-      console.error('Generation error:', err);
       const msg = err instanceof Error ? err.message : 'Failed to generate Basecamp message.';
       setError(msg);
+      showFeedback('error', `❌ ${msg}`);
       
       try {
         await saveBasecampGeneration({ message: null, stats: { totalSkus: 0, totalQty: 0, issueCount: 1 }, status: 'failed', errorMessage: msg });
@@ -498,23 +578,17 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
         console.error('Failed to save error to database:', dbError);
       }
       
-      // 👇 Create error notification for current user
-      try {
-        await createNotificationWithAgent(
-          '❌ Basecamp Generation Failed',
-          `Error: ${msg}`,
-          'error',
-          undefined,
-          userName || userEmail?.split('@')[0] || 'System',
-          userEmail || '',
-          userId || '',
-          { toolName: 'basecamp_generator' }
-        );
-      } catch (notifError) {
-        console.error('Error notification creation failed:', notifError);
-      }
+      await createNotificationWithAgent(
+        '❌ Basecamp Generation Failed',
+        `Error: ${msg}`,
+        'error',
+        undefined,
+        userName || userEmail?.split('@')[0] || 'System',
+        userEmail || '',
+        userId || '',
+        { toolName: 'basecamp_generator' }
+      );
 
-      // 👇 Notify ALL users about the error
       try {
         const { data: allUsers } = await supabase
           .from('profiles')
@@ -523,7 +597,7 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
         if (allUsers && allUsers.length > 1) {
           await notifyAllUsers(
             '❌ Basecamp Generation Failed',
-            `${userName || userEmail?.split('@')[0] || 'System'} encountered an error while generating Basecamp message: ${msg}`,
+            `${userName || userEmail?.split('@')[0] || 'System'} encountered an error: ${msg}`,
             'error',
             { 
               url: '/tools/basecamp', 
@@ -557,6 +631,7 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
   const copyToClipboard = async () => {
     await navigator.clipboard.writeText(generatedMessage);
     setCopied(true);
+    showFeedback('success', '📋 Message copied to clipboard!');
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -572,6 +647,12 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
     setDoneTrackerSubmission(false);
     setGeneratedStats(null);
     setEnableExcluded(false);
+    setLastGenerated(null);
+    showFeedback('info', '🧹 All fields cleared.');
+  };
+
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
   };
 
   const hasRequiredFiles = () => {
@@ -585,21 +666,125 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
   const messageLineCount = generatedMessage ? generatedMessage.split('\n').filter(Boolean).length : 0;
 
   return (
-    <div className="w-full max-w-full space-y-6 overflow-hidden">
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+    <div className={`w-full max-w-full space-y-6 overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 p-4 bg-slate-950' : ''}`}>
+      {/* Toast Feedback */}
+      {feedback && (
+        <div className={`fixed top-4 right-4 z-50 max-w-sm rounded-xl border p-4 shadow-2xl animate-slide-in ${
+          feedback.type === 'success'
+            ? isDark ? 'border-emerald-500/30 bg-emerald-900/90 text-emerald-100' : 'border-emerald-300 bg-emerald-100 text-emerald-800'
+            : feedback.type === 'error'
+              ? isDark ? 'border-red-500/30 bg-red-900/90 text-red-100' : 'border-red-300 bg-red-100 text-red-800'
+              : feedback.type === 'warning'
+                ? isDark ? 'border-yellow-500/30 bg-yellow-900/90 text-yellow-100' : 'border-yellow-300 bg-yellow-100 text-yellow-800'
+                : isDark ? 'border-blue-500/30 bg-blue-900/90 text-blue-100' : 'border-blue-300 bg-blue-100 text-blue-800'
+        }`}>
+          <div className="flex items-start gap-3">
+            {feedback.type === 'success' && <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-400" />}
+            {feedback.type === 'error' && <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-400" />}
+            {feedback.type === 'warning' && <AlertTriangle className="h-5 w-5 flex-shrink-0 text-yellow-400" />}
+            {feedback.type === 'info' && <Info className="h-5 w-5 flex-shrink-0 text-blue-400" />}
+            <p className="text-sm font-medium">{feedback.message}</p>
+          </div>
+        </div>
+      )}
 
-        <div className={`min-w-0 rounded-2xl border p-4 shadow-lg sm:p-6 ${isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'}`}>
-          <div className="mb-5 flex items-center justify-between">
-            <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Configuration</h2>
-            <span className={`rounded-full border px-3 py-1 text-xs font-bold ${
-              isDark ? `border ${typeConfig.darkBg.split(' ')[1]} bg-transparent ${typeConfig.darkText}` : `border ${typeConfig.lightBg.split(' ')[1]} bg-transparent ${typeConfig.lightText}`
+      {/* Header */}
+      <div className="mb-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
+              <h1 className={`text-xl font-bold sm:text-2xl ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                Basecamp Response Generator
+              </h1>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+                v2.0
+              </span>
+            </div>
+            <p className={`mt-1 max-w-2xl text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+              Generate formatted Basecamp messages from PO data files with tracking and exclusions.
+            </p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <div className={`hidden items-center gap-1.5 rounded-lg border px-3 py-2 text-xs sm:flex ${
+              isDark ? 'border-slate-700 bg-slate-800/50 text-slate-500' : 'border-gray-200 bg-gray-50 text-gray-400'
             }`}>
-              {typeConfig.label}
-            </span>
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>AI powered</span>
+            </div>
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              className={`rounded-lg border p-2 transition-colors ${
+                isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-gray-200 text-gray-500 hover:bg-gray-100'
+              }`}
+              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowHelp(!showHelp)}
+              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                isDark ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-700/60' : 'border-gray-200 bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <HelpCircle className="h-4 w-4" />
+              {showHelp ? 'Hide Help' : 'Help'}
+            </button>
+          </div>
+        </div>
+
+        {showHelp && (
+          <div className={`mt-4 rounded-xl border p-4 animate-slide-in ${
+            isDark ? 'border-emerald-500/20 bg-emerald-600/10' : 'border-emerald-300/60 bg-emerald-100/60'
+          }`}>
+            <h3 className={`mb-3 flex items-center gap-2 font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
+              <HelpCircle className="h-4 w-4" />
+              Quick Guide
+            </h3>
+            <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
+              {[
+                'Select message type (Initial/Final/Pre-Approval/For Fixing)',
+                'Enter PO number (optional but recommended)',
+                'Upload the required file(s) based on message type',
+                'Configure optional settings (shipping plan, 3PL, checklists)',
+                'Click Generate or press ⌘↵ to create the message',
+                'Copy the generated message directly to Basecamp',
+              ].map((tip, i) => (
+                <div key={tip} className={`flex items-start gap-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                  <span className="font-bold text-emerald-500">{i + 1}.</span>
+                  <span>{tip}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        {/* Configuration Panel */}
+        <div className={`min-w-0 rounded-2xl border p-4 shadow-lg sm:p-6 ${
+          isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'
+        }`}>
+          <div className="mb-5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Settings className={`h-5 w-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
+              <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Configuration</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`rounded-full border px-3 py-1 text-xs font-bold ${
+                isDark ? `border ${typeConfig.darkBg.split(' ')[1]} bg-transparent ${typeConfig.darkText}` : `border ${typeConfig.lightBg.split(' ')[1]} bg-transparent ${typeConfig.lightText}`
+              }`}>
+                {typeConfig.icon} {typeConfig.label}
+              </span>
+            </div>
           </div>
 
+          {/* Message Type Selection */}
           <div className="mb-5">
-            <label className={`mb-2 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>Message Type</label>
+            <label className={`mb-2 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+              Message Type
+            </label>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               {(['initial', 'final', 'pre-approval', 'for-fixing'] as const).map(type => {
                 const cfg = TYPE_CONFIG[type];
@@ -612,80 +797,118 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
                       setAnalysisType(type);
                       if (type !== 'final') setEnableExcluded(false);
                     }}
-                    className={`min-h-[42px] rounded-lg px-2 py-2 text-xs font-semibold capitalize transition-all sm:text-sm ${
+                    className={`min-h-[44px] rounded-lg px-2 py-2 text-xs font-semibold capitalize transition-all sm:text-sm ${
                       active
-                        ? cfg.color === 'emerald' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
-                          : cfg.color === 'amber' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20'
-                          : 'bg-blue-500 text-white shadow-lg shadow-blue-500/20'
+                        ? `bg-gradient-to-r ${cfg.gradient} text-white shadow-lg`
                         : isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    {type.replace('-', ' ')}
+                    <div className="flex items-center justify-center gap-1.5">
+                      {cfg.icon}
+                      {type.replace('-', ' ')}
+                    </div>
                   </button>
                 );
               })}
             </div>
+            <p className={`mt-1.5 text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+              {typeConfig.description}
+            </p>
           </div>
 
+          {/* PO Number */}
           <div className="mb-4">
-            <label className={`mb-2 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>PO Number</label>
+            <label className={`mb-2 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+              PO Number <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>(optional)</span>
+            </label>
             <input
               type="text"
               value={poNumber}
               onChange={e => setPoNumber(e.target.value)}
               placeholder="e.g. FDANN010726PBB"
-              className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+              className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                 isDark ? 'border-slate-700 bg-slate-900 text-slate-100 placeholder-slate-500' : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
               }`}
             />
           </div>
 
-          <div className={`mb-5 space-y-4 rounded-xl border p-4 ${isDark ? 'border-slate-700/40 bg-slate-800/30' : 'border-gray-100 bg-gray-50'}`}>
-            {(analysisType === 'initial' || analysisType === 'final') && (
-              <div>
-                <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Shipping Plan</label>
-                <select
-                  value={shippingPlanError}
-                  onChange={e => setShippingPlanError(e.target.value as 'no' | 'yes')}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${isDark ? 'border-slate-700 bg-slate-900 text-slate-100' : 'border-gray-300 bg-white text-gray-900'}`}
-                >
-                  <option value="no">No error in shipping plan creation</option>
-                  <option value="yes">Shipping Plan Error</option>
-                </select>
-              </div>
-            )}
-            {analysisType === 'final' && (
-              <div>
-                <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>3PL Suggestion</label>
-                <select
-                  value={suggest3PL}
-                  onChange={e => setSuggest3PL(e.target.value as 'yes' | 'no')}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${isDark ? 'border-slate-700 bg-slate-900 text-slate-100' : 'border-gray-300 bg-white text-gray-900'}`}
-                >
-                  <option value="no">Do not suggest items to 3PL</option>
-                  <option value="yes">Suggest to 3PL</option>
-                </select>
-              </div>
-            )}
-            
-            <div>
-              <label className={`mb-2 block text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Checklist</label>
-              <div className={`space-y-2 text-sm ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                {(analysisType === 'initial' || analysisType === 'for-fixing') && (
-                  <CheckboxRow label="Done updating the tracker" checked={doneTracker} onChange={() => setDoneTracker(c => !c)} isDark={isDark} />
+          {/* Advanced Options */}
+          <div className={`mb-5 space-y-4 rounded-xl border p-4 ${
+            isDark ? 'border-slate-700/40 bg-slate-800/30' : 'border-gray-100 bg-gray-50'
+          }`}>
+            <div className="flex items-center justify-between">
+              <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                Advanced Options
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowConfig(!showConfig)}
+                className={`rounded-lg p-1 transition-colors ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-200 text-gray-500'}`}
+              >
+                {showConfig ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+            </div>
+
+            {showConfig && (
+              <div className="space-y-4">
+                {(analysisType === 'initial' || analysisType === 'final') && (
+                  <div>
+                    <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                      Shipping Plan
+                    </label>
+                    <select
+                      value={shippingPlanError}
+                      onChange={e => setShippingPlanError(e.target.value as 'no' | 'yes')}
+                      className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${
+                        isDark ? 'border-slate-700 bg-slate-900 text-slate-100' : 'border-gray-300 bg-white text-gray-900'
+                      }`}
+                    >
+                      <option value="no">✅ No error in shipping plan creation</option>
+                      <option value="yes">❌ Shipping Plan Error</option>
+                    </select>
+                  </div>
                 )}
                 {analysisType === 'final' && (
-                  <>
-                    <CheckboxRow label="Done updating the tracker" checked={doneTracker} onChange={() => setDoneTracker(c => !c)} isDark={isDark} />
-                    <CheckboxRow label="Done adding to FBA ASIN Errors Encountered tracker" checked={doneFbaErrorTracker} onChange={() => setDoneFbaErrorTracker(c => !c)} isDark={isDark} />
-                    <CheckboxRow label="Added to Thorogood - Amazon Deliverables Tracker & Form Submission" checked={doneTrackerSubmission} onChange={() => setDoneTrackerSubmission(c => !c)} isDark={isDark} />
-                  </>
+                  <div>
+                    <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                      3PL Suggestion
+                    </label>
+                    <select
+                      value={suggest3PL}
+                      onChange={e => setSuggest3PL(e.target.value as 'yes' | 'no')}
+                      className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${
+                        isDark ? 'border-slate-700 bg-slate-900 text-slate-100' : 'border-gray-300 bg-white text-gray-900'
+                      }`}
+                    >
+                      <option value="no">🚫 Do not suggest items to 3PL</option>
+                      <option value="yes">📦 Suggest to 3PL</option>
+                    </select>
+                  </div>
                 )}
+                
+                <div>
+                  <label className={`mb-2 block text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                    <ListChecks className="inline h-3.5 w-3.5 mr-1" />
+                    Checklist
+                  </label>
+                  <div className={`space-y-2 text-sm ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                    {(analysisType === 'initial' || analysisType === 'for-fixing') && (
+                      <CheckboxRow label="Done updating the tracker" checked={doneTracker} onChange={() => setDoneTracker(c => !c)} isDark={isDark} />
+                    )}
+                    {analysisType === 'final' && (
+                      <>
+                        <CheckboxRow label="Done updating the tracker" checked={doneTracker} onChange={() => setDoneTracker(c => !c)} isDark={isDark} />
+                        <CheckboxRow label="Done adding to FBA ASIN Errors Encountered tracker" checked={doneFbaErrorTracker} onChange={() => setDoneFbaErrorTracker(c => !c)} isDark={isDark} />
+                        <CheckboxRow label="Added to Thorogood - Amazon Deliverables Tracker & Form Submission" checked={doneTrackerSubmission} onChange={() => setDoneTrackerSubmission(c => !c)} isDark={isDark} />
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* File uploads section */}
+          {/* File Uploads */}
           <div className="space-y-4">
             {analysisType === 'pre-approval' && (
               <FileUploadArea theme={theme} label="Pre-Approval PO File" description="Upload the pre-approval PO file for review" accept=".csv,.xlsx,.xls"
@@ -733,7 +956,9 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
           </div>
 
           {error && (
-            <div className={`mt-4 flex items-start gap-2 rounded-lg border p-3 text-sm ${isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'}`}>
+            <div className={`mt-4 flex items-start gap-2 rounded-lg border p-3 text-sm ${
+              isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'
+            }`}>
               <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
               <span className="break-words">{error}</span>
             </div>
@@ -746,8 +971,8 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
               disabled={!hasRequiredFiles() || isGenerating}
               className={`flex w-full flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 font-semibold transition-all ${
                 hasRequiredFiles() && !isGenerating
-                  ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30'
-                  : 'cursor-not-allowed opacity-50 bg-emerald-500/40 text-white'
+                  ? `bg-gradient-to-r ${typeConfig.gradient} text-white shadow-lg hover:shadow-xl hover:scale-[1.02]`
+                  : 'cursor-not-allowed opacity-50 bg-slate-600 text-white'
               }`}
             >
               {isGenerating ? (
@@ -758,43 +983,48 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
             </button>
             <button
               type="button" onClick={clearAll}
-              className={`w-full rounded-xl px-4 py-3 font-semibold transition-colors sm:w-auto ${isDark ? 'border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}`}
+              className={`w-full rounded-xl px-4 py-3 font-semibold transition-colors sm:w-auto ${
+                isDark ? 'border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+              }`}
             >
+              <X className="h-4 w-4 inline mr-1" />
               Clear
             </button>
           </div>
         </div>
 
-        <div className={`min-w-0 rounded-2xl border p-4 shadow-lg sm:p-6 ${isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'}`}>
+        {/* Generated Message Panel */}
+        <div className={`min-w-0 rounded-2xl border p-4 shadow-lg sm:p-6 ${
+          isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'
+        }`}>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
+              <MessageSquare className={`h-5 w-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
               <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Generated Message</h2>
               {generatedMessage && (
                 <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
                   isDark ? `${typeConfig.darkBg} ${typeConfig.darkText}` : `${typeConfig.lightBg} ${typeConfig.lightText}`
                 }`}>
-                  {typeConfig.label}
+                  {typeConfig.icon} {typeConfig.label}
                 </span>
               )}
             </div>
 
-            <div className="flex items-center gap-2">
-              {generatedMessage && generatedStats && (
-                <div className="flex items-center gap-3 text-xs">
-                  <span className={`flex items-center gap-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                    <Zap className="h-3 w-3 text-emerald-400" />
-                    {generatedStats.totalSkus} SKUs
-                  </span>
-                  <span className={`flex items-center gap-1 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                    <MessageSquare className="h-3 w-3 text-cyan-400" />
-                    {messageLineCount} lines
-                  </span>
-                </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {generatedMessage && lastGenerated && (
+                <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                  <Clock className="h-3 w-3 inline mr-1" />
+                  {lastGenerated}
+                </span>
               )}
               {generatedMessage && (
                 <button
                   type="button" onClick={copyToClipboard}
-                  className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                  className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    copied
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
                 >
                   {copied ? <><Check className="h-4 w-4 text-emerald-400" />Copied!</> : <><Copy className="h-4 w-4" />Copy</>}
                 </button>
@@ -802,21 +1032,46 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
             </div>
           </div>
 
+          {generatedMessage && generatedStats && (
+            <div className={`mb-4 grid grid-cols-3 gap-2 rounded-lg border p-3 ${
+              isDark ? 'border-slate-700 bg-slate-800/30' : 'border-gray-200 bg-gray-50'
+            }`}>
+              <div className="text-center">
+                <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>SKUs</p>
+                <p className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{generatedStats.totalSkus}</p>
+              </div>
+              <div className="text-center">
+                <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>Total QTY</p>
+                <p className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{generatedStats.totalQty}</p>
+              </div>
+              <div className="text-center">
+                <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>Issues</p>
+                <p className={`text-lg font-bold ${generatedStats.issueCount > 0 ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                  {generatedStats.issueCount}
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className={`min-h-[360px] rounded-xl border sm:min-h-[420px] ${isDark ? 'border-slate-700 bg-slate-950/50' : 'border-gray-200 bg-gray-50'}`}>
             {generatedMessage ? (
-              <div className={`rounded-xl border p-4 h-full ${isDark ? typeConfig.darkBg : typeConfig.lightBg}`}>
+              <div ref={messageRef} className={`rounded-xl border p-4 h-full ${isDark ? typeConfig.darkBg : typeConfig.lightBg}`}>
                 <div className={`mb-3 flex items-center gap-2 border-b pb-3 ${isDark ? 'border-white/10' : 'border-black/10'}`}>
                   <MessageSquare className={`h-4 w-4 ${isDark ? typeConfig.darkText : typeConfig.lightText}`} />
                   <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? typeConfig.darkText : typeConfig.lightText}`}>
                     {typeConfig.label}
                   </span>
                   {poNumber && (
-                    <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-white/10 text-white/70' : 'bg-black/10 text-black/60'}`}>
+                    <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      isDark ? 'bg-white/10 text-white/70' : 'bg-black/10 text-black/60'
+                    }`}>
                       PO: {poNumber}
                     </span>
                   )}
                 </div>
-                <pre className={`max-w-full whitespace-pre-wrap break-words font-sans text-sm leading-relaxed ${isDark ? typeConfig.darkText : typeConfig.lightText}`}>
+                <pre className={`max-w-full whitespace-pre-wrap break-words font-sans text-sm leading-relaxed ${
+                  isDark ? typeConfig.darkText : typeConfig.lightText
+                }`}>
                   {generatedMessage}
                 </pre>
               </div>
@@ -836,6 +1091,11 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
                     <p className={`max-w-sm text-sm ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
                       {!hasRequiredFiles() ? 'Upload required files and click generate' : 'Click "Generate Message" to create your Basecamp response'}
                     </p>
+                    {!hasRequiredFiles() && (
+                      <p className={`mt-2 text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+                        {analysisType === 'pre-approval' ? 'Pre-approval file required' : 'Listing data file required'}
+                      </p>
+                    )}
                   </>
                 )}
               </div>
@@ -868,19 +1128,32 @@ function FileUploadArea({ theme, label, description, accept, required = false, o
       <label className={`flex items-center gap-1 text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
         {label}
         {required && <span className="text-red-500">*</span>}
+        {filename && (
+          <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+            isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+          }`}>
+            ✓ Uploaded
+          </span>
+        )}
       </label>
       {filename ? (
-        <div className={`flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between ${isDark ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-emerald-200 bg-emerald-50'}`}>
+        <div className={`flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between ${
+          isDark ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-emerald-200 bg-emerald-50'
+        }`}>
           <div className="flex min-w-0 items-center gap-2">
             <FileText className={`h-4 w-4 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
             <span className={`truncate text-sm ${isDark ? 'text-slate-300' : 'text-gray-700'}`} title={filename}>{filename}</span>
             {rowCount && rowCount > 1 && (
-              <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+              <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+              }`}>
                 {rowCount - 1} rows
               </span>
             )}
           </div>
-          <button type="button" onClick={() => onUpload(new File([], ''))} className={`self-start text-xs ${isDark ? 'text-slate-400 hover:text-red-400' : 'text-gray-500 hover:text-red-600'}`}>
+          <button type="button" onClick={() => onUpload(new File([], ''))} className={`self-start text-xs ${
+            isDark ? 'text-slate-400 hover:text-red-400' : 'text-gray-500 hover:text-red-600'
+          }`}>
             Remove
           </button>
         </div>

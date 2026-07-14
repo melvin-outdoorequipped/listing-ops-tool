@@ -1,7 +1,51 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { FileSpreadsheet, Download, Upload, Loader2, CheckCircle2, AlertCircle, X, RefreshCw, FileText, FileCheck, FileX, FileWarning, Package } from 'lucide-react';
+import { useState, useRef, useMemo } from 'react';
+import { 
+  FileSpreadsheet, 
+  Download, 
+  Upload, 
+  Loader2, 
+  CheckCircle2, 
+  AlertCircle, 
+  X, 
+  RefreshCw, 
+  FileText, 
+  FileCheck, 
+  FileX, 
+  FileWarning, 
+  Package,
+  Zap,
+  BarChart2,
+  Table,
+  Grid,
+  Settings,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  EyeOff,
+  Maximize2,
+  Minimize2,
+  Filter,
+  ListChecks,
+  Sparkles,
+  Info,
+  ArrowRight,
+  Clock,
+  Calendar,
+  Users,
+  Building2,
+  Tag,
+  Hash,
+  DollarSign,
+  Percent,
+  Link2,
+  ClipboardList,
+  LayoutGrid,
+  List,
+  FolderOpen,
+} from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 
@@ -39,6 +83,7 @@ const TEMPLATES = [
     color: 'emerald',
     templateFile: '/templates/Listing Data.xlsx',
     usesTemplateFile: true,
+    badge: 'Most Used',
   },
   {
     id: 'pre-approval',
@@ -75,8 +120,57 @@ const TEMPLATES = [
     color: 'purple',
     templateFile: '/templates/dtd_sc-shipping-template-v20240320.xlsx',
     usesTemplateFile: true,
+    badge: 'Amazon',
   },
 ];
+
+const COLOR: Record<string, { bg: string; border: string; text: string; selBg: string; selBorder: string; gradient: string; iconBg: string }> = {
+  emerald: { 
+    bg: 'bg-emerald-100', 
+    border: 'border-emerald-300', 
+    text: 'text-emerald-700', 
+    selBg: 'bg-emerald-50', 
+    selBorder: 'border-emerald-500',
+    gradient: 'from-emerald-600 to-teal-600',
+    iconBg: 'bg-emerald-500/20',
+  },
+  blue: { 
+    bg: 'bg-blue-100', 
+    border: 'border-blue-300', 
+    text: 'text-blue-700', 
+    selBg: 'bg-blue-50', 
+    selBorder: 'border-blue-500',
+    gradient: 'from-blue-600 to-cyan-600',
+    iconBg: 'bg-blue-500/20',
+  },
+  red: { 
+    bg: 'bg-red-100', 
+    border: 'border-red-300', 
+    text: 'text-red-700', 
+    selBg: 'bg-red-50', 
+    selBorder: 'border-red-500',
+    gradient: 'from-red-600 to-rose-600',
+    iconBg: 'bg-red-500/20',
+  },
+  yellow: { 
+    bg: 'bg-yellow-100', 
+    border: 'border-yellow-300', 
+    text: 'text-yellow-700', 
+    selBg: 'bg-yellow-50', 
+    selBorder: 'border-yellow-500',
+    gradient: 'from-yellow-600 to-amber-600',
+    iconBg: 'bg-yellow-500/20',
+  },
+  purple: { 
+    bg: 'bg-purple-100', 
+    border: 'border-purple-300', 
+    text: 'text-purple-700', 
+    selBg: 'bg-purple-50', 
+    selBorder: 'border-purple-500',
+    gradient: 'from-purple-600 to-indigo-600',
+    iconBg: 'bg-purple-500/20',
+  },
+};
 
 // Load template file from public folder
 async function loadTemplateFile(templatePath: string): Promise<ArrayBuffer> {
@@ -87,7 +181,6 @@ async function loadTemplateFile(templatePath: string): Promise<ArrayBuffer> {
   return await response.arrayBuffer();
 }
 
-// Generic function to build Excel file from any template
 async function buildFromTemplate(templatePath: string, rows: any[], templateId: string): Promise<Buffer> {
   const templateBuffer = await loadTemplateFile(templatePath);
   const workbook = new ExcelJS.Workbook();
@@ -98,7 +191,6 @@ async function buildFromTemplate(templatePath: string, rows: any[], templateId: 
     throw new Error('No worksheet found in template');
   }
   
-  // For shipping plan, update PlanName with brand name
   if (templateId === 'shipping-plan' && rows.length > 0 && rows[0].BrandName) {
     const planNameCell = worksheet.getCell('B1');
     if (planNameCell) {
@@ -106,7 +198,6 @@ async function buildFromTemplate(templatePath: string, rows: any[], templateId: 
     }
   }
   
-  // Find the header row
   let headerRowIndex = -1;
   let dataStartRow = -1;
   const expectedHeaders = getExpectedHeaders(templateId);
@@ -132,7 +223,6 @@ async function buildFromTemplate(templatePath: string, rows: any[], templateId: 
     dataStartRow = 2;
   }
   
-  // Clear existing data rows
   if (dataStartRow > 0) {
     const rowCount = worksheet.rowCount;
     for (let i = rowCount; i >= dataStartRow; i--) {
@@ -140,7 +230,6 @@ async function buildFromTemplate(templatePath: string, rows: any[], templateId: 
     }
   }
   
-  // Map columns
   const headerRow = worksheet.getRow(headerRowIndex);
   const columnMap: Record<string, number> = {};
   
@@ -172,7 +261,6 @@ async function buildFromTemplate(templatePath: string, rows: any[], templateId: 
     }
   }
   
-  // Add data rows
   rows.forEach((row, index) => {
     const newRow = worksheet.getRow(dataStartRow + index);
     
@@ -221,7 +309,6 @@ function getExpectedHeaders(templateId: string): string[] {
   }
 }
 
-// Map a raw analyzed row → output row
 function mapRow(raw: any, templateId: string): any {
   const mapped: any = {};
   
@@ -237,7 +324,6 @@ function mapRow(raw: any, templateId: string): any {
     return mapped;
   }
   
-  // For other templates (Listing Data, Pre-approval, Excluded, For Fixing)
   mapped.SKU = raw['SKU'] || '';
   mapped.UPC = raw['UPC'] || '';
   mapped.ASIN = raw['DD ASIN'] || raw['All Listings ASIN'] || raw['LL ASIN'] || raw['ASIN'] || '';
@@ -246,20 +332,10 @@ function mapRow(raw: any, templateId: string): any {
   mapped['Disc.Cost'] = raw['Final Disc Cost'] || raw['Disc Cost'] || '';
   mapped.Qty = raw['Order'] || raw['Qty'] || 0;
   mapped['Listing Status'] = raw['All Listing Status'] || raw['Listing Status'] || '';
-  
-  // Map Notes column to Remarks
   mapped.Remarks = raw['Notes'] || raw['Remarks'] || '';
   
   return mapped;
 }
-
-const COLOR: Record<string, { bg: string; border: string; text: string; selBg: string; selBorder: string }> = {
-  emerald: { bg: 'bg-emerald-100', border: 'border-emerald-300', text: 'text-emerald-700', selBg: 'bg-emerald-50', selBorder: 'border-emerald-500' },
-  blue:    { bg: 'bg-blue-100',    border: 'border-blue-300',    text: 'text-blue-700',    selBg: 'bg-blue-50',    selBorder: 'border-blue-500' },
-  red:     { bg: 'bg-red-100',     border: 'border-red-300',     text: 'text-red-700',     selBg: 'bg-red-50',     selBorder: 'border-red-500' },
-  yellow:  { bg: 'bg-yellow-100',  border: 'border-yellow-300',  text: 'text-yellow-700',  selBg: 'bg-yellow-50',  selBorder: 'border-yellow-500' },
-  purple:  { bg: 'bg-purple-100',  border: 'border-purple-300',  text: 'text-purple-700',  selBg: 'bg-purple-50',  selBorder: 'border-purple-500' },
-};
 
 interface FileGeneratorProps {
   theme?: 'light' | 'dark';
@@ -274,6 +350,10 @@ export default function FileGenerator({ theme = 'dark' }: FileGeneratorProps) {
   const [previewData, setPreviewData] = useState<any[] | null>(null);
   const [processedData, setProcessedData] = useState<any[] | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
+  const [expandedHelp, setExpandedHelp] = useState(false);
+  const [processingTime, setProcessingTime] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isDark = theme === 'dark';
@@ -281,6 +361,8 @@ export default function FileGenerator({ theme = 'dark' }: FileGeneratorProps) {
   const card = isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white';
   const textPrimary = isDark ? 'text-white' : 'text-gray-900';
   const textMuted = isDark ? 'text-slate-400' : 'text-gray-500';
+
+  const tmpl = selectedTemplate ? TEMPLATES.find(t => t.id === selectedTemplate) : null;
 
   const validateAndSetFile = (f: File) => {
     const ext = f.name.split('.').pop()?.toLowerCase();
@@ -294,6 +376,7 @@ export default function FileGenerator({ theme = 'dark' }: FileGeneratorProps) {
     setPreviewData(null); 
     setProcessedData(null); 
     setSelectedTemplate(null);
+    setProcessingTime(null);
     return true;
   };
 
@@ -351,6 +434,10 @@ export default function FileGenerator({ theme = 'dark' }: FileGeneratorProps) {
     setError(null); 
     setSuccess(null); 
     setPreviewData(null);
+    setProcessingTime(null);
+    
+    const startTime = performance.now();
+    
     try {
       const raw = await parseFile(file);
       if (!raw.length) throw new Error('No data found in the file');
@@ -379,15 +466,17 @@ export default function FileGenerator({ theme = 'dark' }: FileGeneratorProps) {
       const mapped = filtered.map((r: any) => mapRow(r, selectedTemplate));
       setProcessedData(mapped);
       setPreviewData(mapped.slice(0, 10));
-      setSuccess(`Found ${mapped.length} items for "${tmpl.name}"`);
+      
+      const endTime = performance.now();
+      setProcessingTime(Math.round(endTime - startTime));
+      
+      setSuccess(`✅ Found ${mapped.length} items for "${tmpl.name}" (${processingTime || 'fast'})`);
     } catch (err: any) {
       setError(err.message || 'Error processing file');
     } finally {
       setIsProcessing(false);
     }
   };
-
-  const tmpl = selectedTemplate ? TEMPLATES.find(t => t.id === selectedTemplate) : null;
 
   const handleDownload = async () => {
     if (!processedData || !selectedTemplate || !tmpl) return;
@@ -415,7 +504,7 @@ export default function FileGenerator({ theme = 'dark' }: FileGeneratorProps) {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      setSuccess(`Downloaded ${tmpl.name} — ${processedData.length} rows`);
+      setSuccess(`📥 Downloaded ${tmpl.name} — ${processedData.length} rows`);
     } catch (err: any) {
       setError('Error generating file: ' + err.message);
     }
@@ -428,9 +517,14 @@ export default function FileGenerator({ theme = 'dark' }: FileGeneratorProps) {
     setSuccess(null); 
     setPreviewData(null); 
     setProcessedData(null);
+    setProcessingTime(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
   };
 
   const getPreviewHeaders = () => {
@@ -441,178 +535,321 @@ export default function FileGenerator({ theme = 'dark' }: FileGeneratorProps) {
     return ['SKU', 'UPC', 'ASIN', 'Title', 'Cost', 'Disc.Cost', 'Qty', 'Listing Status', 'Remarks'];
   };
 
+  const selectedColor = tmpl ? COLOR[tmpl.color] : COLOR.emerald;
+
   return (
-    <div className={`min-h-screen p-6 ${bg}`}>
-      <div className="mx-auto max-w-7xl">
-        <div className={`mb-6 flex items-center gap-3 rounded-2xl border p-6 shadow-lg ${card}`}>
-          <div className={`rounded-xl p-3 ${isDark ? 'bg-orange-500/20' : 'bg-orange-100'}`}>
-            <FileSpreadsheet className={`h-8 w-8 ${isDark ? 'text-orange-400' : 'text-orange-600'}`} />
+    <div className={`w-full max-w-full space-y-6 overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 p-4 bg-slate-950' : ''}`}>
+      {/* Header */}
+      <div className={`rounded-2xl border p-6 shadow-lg ${card}`}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className={`rounded-xl p-3 ${isDark ? 'bg-orange-500/20' : 'bg-orange-100'}`}>
+              <FileSpreadsheet className={`h-8 w-8 ${isDark ? 'text-orange-400' : 'text-orange-600'}`} />
+            </div>
+            <div>
+              <h1 className={`text-2xl font-bold ${textPrimary}`}>File Generator</h1>
+              <p className={`text-sm ${textMuted}`}>
+                Generate Listing Data, Pre-approval, Excluded, For Fixing, or Shipping Plan files
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className={`text-2xl font-bold ${textPrimary}`}>File Generator</h1>
-            <p className={`text-sm ${textMuted}`}>
-              Upload spreadsheet to generate Listing Data, Pre-approval, Excluded File, For Fixing, or Shipping Plan
-            </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              className={`rounded-lg border p-2 transition-colors ${
+                isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-gray-200 text-gray-500 hover:bg-gray-100'
+              }`}
+              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setExpandedHelp(!expandedHelp)}
+              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                isDark ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-700/60' : 'border-gray-200 bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <HelpCircle className="h-4 w-4" />
+              {expandedHelp ? 'Hide Help' : 'Help'}
+            </button>
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className={`rounded-2xl border p-6 shadow-lg ${card}`}>
-            <h2 className={`mb-4 text-lg font-semibold ${textPrimary}`}>Step 1: Upload & Configure</h2>
-
-            <div className="mb-5">
-              <label className={`mb-2 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                Upload Spreadsheet
-              </label>
-              {!file ? (
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 transition-all ${
-                    isDragOver 
-                      ? 'border-orange-500 bg-orange-500/10' 
-                      : isDark 
-                        ? 'border-slate-700 hover:border-slate-500' 
-                        : 'border-gray-300 hover:border-gray-400'
-                  }`}
-                >
-                  <input 
-                    ref={fileInputRef}
-                    type="file" 
-                    accept=".xlsx,.xls,.csv" 
-                    onChange={handleUpload} 
-                    className="hidden" 
-                    id="file-upload" 
-                  />
-                  <Upload className={`h-10 w-10 ${isDragOver ? 'text-orange-500' : textMuted}`} />
-                  <span className={`text-sm ${textMuted}`}>
-                    {isDragOver ? 'Drop your file here' : 'Drag & drop or click to upload'}
-                  </span>
-                  <span className={`text-xs ${textMuted}`}>
-                    Supports .xlsx, .xls, .csv
-                  </span>
+        {expandedHelp && (
+          <div className={`mt-4 rounded-xl border p-4 animate-slide-in ${
+            isDark ? 'border-orange-500/20 bg-orange-600/10' : 'border-orange-300/60 bg-orange-100/60'
+          }`}>
+            <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
+              {[
+                'Upload your analyzed spreadsheet (Excel or CSV)',
+                'Select the output type (Listing Data, Pre-approval, etc.)',
+                'The tool filters rows based on the Remarks/Notes column',
+                'Preview the first 10 rows before downloading',
+                'Download the formatted file with your template formatting preserved',
+              ].map((tip, i) => (
+                <div key={tip} className={`flex items-start gap-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                  <span className="font-bold text-orange-500">{i + 1}.</span>
+                  <span>{tip}</span>
                 </div>
-              ) : (
-                <div className={`flex items-center justify-between rounded-xl border p-4 ${isDark ? 'border-slate-700 bg-slate-800/50' : 'border-gray-200 bg-gray-50'}`}>
-                  <div className="flex items-center gap-3">
-                    <FileSpreadsheet className={`h-8 w-8 ${isDark ? 'text-orange-400' : 'text-orange-500'}`} />
-                    <div>
-                      <p className={`text-sm font-medium ${textPrimary}`}>{file.name}</p>
-                      <p className={`text-xs ${textMuted}`}>{(file.size / 1024).toFixed(1)} KB</p>
-                    </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Step 1: Upload & Configure */}
+        <div className={`rounded-2xl border p-6 shadow-lg ${card}`}>
+          <div className="mb-4 flex items-center gap-2">
+            <Settings className={`h-5 w-5 ${textMuted}`} />
+            <h2 className={`text-lg font-semibold ${textPrimary}`}>Step 1: Upload & Configure</h2>
+            {file && (
+              <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+                ✓ File loaded
+              </span>
+            )}
+          </div>
+
+          <div className="mb-5">
+            <label className={`mb-2 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+              Upload Spreadsheet
+            </label>
+            {!file ? (
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 transition-all ${
+                  isDragOver 
+                    ? 'border-orange-500 bg-orange-500/10 scale-[1.02]' 
+                    : isDark 
+                      ? 'border-slate-700 hover:border-slate-500 hover:bg-slate-800/30' 
+                      : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+                }`}
+              >
+                <input 
+                  ref={fileInputRef}
+                  type="file" 
+                  accept=".xlsx,.xls,.csv" 
+                  onChange={handleUpload} 
+                  className="hidden" 
+                  id="file-upload" 
+                />
+                <Upload className={`h-12 w-12 ${isDragOver ? 'text-orange-500' : textMuted}`} />
+                <span className={`text-sm font-medium ${textPrimary}`}>
+                  {isDragOver ? 'Drop your file here' : 'Drag & drop or click to upload'}
+                </span>
+                <span className={`text-xs ${textMuted}`}>
+                  Supports .xlsx, .xls, .csv files
+                </span>
+              </div>
+            ) : (
+              <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border p-4 ${
+                isDark ? 'border-slate-700 bg-slate-800/50' : 'border-gray-200 bg-gray-50'
+              }`}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`rounded-lg p-2 ${isDark ? 'bg-orange-500/20' : 'bg-orange-100'}`}>
+                    <FileSpreadsheet className={`h-6 w-6 ${isDark ? 'text-orange-400' : 'text-orange-500'}`} />
                   </div>
-                  <button 
-                    onClick={clearAll} 
-                    className={`rounded-lg p-2 transition-colors ${isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-200'}`}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  <div className="min-w-0">
+                    <p className={`text-sm font-medium ${textPrimary} truncate`}>{file.name}</p>
+                    <p className={`text-xs ${textMuted}`}>{(file.size / 1024).toFixed(1)} KB</p>
+                  </div>
                 </div>
-              )}
-            </div>
-
-            <div className="mb-5">
-              <label className={`mb-2 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                Select Output Type
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                {TEMPLATES.map((t) => {
-                  const c = COLOR[t.color];
-                  const sel = selectedTemplate === t.id;
-                  return (
-                    <button key={t.id} onClick={() => setSelectedTemplate(t.id)}
-                      className={`relative flex flex-col items-start gap-2 rounded-xl border p-4 text-left transition-all ${sel ? `${c.selBg} ${c.selBorder} border-2 shadow` : isDark ? 'border-slate-700 hover:border-slate-500' : 'border-gray-200 hover:border-gray-300'}`}>
-                      <div className={`rounded-lg p-2 ${c.bg} ${c.text}`}>{t.icon}</div>
-                      <p className={`text-sm font-semibold ${textPrimary}`}>{t.name}</p>
-                      <p className={`text-xs ${textMuted}`}>{t.description}</p>
-                      {sel && <CheckCircle2 className={`absolute right-3 top-3 h-4 w-4 ${c.text}`} />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className={`mb-5 rounded-lg border p-3 text-xs ${isDark ? 'border-slate-700 bg-slate-800/30 text-slate-400' : 'border-gray-200 bg-gray-50 text-gray-600'}`}>
-              <p className="mb-2 font-semibold">Formatting Notes:</p>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2"><span>📄</span><span>All files use your exact Excel templates from /public/templates/</span></div>
-                <div className="flex items-center gap-2"><span>🏷️</span><span>Remarks column is populated from the "Notes" column in your analyzed file</span></div>
-                <div className="flex items-center gap-2"><span>📊</span><span>Only data rows are replaced - all formatting is preserved</span></div>
-              </div>
-            </div>
-
-            <button onClick={processFile} disabled={!file || !selectedTemplate || isProcessing}
-              className={`w-full rounded-xl px-4 py-3 font-semibold transition-all ${!file || !selectedTemplate || isProcessing ? 'cursor-not-allowed opacity-40' : isDark ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-orange-600 text-white hover:bg-orange-700'}`}>
-              {isProcessing
-                ? <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Processing…</span>
-                : `Generate ${tmpl ? tmpl.name : 'File'}`}
-            </button>
-
-            {error && (
-              <div className={`mt-4 flex items-center gap-2 rounded-lg border border-red-500/30 p-3 ${isDark ? 'bg-red-500/10' : 'bg-red-50'}`}>
-                <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
-                <p className="text-sm text-red-400">{error}</p>
+                <button 
+                  onClick={clearAll} 
+                  className={`rounded-lg p-2 transition-colors ${isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-200'}`}
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
             )}
           </div>
 
-          <div className={`rounded-2xl border p-6 shadow-lg ${card}`}>
-            <h2 className={`mb-4 text-lg font-semibold ${textPrimary}`}>Step 2: Preview & Download</h2>
+          <div className="mb-5">
+            <label className={`mb-2 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+              Select Output Type
+            </label>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {TEMPLATES.map((t) => {
+                const c = COLOR[t.color];
+                const sel = selectedTemplate === t.id;
+                return (
+                  <button 
+                    key={t.id} 
+                    onClick={() => setSelectedTemplate(t.id)}
+                    className={`relative flex flex-col items-start gap-2 rounded-xl border p-4 text-left transition-all hover:scale-[1.02] ${
+                      sel 
+                        ? `${c.selBg} ${c.selBorder} border-2 shadow-lg` 
+                        : isDark 
+                          ? 'border-slate-700 hover:border-slate-500 hover:bg-slate-800/30' 
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className={`rounded-lg p-2 ${c.bg} ${c.text}`}>{t.icon}</div>
+                    <div className="min-w-0">
+                      <p className={`text-sm font-semibold ${textPrimary}`}>{t.name}</p>
+                      <p className={`text-xs ${textMuted}`}>{t.description}</p>
+                    </div>
+                    {t.badge && (
+                      <span className={`absolute right-2 top-2 rounded-full px-1.5 py-0.5 text-[8px] font-bold ${
+                        isDark ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700'
+                      }`}>
+                        {t.badge}
+                      </span>
+                    )}
+                    {sel && <CheckCircle2 className={`absolute right-3 bottom-3 h-4 w-4 ${c.text}`} />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-            {!previewData && !isProcessing && (
-              <div className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 text-center ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
-                <RefreshCw className={`mb-4 h-10 w-10 ${textMuted}`} />
-                <p className={`text-sm ${textMuted}`}>Select a template and click Generate</p>
+          <div className={`mb-5 rounded-lg border p-3 text-xs ${
+            isDark ? 'border-slate-700 bg-slate-800/30 text-slate-400' : 'border-gray-200 bg-gray-50 text-gray-600'
+          }`}>
+            <div className="flex items-center gap-2 mb-2">
+              <Info className="h-4 w-4 text-orange-400" />
+              <span className="font-semibold">Formatting Notes:</span>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2"><span>📄</span><span>All files use your exact Excel templates from /public/templates/</span></div>
+              <div className="flex items-center gap-2"><span>🏷️</span><span>Remarks column is populated from the "Notes" column</span></div>
+              <div className="flex items-center gap-2"><span>📊</span><span>Only data rows are replaced - all formatting is preserved</span></div>
+            </div>
+          </div>
+
+          <button 
+            onClick={processFile} 
+            disabled={!file || !selectedTemplate || isProcessing}
+            className={`w-full rounded-xl px-4 py-3 font-semibold transition-all ${
+              !file || !selectedTemplate || isProcessing 
+                ? 'cursor-not-allowed opacity-40' 
+                : `bg-gradient-to-r ${selectedColor.gradient} text-white hover:shadow-lg hover:scale-[1.02]`
+            }`}
+          >
+            {isProcessing
+              ? <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Processing…</span>
+              : <span className="flex items-center justify-center gap-2">
+                  <Zap className="h-4 w-4" />
+                  Generate {tmpl ? tmpl.name : 'File'}
+                </span>
+            }
+          </button>
+
+          {error && (
+            <div className={`mt-4 flex items-start gap-2 rounded-lg border border-red-500/30 p-3 ${isDark ? 'bg-red-500/10' : 'bg-red-50'}`}>
+              <AlertCircle className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
+              <p className="text-sm text-red-400 break-words">{error}</p>
+            </div>
+          )}
+
+          {success && (
+            <div className={`mt-4 flex items-center gap-2 rounded-lg border border-emerald-500/30 p-3 ${isDark ? 'bg-emerald-500/10' : 'bg-emerald-50'}`}>
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+              <p className="text-sm text-emerald-400">{success}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Step 2: Preview & Download */}
+        <div className={`rounded-2xl border p-6 shadow-lg ${card}`}>
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Eye className={`h-5 w-5 ${textMuted}`} />
+              <h2 className={`text-lg font-semibold ${textPrimary}`}>Step 2: Preview & Download</h2>
+            </div>
+            {previewData && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPreview(!showPreview)}
+                  className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-100'}`}
+                >
+                  {showPreview ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
             )}
+          </div>
 
-            {isProcessing && (
-              <div className="flex flex-col items-center justify-center p-12">
-                <Loader2 className="mb-4 h-10 w-10 animate-spin text-orange-500" />
-                <p className={`text-sm ${textMuted}`}>Processing…</p>
+          {!previewData && !isProcessing && (
+            <div className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 text-center ${
+              isDark ? 'border-slate-700' : 'border-gray-200'
+            }`}>
+              <FolderOpen className={`mb-4 h-12 w-12 ${textMuted}`} />
+              <p className={`text-sm font-medium ${textPrimary}`}>Ready to generate</p>
+              <p className={`text-sm ${textMuted}`}>Select a template and click Generate</p>
+              <p className={`text-xs ${textMuted} mt-2`}>Preview will appear here</p>
+            </div>
+          )}
+
+          {isProcessing && (
+            <div className="flex flex-col items-center justify-center p-12">
+              <div className="relative">
+                <Loader2 className="h-12 w-12 animate-spin text-orange-500" />
+                <div className="absolute -inset-1 rounded-full bg-orange-500/20 blur-xl" />
               </div>
-            )}
+              <p className={`mt-4 text-sm font-medium ${textPrimary}`}>Processing your file...</p>
+              <p className={`text-sm ${textMuted}`}>Filtering and mapping data</p>
+            </div>
+          )}
 
-            {previewData && processedData && tmpl && (
-              <div className="space-y-4">
-                <div className={`flex gap-4 rounded-xl border p-4 ${isDark ? 'border-slate-700 bg-slate-800/30' : 'border-gray-200 bg-gray-50'}`}>
-                  <div>
-                    <p className={`text-xs ${textMuted}`}>Total rows</p>
-                    <p className={`text-2xl font-bold ${textPrimary}`}>{processedData.length}</p>
-                  </div>
-                  <div>
-                    <p className={`text-xs ${textMuted}`}>Template</p>
-                    <p className={`text-lg font-semibold ${textPrimary}`}>{tmpl.name}</p>
-                  </div>
-                  <div>
-                    <p className={`text-xs ${textMuted}`}>Columns</p>
-                    <p className={`text-2xl font-bold ${textPrimary}`}>{getPreviewHeaders().length}</p>
-                  </div>
+          {previewData && processedData && tmpl && (
+            <div className="space-y-4 animate-fade-in">
+              <div className={`grid grid-cols-2 gap-3 rounded-xl border p-4 ${
+                isDark ? 'border-slate-700 bg-slate-800/30' : 'border-gray-200 bg-gray-50'
+              }`}>
+                <div className="text-center">
+                  <p className={`text-xs ${textMuted}`}>Total Rows</p>
+                  <p className={`text-2xl font-bold ${textPrimary}`}>{processedData.length}</p>
                 </div>
+                <div className="text-center">
+                  <p className={`text-xs ${textMuted}`}>Template</p>
+                  <p className={`text-lg font-semibold ${textPrimary}`}>{tmpl.name}</p>
+                </div>
+                <div className="text-center">
+                  <p className={`text-xs ${textMuted}`}>Columns</p>
+                  <p className={`text-2xl font-bold ${textPrimary}`}>{getPreviewHeaders().length}</p>
+                </div>
+                <div className="text-center">
+                  <p className={`text-xs ${textMuted}`}>Time</p>
+                  <p className={`text-lg font-semibold ${textPrimary}`}>{processingTime || '< 1'}ms</p>
+                </div>
+              </div>
 
+              {showPreview && (
                 <div>
-                  <p className={`mb-2 text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>Preview (first 10 rows)</p>
+                  <p className={`mb-2 text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                    Preview (first 10 rows)
+                  </p>
                   <div className="overflow-x-auto rounded-xl border border-zinc-300">
                     <div className="max-h-80 overflow-auto">
                       <table className="min-w-full text-xs border-collapse">
-                        <thead className="sticky top-0">
-                          <tr>
+                        <thead className="sticky top-0 z-10">
+                          <tr className={`${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
                             {getPreviewHeaders().map((h: string) => (
-                              <th key={h} className="border border-zinc-300 bg-yellow-300 px-3 py-2 text-left font-bold text-black whitespace-nowrap">{h}</th>
+                              <th key={h} className={`border px-3 py-2 text-left font-bold whitespace-nowrap ${
+                                isDark ? 'border-slate-700 text-white' : 'border-gray-300 text-black'
+                              }`}>
+                                {h}
+                              </th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {previewData.map((row: any, ri: number) => (
-                            <tr key={ri}>
+                            <tr key={ri} className={ri % 2 === 0 ? (isDark ? 'bg-slate-900/50' : 'bg-white') : (isDark ? 'bg-slate-800/50' : 'bg-gray-50')}>
                               {getPreviewHeaders().map((h: string) => {
                                 const isQty = h === 'Quantity' || h === 'Qty';
                                 const val = row[h] ?? '';
                                 const display = String(val).length > 40 ? String(val).slice(0, 40) + '…' : val;
                                 return (
-                                  <td key={h} className={`border border-zinc-300 px-3 py-1.5 ${isQty ? 'bg-green-500 text-center text-black' : 'text-black bg-white'}`}>
+                                  <td key={h} className={`border px-3 py-1.5 ${isQty ? 'text-center' : ''} ${
+                                    isDark ? 'border-slate-700 text-slate-300' : 'border-gray-300 text-gray-700'
+                                  }`}>
                                     {display}
                                   </td>
                                 );
@@ -627,15 +864,21 @@ export default function FileGenerator({ theme = 'dark' }: FileGeneratorProps) {
                     <p className={`mt-1 text-xs ${textMuted}`}>Showing 10 of {processedData.length} rows</p>
                   )}
                 </div>
+              )}
 
-                <button onClick={handleDownload}
-                  className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 font-semibold transition-all ${isDark ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
-                  <Download className="h-5 w-5" />
-                  Download {tmpl.name} (.xlsx)
-                </button>
-              </div>
-            )}
-          </div>
+              <button 
+                onClick={handleDownload}
+                className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 font-semibold transition-all ${
+                  isDark 
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:shadow-lg hover:scale-[1.02]' 
+                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:shadow-lg hover:scale-[1.02]'
+                }`}
+              >
+                <Download className="h-5 w-5" />
+                Download {tmpl.name} (.xlsx)
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

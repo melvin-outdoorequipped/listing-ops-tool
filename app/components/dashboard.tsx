@@ -954,11 +954,11 @@ export default function DashboardClient({
 
   if (isMaintenanceMode() && !isAdmin) {
     return (
-      <div className={`flex min-h-[400px] flex-col items-center justify-center rounded-2xl border p-12 text-center ${isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'}`}>
+      <div className={`flex min-h-[400px] flex-col items-center justify-center rounded-2xl border p-8 sm:p-12 text-center ${isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'}`}>
         <div className="mb-6 rounded-full bg-amber-500/20 p-4">
-          <WrenchIcon className="h-16 w-16 text-amber-400" />
+          <WrenchIcon className="h-12 w-12 sm:h-16 sm:w-16 text-amber-400" />
         </div>
-        <h2 className={`mb-2 text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+        <h2 className={`mb-2 text-2xl sm:text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
           Under Maintenance
         </h2>
         <p className={`mb-6 max-w-md text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
@@ -1188,7 +1188,7 @@ export default function DashboardClient({
     <>
       {/* New Task Notification Banner */}
       {showNewTaskNotification && newTaskCount > 0 && (
-        <div className={`fixed top-4 right-4 z-50 rounded-xl border shadow-2xl p-4 max-w-sm animate-in slide-in-from-top-4 duration-300 ${
+        <div className={`fixed top-4 left-4 right-4 sm:left-auto sm:right-4 z-50 rounded-xl border shadow-2xl p-4 w-auto sm:w-full sm:max-w-sm animate-in slide-in-from-top-4 duration-300 ${
           isDark ? 'bg-slate-800 border-emerald-500/30' : 'bg-white border-emerald-300'
         }`}>
           <div className="flex items-start gap-3">
@@ -1227,11 +1227,11 @@ export default function DashboardClient({
         <div className="w-full max-w-full space-y-5 sm:space-y-6 pb-6">
           <section className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <div className="rounded-xl bg-emerald-500/10 p-2">
                   <TrendingUp className="h-5 w-5 text-emerald-400" />
                 </div>
-                <h1 className={`break-words text-2xl font-bold tracking-tight sm:text-3xl ${pageText}`}>Dashboard</h1>
+                <h1 className={`break-words text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl ${pageText}`}>Dashboard</h1>
                 <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />LIVE
                 </span>
@@ -1261,8 +1261,9 @@ export default function DashboardClient({
                   }
                 }}
               />
-              <button onClick={fetchDashboardData} disabled={isLoading} className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}`}>
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Refresh
+              <button onClick={fetchDashboardData} disabled={isLoading} className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all sm:flex-initial ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}`}>
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                <span className="sm:inline">Refresh</span>
               </button>
             </div>
           </section>
@@ -1280,7 +1281,7 @@ export default function DashboardClient({
                 <p className={`text-xs ${mutedText}`}>Streamline your workflow with these tools</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
               {operationTools.map(tool => (
                 <ToolCard
                   key={tool.id}
@@ -1294,7 +1295,7 @@ export default function DashboardClient({
             </div>
           </section>
 
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
             <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${panelClass}`}>
               <div className={`border-b px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
                 <div className="flex items-center justify-between">
@@ -1310,7 +1311,7 @@ export default function DashboardClient({
                   <span className={`text-xs ${mutedText}`}>{allUsers.length} members</span>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto max-h-[400px]">
+              <div className="flex-1 overflow-y-auto max-h-[320px] sm:max-h-[400px]">
                 {allUsers.length === 0 ? (
                   <div className="flex items-center justify-center h-full min-h-[200px]">
                     <div className={`text-center text-sm ${mutedText}`}>No user data available</div>
@@ -1350,18 +1351,18 @@ export default function DashboardClient({
                             )}
 
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex min-w-0 items-center gap-2">
                                   <p className={`text-sm font-semibold truncate ${pageText}`}>{user.name}</p>
                                   {user.role === 'Team Manager' && (
-                                    <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-bold ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+                                    <span className={`hidden sm:inline-flex flex-shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-bold ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
                                       Manager
                                     </span>
                                   )}
                                 </div>
-                                <span className={`text-sm font-bold tabular-nums ${isTopPerformer ? 'text-yellow-400' : 'text-emerald-400'}`}>{user.totalRuns}</span>
+                                <span className={`flex-shrink-0 text-sm font-bold tabular-nums ${isTopPerformer ? 'text-yellow-400' : 'text-emerald-400'}`}>{user.totalRuns}</span>
                               </div>
-                              <div className="flex items-center gap-3 mt-0.5">
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
                                 <div className="flex items-center gap-1">
                                   <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />
                                   <span className={`text-[9px] ${mutedText}`}>{user.completedRuns} completed</span>
@@ -1406,7 +1407,7 @@ export default function DashboardClient({
                   <span className={`text-xs ${mutedText}`}>last {recentRuns.length}</span>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto max-h-[400px]">
+              <div className="flex-1 overflow-y-auto max-h-[320px] sm:max-h-[400px]">
                 {isLoading ? (
                   <div className="flex items-center justify-center h-full min-h-[200px]"><Loader2 className={`h-6 w-6 animate-spin ${mutedText}`} /></div>
                 ) : recentRuns.length === 0 ? (
@@ -1418,7 +1419,7 @@ export default function DashboardClient({
                         <StatusDot status={run.status} />
                         <div className="flex-1 min-w-0">
                           <p className={`text-sm font-medium truncate ${pageText}`}>{run.title}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                             <span className={`text-xs ${run.status === 'completed' ? 'text-emerald-400' : run.status === 'warning' ? 'text-yellow-400' : 'text-red-400'}`}>{run.status}</span>
                             <span className={`text-[10px] ${mutedText}`}>{toolLabel[run.tool_type]} {run.total_count > 0 && `· ${run.total_count.toLocaleString()} items`}</span>
                           </div>
@@ -1431,9 +1432,9 @@ export default function DashboardClient({
               </div>
             </section>
 
-            <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col ${panelClass}`}>
+            <section className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col md:col-span-2 xl:col-span-1 ${panelClass}`}>
               <div className={`border-b px-5 py-3 flex-shrink-0 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <div className="rounded-lg bg-emerald-500/20 p-1.5">
                       <Users className="h-4 w-4 text-emerald-400" />
@@ -1462,7 +1463,7 @@ export default function DashboardClient({
                     <div key={idx} className="w-full flex-shrink-0 px-6 py-6">
                       <div className="flex flex-col items-center text-center">
                         <div className="relative group">
-                          <div className="w-28 h-28 rounded-full overflow-hidden ring-4 ring-emerald-500/30 group-hover:ring-emerald-500 transition-all duration-300 shadow-xl">
+                          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden ring-4 ring-emerald-500/30 group-hover:ring-emerald-500 transition-all duration-300 shadow-xl">
                             <Image src={member.image} alt={member.name} width={112} height={112} className="w-full h-full object-cover" priority unoptimized />
                           </div>
                           <div className="absolute -bottom-1 -right-1">
@@ -1504,26 +1505,26 @@ export default function DashboardClient({
 
       {/* ─── TASK DETAIL MODAL ─────────────────────────────────────────────────── */}
       {showTaskModal && selectedTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className={`relative w-full max-w-2xl rounded-2xl border shadow-2xl ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'} animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto`}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200">
+          <div className={`relative w-full max-w-2xl rounded-2xl border shadow-2xl ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'} animate-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto`}>
             {/* Header */}
-            <div className={`flex items-center justify-between border-b p-4 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
-              <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-emerald-500/20 p-1.5">
+            <div className={`sticky top-0 z-10 flex items-center justify-between border-b p-3 sm:p-4 backdrop-blur-md ${isDark ? 'border-slate-700 bg-slate-900/95' : 'border-gray-200 bg-white/95'}`}>
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="flex-shrink-0 rounded-lg bg-emerald-500/20 p-1.5">
                   <CheckCircle2 className="h-5 w-5 text-emerald-400" />
                 </div>
-                <div>
-                  <h3 className={`font-semibold ${pageText}`}>Task Details</h3>
-                  <p className={`text-xs ${mutedText}`}>View and manage task information</p>
+                <div className="min-w-0">
+                  <h3 className={`font-semibold truncate ${pageText}`}>Task Details</h3>
+                  <p className={`hidden text-xs sm:block ${mutedText}`}>View and manage task information</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-shrink-0 items-center gap-2">
                 {isTaskAdmin && (
                   <button
                     onClick={() => { setTaskFormError(null); setShowEditTaskModal(true); }}
                     className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                   >
-                    <Edit2 className="h-3.5 w-3.5" /> Edit
+                    <Edit2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Edit</span>
                   </button>
                 )}
                 <button onClick={closeTaskModal} className={`rounded-lg p-1 transition-colors ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
@@ -1533,15 +1534,15 @@ export default function DashboardClient({
             </div>
 
             {/* Task Content */}
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 sm:p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Row #</label>
                   <p className={`text-base font-semibold ${pageText}`}>{selectedTask.rowIndex}</p>
                 </div>
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Task</label>
-                  <p className={`text-base font-semibold ${pageText}`}>{selectedTask.task}</p>
+                  <p className={`text-base font-semibold break-words ${pageText}`}>{selectedTask.task}</p>
                 </div>
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Brand</label>
@@ -1569,10 +1570,12 @@ export default function DashboardClient({
                 </div>
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Status</label>
-                  <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium ${getStatusColor(selectedTask.status).bg} ${getStatusColor(selectedTask.status).text}`}>
-                    <span className={`h-2 w-2 rounded-full ${getStatusColor(selectedTask.status).dot}`} />
-                    <span>{selectedTask.status}</span>
-                  </span>
+                  <div>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium ${getStatusColor(selectedTask.status).bg} ${getStatusColor(selectedTask.status).text}`}>
+                      <span className={`h-2 w-2 rounded-full ${getStatusColor(selectedTask.status).dot}`} />
+                      <span>{selectedTask.status}</span>
+                    </span>
+                  </div>
                 </div>
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Auditor</label>
@@ -1583,7 +1586,7 @@ export default function DashboardClient({
               {selectedTask.remarks && (
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Remarks</label>
-                  <p className={`text-sm ${pageText} mt-1`}>{selectedTask.remarks}</p>
+                  <p className={`text-sm ${pageText} mt-1 break-words`}>{selectedTask.remarks}</p>
                 </div>
               )}
 
@@ -1592,8 +1595,8 @@ export default function DashboardClient({
                   <label className={`text-xs font-medium ${mutedText}`}>Reason for Pending</label>
                   <div className={`mt-1 rounded-lg border p-3 ${isDark ? 'border-yellow-500/30 bg-yellow-500/10' : 'border-yellow-300 bg-yellow-50'}`}>
                     <div className="flex items-start gap-2">
-                      <Clock className={`h-4 w-4 mt-0.5 ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`} />
-                      <p className={`text-sm ${pageText}`}>{selectedTask.reason_for_pending}</p>
+                      <Clock className={`h-4 w-4 mt-0.5 flex-shrink-0 ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`} />
+                      <p className={`text-sm break-words ${pageText}`}>{selectedTask.reason_for_pending}</p>
                     </div>
                   </div>
                 </div>
@@ -1602,7 +1605,7 @@ export default function DashboardClient({
               {selectedTask.reason_for_cancel && (
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>Reason for Cancel</label>
-                  <p className={`text-sm ${pageText} mt-1`}>{selectedTask.reason_for_cancel}</p>
+                  <p className={`text-sm ${pageText} mt-1 break-words`}>{selectedTask.reason_for_cancel}</p>
                 </div>
               )}
 
@@ -1616,7 +1619,7 @@ export default function DashboardClient({
               {selectedTask.bc_links && (
                 <div>
                   <label className={`text-xs font-medium ${mutedText}`}>BC Links</label>
-                  <div className="mt-1">
+                  <div className="mt-1 flex flex-wrap gap-2">
                     {selectedTask.bc_links.split(',').map((link, index) => {
                       const trimmedLink = link.trim();
                       if (trimmedLink.startsWith('http://') || trimmedLink.startsWith('https://')) {
@@ -1626,7 +1629,7 @@ export default function DashboardClient({
                             href={trimmedLink}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className={`inline-flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300 underline-offset-2 hover:underline transition-colors mr-2 ${
+                            className={`inline-flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300 underline-offset-2 hover:underline transition-colors ${
                               isDark ? 'hover:text-blue-300' : 'hover:text-blue-600'
                             }`}
                             onClick={(e) => e.stopPropagation()}
@@ -1638,7 +1641,7 @@ export default function DashboardClient({
                         );
                       }
                       return (
-                        <span key={index} className={`text-sm ${mutedText} mr-2`}>
+                        <span key={index} className={`text-sm ${mutedText}`}>
                           {trimmedLink}
                         </span>
                       );
@@ -1649,8 +1652,14 @@ export default function DashboardClient({
             </div>
 
             {/* Footer with actions */}
-            <div className={`border-t p-4 ${isDark ? 'border-slate-700' : 'border-gray-200'} flex flex-wrap gap-2 justify-between`}>
-              <div className="flex gap-2 flex-wrap">
+            <div className={`sticky bottom-0 border-t p-3 sm:p-4 backdrop-blur-md ${isDark ? 'border-slate-700 bg-slate-900/95' : 'border-gray-200 bg-white/95'} flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between`}>
+              <button
+                onClick={closeTaskModal}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              >
+                Close
+              </button>
+              <div className="flex flex-wrap gap-2">
                 {getStatusOptions(selectedTask.status).map((newStatus) => (
                   <button
                     key={newStatus}
@@ -1658,7 +1667,7 @@ export default function DashboardClient({
                       updateTaskStatus(selectedTask.id, newStatus);
                     }}
                     disabled={updatingTaskId === selectedTask.id}
-                    className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+                    className={`rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-all ${
                       updatingTaskId === selectedTask.id ? 'opacity-50 cursor-not-allowed' :
                       newStatus === 'Completed' ? 'bg-emerald-500 text-white hover:bg-emerald-600' :
                       newStatus === 'Cancelled' ? 'bg-red-500 text-white hover:bg-red-600' :
@@ -1670,12 +1679,6 @@ export default function DashboardClient({
                   </button>
                 ))}
               </div>
-              <button
-                onClick={closeTaskModal}
-                className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>
@@ -1850,7 +1853,7 @@ function ToolCard({ tool, theme, runCount, sparkline, onOpen }: any) {
   const mutedText = isDark ? 'text-slate-400' : 'text-gray-500';
 
   return (
-    <button onClick={onOpen} className={`group relative flex min-h-[180px] w-full flex-col rounded-xl border p-3 text-left shadow-sm transition-all duration-200 hover:shadow-md ${accentConfig.card}`}>
+    <button onClick={onOpen} className={`group relative flex min-h-[170px] sm:min-h-[180px] w-full flex-col rounded-xl border p-3 text-left shadow-sm transition-all duration-200 hover:shadow-md active:scale-[0.98] ${accentConfig.card}`}>
       <div className="flex items-start justify-between gap-2">
         <div className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold ${isDark ? 'bg-slate-900/50 text-slate-300' : 'bg-white/70 text-gray-600'}`}>
           <span className="flex-shrink-0">{tool.icon}</span>

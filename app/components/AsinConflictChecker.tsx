@@ -13,6 +13,24 @@ import {
   Play,
   Trash2,
   Upload,
+  Filter,
+  ChevronDown,
+  ChevronUp,
+  Search,
+  X,
+  Zap,
+  TrendingUp,
+  AlertTriangle,
+  Shield,
+  Eye,
+  EyeOff,
+  Maximize2,
+  Minimize2,
+  Grid,
+  List,
+  BarChart2,
+  PieChart,
+  Info,
 } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase/client';
@@ -41,7 +59,7 @@ interface RunStats {
   uniqueStyles: number;
 }
 
-type FeedbackType = 'success' | 'error' | 'info';
+type FeedbackType = 'success' | 'error' | 'info' | 'warning';
 
 interface Feedback {
   type: FeedbackType;
@@ -114,7 +132,6 @@ function findConflicts(pairs: StyleAsinPair[]): Conflict[] {
     .sort((a, b) => a.style.localeCompare(b.style));
 }
 
-// Line number gutter component
 function LineGutter({ text, isDark }: { text: string; isDark: boolean }) {
   const lines = text ? splitLines(text) : [];
   const count = Math.max(lines.length, 20);
@@ -149,8 +166,12 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>('User');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [severityFilter, setSeverityFilter] = useState<'all' | 'critical' | 'high' | 'medium'>('all');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showStatsPanel, setShowStatsPanel] = useState(true);
 
-  // Get notification context
   const { createNotificationWithAgent } = useNotifications();
 
   const stylesRef = useRef<HTMLTextAreaElement>(null);
@@ -164,6 +185,28 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
   const lineCountMismatch = stylesLineCount > 0 && asinsLineCount > 0 && stylesLineCount !== asinsLineCount;
   const maxAsins = conflicts.length > 0 ? Math.max(...conflicts.map(c => c.asins.length)) : 0;
 
+  // Filtered conflicts
+  const filteredConflicts = useMemo(() => {
+    let filtered = conflicts;
+
+    if (searchTerm.trim()) {
+      const query = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(c =>
+        c.style.toLowerCase().includes(query) ||
+        c.asins.some(asin => asin.toLowerCase().includes(query))
+      );
+    }
+
+    if (severityFilter !== 'all') {
+      filtered = filtered.filter(c => {
+        const severity = getSeverity(c.asins.length);
+        return severity.key === severityFilter;
+      });
+    }
+
+    return filtered;
+  }, [conflicts, searchTerm, severityFilter]);
+
   // Get current user on mount
   useEffect(() => {
     const getUser = async () => {
@@ -171,7 +214,6 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
       if (user) {
         setUserId(user.id);
         setUserEmail(user.email || null);
-        // Get user name from profile
         const { data: profile } = await supabase
           .from('profiles')
           .select('name')
@@ -197,7 +239,7 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
 
   const showFeedback = (type: FeedbackType, message: string) => {
     setFeedback({ type, message });
-    setTimeout(() => setFeedback(null), 3500);
+    setTimeout(() => setFeedback(null), 4000);
   };
 
   const syncScroll = useCallback((source: 'styles' | 'asins') => {
@@ -215,7 +257,13 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
     setConflicts([]);
     setLastRan(null);
     setStats(null);
-    showFeedback('info', 'Sample data loaded.');
+    showFeedback('info', '📋 Sample data loaded. Click Run Check to analyze.');
+  };
+
+  const getSeverity = (asinCount: number) => {
+    if (asinCount >= 4) return { label: 'Critical', key: 'critical', cls: isDark ? 'bg-red-500/20 text-red-300 border-red-500/30' : 'bg-red-100 text-red-700 border-red-300' };
+    if (asinCount === 3) return { label: 'High', key: 'high', cls: isDark ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' : 'bg-orange-100 text-orange-700 border-orange-300' };
+    return { label: 'Medium', key: 'medium', cls: isDark ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' : 'bg-yellow-100 text-yellow-700 border-yellow-300' };
   };
 
   const handleRun = async () => {
@@ -235,7 +283,6 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         currentUserId = user.id;
         setUserEmail(currentUserEmail);
         setUserId(currentUserId);
-        // Get user name
         const { data: profile } = await supabase
           .from('profiles')
           .select('name')
@@ -297,7 +344,6 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         console.error('Failed to save to asin_checks:', err);
       }
 
-      // 👇 Create notification for current user
       await createNotificationWithAgent(
         conflictCount > 0 ? '⚠️ ASIN Conflicts Found' : '✅ ASIN Check Complete',
         conflictCount > 0 
@@ -311,21 +357,19 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         { toolName: 'asin_checker', asinCheckId: savedCheck?.id }
       );
 
-      // 👇👀 IMPORTANT: Notify ALL users about this run (always)
+      // Notify ALL users
       try {
         const { data: allUsers } = await supabase
           .from('profiles')
           .select('id, email, name');
         
         if (allUsers && allUsers.length > 1) {
-          console.log(`🔔 Notifying ${allUsers.length - 1} other users about ASIN check...`);
-          
           await notifyAllUsers(
             conflictCount > 0 
               ? `⚠️ ${conflictCount} ASIN Conflict${conflictCount > 1 ? 's' : ''} Found`
               : '✅ ASIN Check Complete',
             conflictCount > 0 
-              ? `${currentUserName || currentUserEmail} found ${conflictCount} style${conflictCount === 1 ? '' : 's'} with multiple parent ASINs${conflictCount >= 3 ? ' - Please review!' : ''}`
+              ? `${currentUserName || currentUserEmail} found ${conflictCount} style${conflictCount === 1 ? '' : 's'} with multiple parent ASINs`
               : `${currentUserName || currentUserEmail} completed an ASIN check with no conflicts found.`,
             conflictCount >= 3 ? 'error' : (conflictCount > 0 ? 'warning' : 'info'),
             { 
@@ -342,11 +386,9 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
             { toolName: 'asin_checker', asinCheckId: savedCheck?.id },
             currentUserId || undefined
           );
-        } else {
-          console.log('ℹ️ No other users found to notify');
         }
       } catch (notifError) {
-        console.error('Failed to send notifications to other users:', notifError);
+        console.error('Failed to send notifications:', notifError);
       }
 
       await logToolRun({
@@ -373,10 +415,10 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
       });
 
       showFeedback(
-        conflictCount > 0 ? 'error' : 'success',
+        conflictCount > 0 ? 'warning' : 'success',
         conflictCount > 0 
-          ? `${conflictCount} conflict${conflictCount === 1 ? '' : 's'} found.` 
-          : 'No conflicts found.'
+          ? `⚠️ ${conflictCount} conflict${conflictCount === 1 ? '' : 's'} found.` 
+          : '✅ No conflicts found.'
       );
       
     } catch (error) {
@@ -399,7 +441,6 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         
         await supabase.from('asin_checks').insert(insertData);
         
-        // 👇 Create error notification for current user
         await createNotificationWithAgent(
           '❌ ASIN Check Failed',
           `Error: ${message}`,
@@ -411,7 +452,6 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
           { toolName: 'asin_checker' }
         );
 
-        // 👇 Notify ALL users about the error
         try {
           const { data: allUsers } = await supabase
             .from('profiles')
@@ -458,7 +498,7 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         },
       });
       
-      showFeedback('error', message);
+      showFeedback('error', `❌ ${message}`);
     } finally {
       setIsChecking(false);
     }
@@ -470,25 +510,27 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
     setConflicts([]); 
     setLastRan(null); 
     setStats(null); 
-    setFeedback(null); 
+    setFeedback(null);
+    setSearchTerm('');
+    setSeverityFilter('all');
   };
 
   const handleCopyResults = async () => {
-    if (conflicts.length === 0) return;
+    if (filteredConflicts.length === 0) return;
     try {
       const headers = ['Style', ...Array.from({ length: maxAsins }, (_, i) => `Parent ASIN ${i + 1}`)];
-      const rows = conflicts.map(c => [c.style, ...c.asins]);
+      const rows = filteredConflicts.map(c => [c.style, ...c.asins]);
       await navigator.clipboard.writeText([headers, ...rows].map(r => r.join('\t')).join('\n'));
-      showFeedback('success', 'Results copied to clipboard.');
+      showFeedback('success', '📋 Results copied to clipboard.');
     } catch { 
       showFeedback('error', 'Unable to copy results.'); 
     }
   };
 
   const handleExportCSV = () => {
-    if (conflicts.length === 0) return;
+    if (filteredConflicts.length === 0) return;
     const headers = ['Style', ...Array.from({ length: maxAsins }, (_, i) => `Parent ASIN ${i + 1}`)];
-    const rows = conflicts.map(c => [c.style, ...c.asins]);
+    const rows = filteredConflicts.map(c => [c.style, ...c.asins]);
     const csv = [headers, ...rows].map(r => r.map(csvEscape).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -497,14 +539,12 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
     a.download = `asin-conflicts-${new Date().toISOString().split('T')[0]}.csv`; 
     a.click();
     URL.revokeObjectURL(url);
-    showFeedback('success', 'CSV exported.');
+    showFeedback('success', '📊 CSV exported successfully.');
   };
 
-  // Severity badge
-  const getSeverity = (asinCount: number) =>
-    asinCount >= 4 ? { label: 'Critical', cls: isDark ? 'bg-red-500/20 text-red-300 border-red-500/30' : 'bg-red-100 text-red-700 border-red-300' }
-    : asinCount === 3 ? { label: 'High', cls: isDark ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' : 'bg-orange-100 text-orange-700 border-orange-300' }
-    : { label: 'Medium', cls: isDark ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' : 'bg-yellow-100 text-yellow-700 border-yellow-300' };
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+  };
 
   const cardClass = isDark ? 'bg-slate-900/50 border-slate-700/50' : 'bg-white/70 border-gray-300/60';
   const panelHeaderClass = isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-gray-100/70 border-gray-300';
@@ -512,19 +552,45 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
   const strongText = isDark ? 'text-white' : 'text-gray-900';
 
   return (
-    <div className="flex h-full w-full max-w-full flex-col overflow-hidden">
+    <div className={`w-full max-w-full space-y-6 overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 p-4 bg-slate-950' : ''}`}>
+      {/* Toast Feedback */}
+      {feedback && (
+        <div className={`fixed top-4 right-4 z-50 max-w-sm rounded-xl border p-4 shadow-2xl animate-slide-in ${
+          feedback.type === 'success'
+            ? isDark ? 'border-emerald-500/30 bg-emerald-900/90 text-emerald-100' : 'border-emerald-300 bg-emerald-100 text-emerald-800'
+            : feedback.type === 'error'
+              ? isDark ? 'border-red-500/30 bg-red-900/90 text-red-100' : 'border-red-300 bg-red-100 text-red-800'
+              : feedback.type === 'warning'
+                ? isDark ? 'border-yellow-500/30 bg-yellow-900/90 text-yellow-100' : 'border-yellow-300 bg-yellow-100 text-yellow-800'
+                : isDark ? 'border-blue-500/30 bg-blue-900/90 text-blue-100' : 'border-blue-300 bg-blue-100 text-blue-800'
+        }`}>
+          <div className="flex items-start gap-3">
+            {feedback.type === 'success' && <CheckCircle className="h-5 w-5 flex-shrink-0 text-emerald-400" />}
+            {feedback.type === 'error' && <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-400" />}
+            {feedback.type === 'warning' && <AlertTriangle className="h-5 w-5 flex-shrink-0 text-yellow-400" />}
+            {feedback.type === 'info' && <Info className="h-5 w-5 flex-shrink-0 text-blue-400" />}
+            <p className="text-sm font-medium">{feedback.message}</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h2 className={`mb-1 break-words text-xl font-bold sm:text-2xl ${strongText}`}>
-              Multiple Parent ASIN Checker
-            </h2>
+            <div className="flex items-center gap-3">
+              <h2 className={`mb-1 break-words text-xl font-bold sm:text-2xl ${strongText}`}>
+                Multiple Parent ASIN Checker
+              </h2>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+                v2.0
+              </span>
+            </div>
             <p className={`max-w-3xl text-sm leading-6 ${mutedText}`}>
               Identify styles that have multiple unique parent ASINs mapped to them.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <div className={`hidden items-center gap-1.5 rounded-lg border px-3 py-2 text-xs sm:flex ${
               isDark ? 'border-slate-700 bg-slate-800/50 text-slate-500' : 'border-gray-200 bg-gray-50 text-gray-400'
             }`}>
@@ -534,19 +600,31 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
             </div>
             <button
               type="button"
+              onClick={toggleFullscreen}
+              className={`rounded-lg border p-2 transition-colors ${
+                isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-gray-200 text-gray-500 hover:bg-gray-100'
+              }`}
+              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
+            <button
+              type="button"
               onClick={() => setShowHelp(c => !c)}
-              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                isDark ? 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/60' : 'bg-gray-200/70 text-gray-700 hover:bg-gray-300/70'
+              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                isDark ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-700/60' : 'border-gray-200 bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               <HelpCircle className="h-4 w-4" />
-              Help
+              {showHelp ? 'Hide Help' : 'Help'}
             </button>
           </div>
         </div>
 
         {showHelp && (
-          <div className={`mt-4 rounded-xl border p-4 ${isDark ? 'border-emerald-500/20 bg-emerald-600/10' : 'border-emerald-300/60 bg-emerald-100/60'}`}>
+          <div className={`mt-4 rounded-xl border p-4 animate-slide-in ${
+            isDark ? 'border-emerald-500/20 bg-emerald-600/10' : 'border-emerald-300/60 bg-emerald-100/60'
+          }`}>
             <h3 className={`mb-3 flex items-center gap-2 font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
               <HelpCircle className="h-4 w-4" />
               How to use
@@ -559,6 +637,8 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
                 'Press ⌘↵ or click Run Check to scan.',
                 'Duplicate ASINs for the same style are ignored.',
                 'Results are saved to activity logs for dashboard tracking.',
+                'Filter results by severity or search for specific styles.',
+                'Export results as CSV or copy to clipboard.',
               ].map((tip, i) => (
                 <div key={tip} className={`flex items-start gap-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
                   <span className="font-bold text-emerald-500">{i + 1}.</span>
@@ -570,32 +650,18 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         )}
       </div>
 
-      {/* Feedback */}
-      {feedback && (
-        <div className={`mb-4 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm transition-all ${
-          feedback.type === 'success'
-            ? isDark ? 'border-emerald-500/30 bg-emerald-600/10 text-emerald-400' : 'border-emerald-300 bg-emerald-100 text-emerald-700'
-            : feedback.type === 'error'
-              ? isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'
-              : isDark ? 'border-blue-500/30 bg-blue-600/10 text-blue-400' : 'border-blue-300 bg-blue-100 text-blue-700'
-        }`}>
-          {feedback.type === 'success' ? <CheckCircle className="h-4 w-4 flex-shrink-0" /> : <AlertCircle className="h-4 w-4 flex-shrink-0" />}
-          {feedback.message}
-        </div>
-      )}
-
       {/* Main card */}
       <div className={`flex flex-1 flex-col overflow-hidden rounded-xl border ${cardClass}`}>
         {/* Action bar */}
-        <div className={`flex flex-col gap-3 border-b p-4 xl:flex-row xl:items-center xl:justify-between ${panelHeaderClass}`}>
+        <div className={`flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center lg:justify-between ${panelHeaderClass}`}>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap">
             <button
               type="button"
               onClick={handleRun}
               disabled={!hasBothInputs || isChecking}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-sm font-medium text-white transition-all hover:scale-[1.02] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
             >
-              {isChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
+              {isChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
               {isChecking ? 'Checking...' : 'Run Check'}
             </button>
             <button
@@ -608,17 +674,23 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
             </button>
             {conflicts.length > 0 && (
               <>
-                <button type="button" onClick={handleCopyResults} className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ${isDark ? 'border-blue-600/30 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30' : 'border-blue-300 bg-blue-100 text-blue-700 hover:bg-blue-200'}`}>
+                <button type="button" onClick={handleCopyResults} className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ${
+                  isDark ? 'border-blue-600/30 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30' : 'border-blue-300 bg-blue-100 text-blue-700 hover:bg-blue-200'
+                }`}>
                   <Copy className="h-4 w-4" />Copy
                 </button>
-                <button type="button" onClick={handleExportCSV} className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ${isDark ? 'border-purple-600/30 bg-purple-600/20 text-purple-400 hover:bg-purple-600/30' : 'border-purple-300 bg-purple-100 text-purple-700 hover:bg-purple-200'}`}>
+                <button type="button" onClick={handleExportCSV} className={`inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium ${
+                  isDark ? 'border-purple-600/30 bg-purple-600/20 text-purple-400 hover:bg-purple-600/30' : 'border-purple-300 bg-purple-100 text-purple-700 hover:bg-purple-200'
+                }`}>
                   <Download className="h-4 w-4" />Export CSV
                 </button>
               </>
             )}
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between xl:justify-end">
-            <button type="button" onClick={loadSampleData} className={`inline-flex items-center gap-2 text-sm ${isDark ? 'text-slate-400 hover:text-slate-200' : 'text-gray-600 hover:text-gray-900'}`}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between lg:justify-end">
+            <button type="button" onClick={loadSampleData} className={`inline-flex items-center gap-2 text-sm ${
+              isDark ? 'text-slate-400 hover:text-slate-200' : 'text-gray-600 hover:text-gray-900'
+            }`}>
               <FileText className="h-4 w-4" />Load Sample
             </button>
             {lastRan && (
@@ -637,7 +709,7 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         {(stylesInput || asinsInput) && (
           <div className={`h-0.5 w-full ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
             <div
-              className="h-full bg-emerald-500 transition-all duration-100"
+              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-100"
               style={{ width: `${scrollPct}%` }}
             />
           </div>
@@ -645,13 +717,15 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
 
         {/* Mismatch warning */}
         {lineCountMismatch && (
-          <div className={`border-b px-4 py-2 text-xs ${isDark ? 'border-yellow-500/20 bg-yellow-600/10 text-yellow-400' : 'border-yellow-300 bg-yellow-100 text-yellow-800'}`}>
-            ⚠ Style rows ({stylesLineCount}) and ASIN rows ({asinsLineCount}) don't match — mismatched rows will be ignored.
+          <div className={`border-b px-4 py-2 text-xs ${
+            isDark ? 'border-yellow-500/20 bg-yellow-600/10 text-yellow-400' : 'border-yellow-300 bg-yellow-100 text-yellow-800'
+          }`}>
+            ⚠️ Style rows ({stylesLineCount}) and ASIN rows ({asinsLineCount}) don't match — mismatched rows will be ignored.
           </div>
         )}
 
         {/* Stats */}
-        {stats && (
+        {stats && showStatsPanel && (
           <div className={`grid grid-cols-2 gap-2 border-b p-4 sm:grid-cols-4 ${isDark ? 'border-slate-700' : 'border-gray-300'}`}>
             <StatCard label="Total Rows" value={stats.totalRows} theme={theme} />
             <StatCard label="Valid Pairs" value={stats.validPairs} theme={theme} />
@@ -663,15 +737,21 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
         {/* Line count badges + input headers */}
         <div className={`border-b ${isDark ? 'border-slate-700' : 'border-gray-300'}`}>
           <div className={`grid grid-cols-1 md:grid-cols-2 ${isDark ? 'bg-slate-800/30' : 'bg-gray-100/50'}`}>
-            <div className={`flex items-center justify-between p-3 text-sm font-semibold md:border-r ${isDark ? 'border-slate-700 text-emerald-400' : 'border-gray-300 text-emerald-700'}`}>
+            <div className={`flex items-center justify-between p-3 text-sm font-semibold md:border-r ${
+              isDark ? 'border-slate-700 text-emerald-400' : 'border-gray-300 text-emerald-700'
+            }`}>
               <span>📦 Style IDs <span className={`text-xs font-normal ${mutedText}`}>(one per line)</span></span>
               {stylesLineCount > 0 && (
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                  isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                }`}>
                   {stylesLineCount} rows
                 </span>
               )}
             </div>
-            <div className={`flex items-center justify-between p-3 text-sm font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
+            <div className={`flex items-center justify-between p-3 text-sm font-semibold ${
+              isDark ? 'text-emerald-400' : 'text-emerald-700'
+            }`}>
               <span>🔗 Parent ASINs <span className={`text-xs font-normal ${mutedText}`}>(one per line)</span></span>
               {asinsLineCount > 0 && (
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
@@ -687,49 +767,53 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
 
           {/* Textareas with synced line gutters */}
           <div className="grid grid-cols-1 md:grid-cols-2">
-          {/* Style ID Column */}
-          <div className={`relative h-[32rem] overflow-auto border-b md:border-b-0 md:border-r ${isDark ? 'border-slate-700 bg-slate-950' : 'border-gray-300 bg-white'}`}>
-            <div className="flex min-h-full w-full">
-              <LineGutter text={stylesInput} isDark={isDark} />
-              <textarea
-                ref={stylesRef}
-                className={`flex-1 resize-none p-4 font-mono text-sm focus:outline-none overflow-hidden ${
-                  isDark ? 'bg-transparent text-slate-200 placeholder-slate-600' : 'bg-transparent text-gray-900 placeholder-gray-400'
-                }`}
-                placeholder="Style IDs..."
-                value={stylesInput}
-                onChange={e => setStylesInput(e.target.value)}
-                disabled={isChecking}
-                spellCheck={false}
-                style={{ height: `${Math.max(splitLines(stylesInput).length, 20) * 1.625}rem`, lineHeight: '1.625rem' }}
-              />
+            {/* Style ID Column */}
+            <div className={`relative h-[32rem] overflow-auto border-b md:border-b-0 md:border-r ${
+              isDark ? 'border-slate-700 bg-slate-950' : 'border-gray-300 bg-white'
+            }`}>
+              <div className="flex min-h-full w-full">
+                <LineGutter text={stylesInput} isDark={isDark} />
+                <textarea
+                  ref={stylesRef}
+                  className={`flex-1 resize-none p-4 font-mono text-sm focus:outline-none overflow-hidden ${
+                    isDark ? 'bg-transparent text-slate-200 placeholder-slate-600' : 'bg-transparent text-gray-900 placeholder-gray-400'
+                  }`}
+                  placeholder="Style IDs..."
+                  value={stylesInput}
+                  onChange={e => setStylesInput(e.target.value)}
+                  onScroll={() => syncScroll('styles')}
+                  disabled={isChecking}
+                  spellCheck={false}
+                  style={{ height: `${Math.max(splitLines(stylesInput).length, 20) * 1.625}rem`, lineHeight: '1.625rem' }}
+                />
+              </div>
             </div>
-          </div>
 
-          {/* ASIN Column */}
-          <div className={`relative h-[32rem] overflow-auto ${isDark ? 'border-slate-700 bg-slate-950' : 'border-gray-300 bg-white'}`}>
-            <div className="flex min-h-full w-full">
-              <LineGutter text={asinsInput} isDark={isDark} />
-              <textarea
-                ref={asinsRef}
-                className={`flex-1 resize-none p-4 font-mono text-sm focus:outline-none overflow-hidden ${
-                  isDark ? 'bg-transparent text-slate-200 placeholder-slate-600' : 'bg-transparent text-gray-900 placeholder-gray-400'
-                }`}
-                placeholder="Parent ASINs..."
-                value={asinsInput}
-                onChange={e => setAsinsInput(e.target.value)}
-                disabled={isChecking}
-                spellCheck={false}
-                style={{ height: `${Math.max(splitLines(asinsInput).length, 20) * 1.625}rem`, lineHeight: '1.625rem' }}
-              />
+            {/* ASIN Column */}
+            <div className={`relative h-[32rem] overflow-auto ${isDark ? 'border-slate-700 bg-slate-950' : 'border-gray-300 bg-white'}`}>
+              <div className="flex min-h-full w-full">
+                <LineGutter text={asinsInput} isDark={isDark} />
+                <textarea
+                  ref={asinsRef}
+                  className={`flex-1 resize-none p-4 font-mono text-sm focus:outline-none overflow-hidden ${
+                    isDark ? 'bg-transparent text-slate-200 placeholder-slate-600' : 'bg-transparent text-gray-900 placeholder-gray-400'
+                  }`}
+                  placeholder="Parent ASINs..."
+                  value={asinsInput}
+                  onChange={e => setAsinsInput(e.target.value)}
+                  onScroll={() => syncScroll('asins')}
+                  disabled={isChecking}
+                  spellCheck={false}
+                  style={{ height: `${Math.max(splitLines(asinsInput).length, 20) * 1.625}rem`, lineHeight: '1.625rem' }}
+                />
+              </div>
             </div>
           </div>
         </div>
-        </div>
 
-        {/* Results - Fixed at bottom with scrollable container */}
-        <div className="flex-1 flex flex-col min-h-0 mt-4">
-          {/* Results Header */}
+        {/* Results Section */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Results Header with Filters */}
           <div className={`flex flex-col gap-2 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
             isDark ? 'border-slate-700 bg-slate-800/30' : 'border-gray-300 bg-gray-100/50'
           }`}>
@@ -737,61 +821,138 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
               <span className={`text-sm font-semibold ${strongText}`}>Results</span>
               {conflicts.length > 0 && (
                 <>
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${isDark ? 'bg-yellow-600/20 text-yellow-400' : 'bg-yellow-100 text-yellow-800'}`}>
-                    {conflicts.length} conflict{conflicts.length !== 1 ? 's' : ''}
+                  <span className={`rounded-full px-2 py-0.5 text-xs ${
+                    isDark ? 'bg-yellow-600/20 text-yellow-400' : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {filteredConflicts.length} of {conflicts.length} conflicts
                   </span>
                   <span className={`text-xs ${mutedText}`}>·</span>
-                  <span className={`text-xs ${mutedText}`}>sorted A–Z</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowStatsPanel(!showStatsPanel)}
+                    className={`text-xs ${mutedText} hover:text-emerald-400 transition-colors`}
+                  >
+                    {showStatsPanel ? 'Hide stats' : 'Show stats'}
+                  </button>
                 </>
               )}
             </div>
-            {conflicts.length > 0 && (
-              <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* View mode toggle */}
+              <div className={`flex items-center gap-0.5 rounded-lg border p-0.5 ${
+                isDark ? 'border-slate-700 bg-slate-800' : 'border-gray-200 bg-white'
+              }`}>
                 <button
-                  onClick={handleCopyResults}
-                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors ${
-                    isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-200'
+                  type="button"
+                  onClick={() => setViewMode('table')}
+                  className={`rounded-md p-1.5 transition-colors ${
+                    viewMode === 'table'
+                      ? isDark ? 'bg-slate-700 text-white' : 'bg-gray-200 text-gray-900'
+                      : isDark ? 'text-slate-400 hover:text-white' : 'text-gray-400 hover:text-gray-900'
                   }`}
+                  aria-label="Table view"
                 >
-                  <Copy className="h-3 w-3" />
-                  Copy
+                  <Grid className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={handleExportCSV}
-                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors ${
-                    isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-200'
+                  type="button"
+                  onClick={() => setViewMode('cards')}
+                  className={`rounded-md p-1.5 transition-colors ${
+                    viewMode === 'cards'
+                      ? isDark ? 'bg-slate-700 text-white' : 'bg-gray-200 text-gray-900'
+                      : isDark ? 'text-slate-400 hover:text-white' : 'text-gray-400 hover:text-gray-900'
                   }`}
+                  aria-label="Card view"
                 >
-                  <Download className="h-3 w-3" />
-                  Export CSV
+                  <List className="h-4 w-4" />
                 </button>
               </div>
-            )}
+
+              {/* Search */}
+              <div className="relative">
+                <Search className={`absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${mutedText}`} />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className={`w-32 rounded-lg border pl-7 pr-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:w-40 ${
+                    isDark
+                      ? 'border-slate-700 bg-slate-800 text-white placeholder-slate-500'
+                      : 'border-gray-200 bg-white text-gray-900 placeholder-gray-400'
+                  }`}
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 ${
+                      isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-200 text-gray-400'
+                    }`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+
+              {/* Severity filter */}
+              <select
+                value={severityFilter}
+                onChange={e => setSeverityFilter(e.target.value as any)}
+                className={`rounded-lg border px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                  isDark
+                    ? 'border-slate-700 bg-slate-800 text-white'
+                    : 'border-gray-200 bg-white text-gray-900'
+                }`}
+              >
+                <option value="all">All Severity</option>
+                <option value="critical">🚨 Critical</option>
+                <option value="high">🔴 High</option>
+                <option value="medium">🟡 Medium</option>
+              </select>
+            </div>
           </div>
 
-          {/* Fixed height scrollable container - ONLY table scrolls, no empty space */}
+          {/* Results Content - Scrollable */}
           <div className="overflow-auto" style={{ maxHeight: '400px' }}>
             {conflicts.length === 0 && lastRan && (
-              <div className="flex items-center justify-center py-12">
+              <div className="flex items-center justify-center py-16">
                 <div className="text-center">
-                  <CheckCircle className={`mx-auto h-12 w-12 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
-                  <p className={`mt-3 font-medium ${strongText}`}>No conflicts found!</p>
+                  <CheckCircle className={`mx-auto h-16 w-16 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                  <p className={`mt-4 text-lg font-bold ${strongText}`}>No conflicts found! 🎉</p>
                   <p className={`mt-1 text-sm ${mutedText}`}>All styles have unique parent ASINs.</p>
                 </div>
               </div>
             )}
             
             {conflicts.length === 0 && !lastRan && (
-              <div className="flex items-center justify-center py-12">
+              <div className="flex items-center justify-center py-16">
                 <div className="text-center">
-                  <Upload className={`mx-auto h-12 w-12 ${mutedText}`} />
-                  <p className={`mt-3 font-medium ${strongText}`}>Ready to check</p>
+                  <Upload className={`mx-auto h-16 w-16 ${mutedText}`} />
+                  <p className={`mt-4 text-lg font-bold ${strongText}`}>Ready to check</p>
                   <p className={`mt-1 text-sm ${mutedText}`}>Click "Run Check" or press ⌘↵ to analyze your data.</p>
                 </div>
               </div>
             )}
             
-            {conflicts.length > 0 && (
+            {conflicts.length > 0 && filteredConflicts.length === 0 && (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <Search className={`mx-auto h-12 w-12 ${mutedText}`} />
+                  <p className={`mt-3 font-medium ${strongText}`}>No matches found</p>
+                  <p className={`mt-1 text-sm ${mutedText}`}>Try adjusting your search or filter criteria.</p>
+                  <button
+                    type="button"
+                    onClick={() => { setSearchTerm(''); setSeverityFilter('all'); }}
+                    className={`mt-3 text-sm text-emerald-400 hover:underline`}
+                  >
+                    Clear filters
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {filteredConflicts.length > 0 && viewMode === 'table' && (
               <table className="w-full border-collapse text-sm">
                 <thead className={`sticky top-0 z-10 ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
                   <tr className={`border-b ${isDark ? 'border-slate-700' : 'border-gray-300'}`}>
@@ -801,7 +962,7 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
                   </tr>
                 </thead>
                 <tbody>
-                  {conflicts.map((conflict) => {
+                  {filteredConflicts.map((conflict) => {
                     const severity = getSeverity(conflict.asins.length);
                     return (
                       <tr key={conflict.style} className={`border-b ${isDark ? 'border-slate-700/50 hover:bg-slate-800/30' : 'border-gray-200 hover:bg-gray-50'}`}>
@@ -832,6 +993,41 @@ export default function AsinConflictChecker({ theme = 'dark' }: AsinConflictChec
                   })}
                 </tbody>
               </table>
+            )}
+
+            {filteredConflicts.length > 0 && viewMode === 'cards' && (
+              <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredConflicts.map((conflict) => {
+                  const severity = getSeverity(conflict.asins.length);
+                  return (
+                    <div key={conflict.style} className={`rounded-xl border p-4 ${
+                      isDark ? 'border-slate-700/60 bg-slate-800/30' : 'border-gray-200 bg-white/80'
+                    }`}>
+                      <div className="flex items-start justify-between">
+                        <span className={`font-mono text-sm font-bold ${strongText}`}>{conflict.style}</span>
+                        <span className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold ${severity.cls}`}>
+                          {severity.label}
+                        </span>
+                      </div>
+                      <div className="mt-3">
+                        <p className={`text-xs ${mutedText}`}>Parent ASINs:</p>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {conflict.asins.map((asin) => (
+                            <span
+                              key={`${conflict.style}-${asin}`}
+                              className={`inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-[11px] ${
+                                isDark ? 'border-red-600/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'
+                              }`}
+                            >
+                              {asin}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>

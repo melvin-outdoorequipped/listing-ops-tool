@@ -53,6 +53,17 @@ import {
   Trash,
   Pin,
   PinOff,
+  MoreVertical,
+  Filter,
+  ArrowUpDown,
+  Download,
+  Printer,
+  Copy,
+  Share2,
+  Star,
+  StarOff,
+  Clock as ClockIcon,
+  Target,
 } from 'lucide-react';
 import { supabase, supabaseAdmin } from '@/lib/supabase/admin';
 
@@ -71,6 +82,7 @@ interface UserStats {
   confirmed_at: string | null;
   role?: 'admin' | 'user';
   isFromAuth?: boolean;
+  displayName?: string;
 }
 
 interface AdminStats {
@@ -79,6 +91,8 @@ interface AdminStats {
   successRate: number;
   activeUsers: number;
   usersWithRuns: number;
+  totalErrors: number;
+  averageRunsPerUser: number;
 }
 
 interface ActivityLog {
@@ -116,9 +130,8 @@ interface Announcement {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-// Updated: Multiple admin emails
+const SUPER_ADMIN_EMAILS = ['melvin@outdoorequipped.com'];
 const ADMIN_EMAILS = ['melvin@outdoorequipped.com', 'jonisa@outdoorequipped.com', 'arlie@outdoorequipped.com', 'jogie@outdoorequipped.com'];
-
 const ALL_KNOWN_USERS = [
   { email: 'arlie@outdoorequipped.com', name: 'Arlie' },
   { email: 'melvin@outdoorequipped.com', name: 'Melvin' },
@@ -135,9 +148,7 @@ const ALL_KNOWN_USERS = [
 ];
 
 const TEAM_MEMBERS = ALL_KNOWN_USERS.map(u => u.email);
-
-const isValidUUID = (str: string) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
 const DEFAULT_SETTINGS: SystemSettings = {
   maintenanceMode: false,
@@ -150,11 +161,9 @@ const DEFAULT_SETTINGS: SystemSettings = {
   autoRefreshInterval: 60,
 };
 
-// ─── Tab types ────────────────────────────────────────────────────────────────
-
 type AdminTab = 'overview' | 'settings' | 'announcements' | 'activity';
 
-// ─── Tab Navigation Component ──────────────────────────────────────────────
+// ─── Tab Navigation ──────────────────────────────────────────────────────────
 
 function AdminTabNavigation({
   activeTab,
@@ -163,7 +172,6 @@ function AdminTabNavigation({
   isDark,
   textClass,
   mutedTextClass,
-  borderClass,
 }: {
   activeTab: AdminTab;
   setActiveTab: (tab: AdminTab) => void;
@@ -171,30 +179,33 @@ function AdminTabNavigation({
   isDark: boolean;
   textClass: string;
   mutedTextClass: string;
-  borderClass: string;
 }) {
   const tabs: Array<{ id: AdminTab; label: string; icon: React.ReactNode; badge?: number }> = [
-    { id: 'overview', label: 'Users & Activity', icon: <Users className="h-4 w-4" /> },
-    { id: 'settings', label: 'System Settings', icon: <Settings className="h-4 w-4" /> },
+    { id: 'overview', label: 'Overview', icon: <BarChart2 className="h-4 w-4" /> },
+    { id: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4" /> },
     { id: 'announcements', label: 'Announcements', icon: <Megaphone className="h-4 w-4" />, badge: announcements.filter(a => a.active).length },
   ];
 
   return (
-    <div className={`flex gap-1 rounded-xl border p-1 ${isDark ? 'border-slate-700 bg-slate-800/50' : 'border-gray-200 bg-gray-100'}`}>
+    <div className={`flex flex-wrap gap-1 rounded-xl border p-1 ${isDark ? 'border-slate-700/50 bg-slate-800/50' : 'border-gray-200 bg-gray-100'}`}>
       {tabs.map(tab => (
         <button
           key={tab.id}
           onClick={() => setActiveTab(tab.id)}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+          className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 min-w-[100px] ${
             activeTab === tab.id
-              ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-gray-900 shadow-sm'
-              : isDark ? 'text-slate-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'
+              ? isDark 
+                ? 'bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 text-white shadow-lg shadow-emerald-500/10' 
+                : 'bg-white text-gray-900 shadow-lg shadow-gray-200/50'
+              : isDark 
+                ? 'text-slate-400 hover:text-white hover:bg-slate-700/50' 
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
           }`}
         >
           {tab.icon}
           <span className="hidden sm:inline">{tab.label}</span>
           {tab.badge !== undefined && tab.badge > 0 && (
-            <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
+            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
               {tab.badge}
             </span>
           )}
@@ -214,7 +225,10 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
   const [userStats, setUserStats] = useState<UserStats[]>([]);
   const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [allActivities, setAllActivities] = useState<ActivityLog[]>([]);
-  const [stats, setStats] = useState<AdminStats>({ totalUsers: 0, totalRuns: 0, successRate: 0, activeUsers: 0, usersWithRuns: 0 });
+  const [stats, setStats] = useState<AdminStats>({ 
+    totalUsers: 0, totalRuns: 0, successRate: 0, activeUsers: 0, usersWithRuns: 0, 
+    totalErrors: 0, averageRunsPerUser: 0 
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -225,6 +239,8 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
   const [authUserCount, setAuthUserCount] = useState(0);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [sortField, setSortField] = useState<'totalRuns' | 'email' | 'lastRun'>('totalRuns');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   
   const dataLoadedRef = useRef(false);
   const isMountedRef = useRef(true);
@@ -272,44 +288,36 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
   // Styles
   const textClass = isDark ? 'text-white' : 'text-gray-900';
   const mutedTextClass = isDark ? 'text-slate-400' : 'text-gray-500';
-  const borderClass = isDark ? 'border-slate-700' : 'border-gray-200';
+  const borderClass = isDark ? 'border-slate-700/50' : 'border-gray-200';
   const panelClass = isDark ? 'bg-slate-900/70 border-slate-700/50' : 'bg-white border-gray-200';
   const inputClass = isDark
-    ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400'
+    ? 'bg-slate-800/80 border-slate-700 text-white placeholder-slate-400'
     : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400';
   const hoverRowClass = isDark ? 'hover:bg-slate-800/50' : 'hover:bg-gray-50';
 
-  // ─── State Fixes ──────────────────────────────────────────────────────────────
+  // ─── Data Fetching ──────────────────────────────────────────────────────────
 
-  // 1. Force isLoading to false when data is already loaded
-  useEffect(() => {
-    if (dataLoadedRef.current) {
-      console.log('Data already loaded, forcing isLoading to false');
-      setIsLoading(false);
-    }
-  }, []);
-
-  // 2. Fallback timeout - if still loading after 8 seconds, force it
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (isLoading) {
-        console.log('⚠️ Force setting isLoading to false after timeout');
-        setIsLoading(false);
+  const checkAdminStatus = async () => {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) {
+        setError('Please sign in to access admin panel.');
+        return false;
       }
-    }, 8000);
-
-    return () => clearTimeout(timeoutId);
-  }, [isLoading]);
-
-  // 3. Safety check - if data is loaded but isLoading is true, fix it
-  useEffect(() => {
-    if (dataLoadedRef.current && isLoading) {
-      console.log('🔄 Safety check: Data loaded but isLoading is true, fixing...');
-      setIsLoading(false);
+      setCurrentUser(user);
+      if (!ADMIN_EMAILS.includes(user.email || '')) {
+        setError('Access denied. Only admins can access the admin panel.');
+        return false;
+      }
+      return true;
+    } catch (err: any) {
+      console.error('Failed to verify admin status:', err);
+      setError('Failed to verify admin status: ' + err.message);
+      return false;
     }
-  }, [isLoading, dataLoadedRef.current]);
+  };
 
-  // ─── Supabase Database Functions ──────────────────────────────────────────
+  const isSuperAdmin = currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email);
 
   const loadSettingsFromDB = async () => {
     try {
@@ -319,9 +327,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         .eq('id', 1)
         .single();
 
-      if (error) throw error;
-
-      if (data) {
+      if (!error && data) {
         setSettings({
           maintenanceMode: data.maintenance_mode ?? false,
           registrationOpen: data.registration_open ?? true,
@@ -332,19 +338,11 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
           debugMode: data.debug_mode ?? false,
           autoRefreshInterval: data.auto_refresh_interval ?? 60,
         });
+        return true;
       }
-      return true;
+      return false;
     } catch (err) {
-      console.error('Failed to load settings from DB:', err);
-      // Fallback to localStorage
-      const saved = localStorage.getItem('lot_admin_settings');
-      if (saved) {
-        try {
-          setSettings(JSON.parse(saved));
-        } catch {
-          setSettings(DEFAULT_SETTINGS);
-        }
-      }
+      console.error('Failed to load settings:', err);
       return false;
     }
   };
@@ -368,22 +366,10 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         .eq('id', 1);
 
       if (error) throw error;
-
-      // Also save to localStorage as backup
-      localStorage.setItem('lot_admin_settings', JSON.stringify(settings));
-      
-      // Dispatch events to notify all components
       window.dispatchEvent(new CustomEvent('settingsUpdated'));
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'lot_admin_settings',
-        newValue: JSON.stringify(settings),
-      }));
-
       return true;
     } catch (err) {
-      console.error('Failed to save settings to DB:', err);
-      // Fallback to localStorage
-      localStorage.setItem('lot_admin_settings', JSON.stringify(settings));
+      console.error('Failed to save settings:', err);
       return false;
     }
   };
@@ -395,9 +381,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-
-      if (data) {
+      if (!error && data) {
         const formatted = data.map((a: any) => ({
           id: a.id,
           title: a.title,
@@ -410,22 +394,11 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
           active: a.active,
         }));
         setAnnouncements(formatted);
-        // Also save to localStorage as backup
-        localStorage.setItem('lot_announcements', JSON.stringify(formatted));
         return true;
       }
       return false;
     } catch (err) {
-      console.error('Failed to load announcements from DB:', err);
-      // Fallback to localStorage
-      const saved = localStorage.getItem('lot_announcements');
-      if (saved) {
-        try {
-          setAnnouncements(JSON.parse(saved));
-        } catch {
-          setAnnouncements([]);
-        }
-      }
+      console.error('Failed to load announcements:', err);
       return false;
     }
   };
@@ -450,7 +423,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
       if (error) throw error;
       return true;
     } catch (err) {
-      console.error('Failed to save announcement to DB:', err);
+      console.error('Failed to save announcement:', err);
       return false;
     }
   };
@@ -465,48 +438,14 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
       if (error) throw error;
       return true;
     } catch (err) {
-      console.error('Failed to delete announcement from DB:', err);
-      return false;
-    }
-  };
-
-  // ─── Data Fetching ──────────────────────────────────────────────────────────
-
-  const checkAdminStatus = async () => {
-    try {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error) {
-        console.error('Auth error:', error);
-        setError('Please sign in to access admin panel.');
-        return false;
-      }
-      setCurrentUser(user);
-      if (!user) { 
-        setError('Please sign in to access admin panel.'); 
-        return false; 
-      }
-      // Updated: Check against multiple admin emails
-      if (!ADMIN_EMAILS.includes(user.email || '')) { 
-        setError(`Access denied. Only admins can access the admin panel.`); 
-        return false; 
-      }
-      console.log('Admin verified:', user.email);
-      return true;
-    } catch (err: any) {
-      console.error('Failed to verify admin status:', err);
-      setError('Failed to verify admin status: ' + err.message);
+      console.error('Failed to delete announcement:', err);
       return false;
     }
   };
 
   const fetchData = useCallback(async (force = false) => {
-    if (fetchInProgressRef.current && !force) {
-      console.log('Fetch already in progress, skipping');
-      return;
-    }
-
+    if (fetchInProgressRef.current && !force) return;
     if (dataLoadedRef.current && !force) {
-      console.log('Data already loaded, skipping fetch');
       setIsLoading(false);
       return;
     }
@@ -516,48 +455,37 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     setError(null);
 
     try {
-      console.log('Starting fetchData...');
-      
       const isAdmin = await checkAdminStatus();
-      console.log('isAdmin:', isAdmin);
-      
-      if (!isAdmin) { 
-        console.log('Not admin, stopping fetch');
-        setIsLoading(false); 
+      if (!isAdmin) {
+        setIsLoading(false);
         fetchInProgressRef.current = false;
-        return; 
+        return;
       }
 
-      // Load settings and announcements from Supabase
-      console.log('Loading settings from DB...');
       await loadSettingsFromDB();
-      console.log('Loading announcements from DB...');
       await loadAnnouncementsFromDB();
 
-      // Tool runs
+      // Fetch tool runs
       let toolRuns: any[] = [];
       try {
-        console.log('Fetching tool runs...');
         const { data, error } = await supabaseAdmin
           .from('tool_runs')
           .select('id, user_email, tool_type, status, title, total_count, created_at')
           .order('created_at', { ascending: false });
-        if (error) {
-          console.log('Error fetching tool runs, using fallback:', error);
+
+        if (!error) toolRuns = data || [];
+        else {
           const { data: fallback } = await supabase
             .from('tool_runs')
             .select('id, user_email, tool_type, status, title, total_count, created_at')
             .order('created_at', { ascending: false });
           toolRuns = fallback || [];
-        } else {
-          toolRuns = data || [];
+          setUsingFallbackData(true);
         }
       } catch (err) {
-        console.error('Tool runs fetch error:', err);
         toolRuns = [];
+        setUsingFallbackData(true);
       }
-
-      console.log('Tool runs count:', toolRuns.length);
 
       setAllActivities(toolRuns.map((run: any) => ({
         id: run.id,
@@ -569,23 +497,19 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         total_count: run.total_count || 0,
       })));
 
-      // Auth users
+      // Fetch auth users
       let authUsers: any[] = [];
       let authSuccess = false;
       try {
-        console.log('Fetching auth users...');
         const { data, error: authError } = await supabaseAdmin.auth.admin.listUsers();
         if (!authError && data?.users) {
           authUsers = data.users;
           authSuccess = true;
           setAuthUserCount(authUsers.length);
-          console.log('Auth users count:', authUsers.length);
         } else {
-          console.log('Auth users fetch failed, using fallback');
           setUsingFallbackData(true);
         }
       } catch (err) {
-        console.error('Auth users fetch error:', err);
         setUsingFallbackData(true);
       }
 
@@ -594,15 +518,16 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         authUsers.forEach((user: any) => {
           const email = user.email || user.id;
           if (email?.includes('@')) {
+            const displayName = email.split('@')[0];
             userMap.set(email, {
               id: user.id,
               email,
+              displayName: displayName.charAt(0).toUpperCase() + displayName.slice(1),
               totalRuns: 0, completedRuns: 0, failedRuns: 0,
               lastRun: null, firstRun: null,
               created_at: user.created_at || null,
               last_sign_in_at: user.last_sign_in_at || null,
               confirmed_at: user.email_confirmed_at || null,
-              // Updated: Check against multiple admin emails
               role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
               isFromAuth: true,
             });
@@ -611,21 +536,23 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         setUsingFallbackData(false);
       } else {
         setUsingFallbackData(true);
-        ALL_KNOWN_USERS.forEach(({ email }) => {
+        ALL_KNOWN_USERS.forEach(({ email, name }) => {
           userMap.set(email, {
             id: email, email,
+            displayName: name || email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1),
             totalRuns: 0, completedRuns: 0, failedRuns: 0,
             lastRun: null, firstRun: null,
             created_at: null, last_sign_in_at: null, confirmed_at: null,
-            // Updated: Check against multiple admin emails
             role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
             isFromAuth: false,
           });
         });
         toolRuns.forEach((run: any) => {
           if (run.user_email && !userMap.has(run.user_email)) {
-            userMap.set(run.user_email, {
-              id: run.user_email, email: run.user_email,
+            const email = run.user_email;
+            userMap.set(email, {
+              id: email, email,
+              displayName: email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1),
               totalRuns: 0, completedRuns: 0, failedRuns: 0,
               lastRun: null, firstRun: null,
               created_at: null, last_sign_in_at: null, confirmed_at: null,
@@ -635,6 +562,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         });
       }
 
+      // Aggregate run data
       toolRuns.forEach((run: any) => {
         const email = run.user_email;
         if (email && userMap.has(email)) {
@@ -653,6 +581,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
 
       const totalRuns = toolRuns.length;
       const completedRuns = toolRuns.filter((r: any) => r.status === 'completed').length;
+      const failedRuns = toolRuns.filter((r: any) => r.status === 'failed' || r.status === 'error').length;
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -662,6 +591,8 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         successRate: totalRuns > 0 ? Math.round((completedRuns / totalRuns) * 100) : 0,
         activeUsers: userStatsArray.filter(u => u.lastRun && new Date(u.lastRun) >= sevenDaysAgo).length,
         usersWithRuns: userStatsArray.filter(u => u.totalRuns > 0).length,
+        totalErrors: failedRuns,
+        averageRunsPerUser: userStatsArray.length > 0 ? Math.round(totalRuns / userStatsArray.length) : 0,
       });
 
       setActivities(toolRuns.slice(0, 10).map((run: any) => ({
@@ -675,18 +606,13 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
       })));
 
       dataLoadedRef.current = true;
-      setIsLoading(false); // Force set loading to false immediately
-      console.log('Data loaded successfully!');
+      setIsLoading(false);
 
     } catch (err: any) {
       console.error('Fetch error:', err);
       setError(err.message || 'Failed to load data');
       setIsLoading(false);
     } finally {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-        console.log('Loading complete, isLoading set to false');
-      }
       fetchInProgressRef.current = false;
     }
   }, []);
@@ -697,64 +623,19 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     if (!dataLoadedRef.current && !fetchInProgressRef.current) {
       fetchData();
     }
-    
-    return () => {
-      isMountedRef.current = false;
-    };
+    return () => { isMountedRef.current = false; };
   }, [fetchData]);
 
-  // Listen for settings updates from other tabs/windows
   useEffect(() => {
-    const handleSettingsUpdate = () => {
-      loadSettingsFromDB();
-      loadAnnouncementsFromDB();
-    };
+    const timeoutId = setTimeout(() => {
+      if (isLoading) setIsLoading(false);
+    }, 8000);
+    return () => clearTimeout(timeoutId);
+  }, [isLoading]);
 
-    window.addEventListener('settingsUpdated', handleSettingsUpdate);
-    window.addEventListener('storage', handleSettingsUpdate);
-
-    // Real-time subscription for settings changes
-    const channel = supabase
-      .channel('system_settings_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'system_settings',
-          filter: 'id=eq.1',
-        },
-        (payload) => {
-          console.log('Settings updated in real-time:', payload);
-          loadSettingsFromDB();
-        }
-      )
-      .subscribe();
-
-    // Real-time subscription for announcements changes
-    const announcementsChannel = supabase
-      .channel('announcements_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'announcements',
-        },
-        (payload) => {
-          console.log('Announcements updated in real-time:', payload);
-          loadAnnouncementsFromDB();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      window.removeEventListener('settingsUpdated', handleSettingsUpdate);
-      window.removeEventListener('storage', handleSettingsUpdate);
-      supabase.removeChannel(channel);
-      supabase.removeChannel(announcementsChannel);
-    };
-  }, []);
+  useEffect(() => {
+    if (dataLoadedRef.current && isLoading) setIsLoading(false);
+  }, [isLoading]);
 
   const refreshData = useCallback(async () => {
     setIsRefreshing(true);
@@ -763,7 +644,16 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     setIsRefreshing(false);
   }, [fetchData]);
 
-  // ─── System Settings Functions ────────────────────────────────────────────
+  // ─── Handlers ──────────────────────────────────────────────────────────────
+
+  const handleSort = (field: 'totalRuns' | 'email' | 'lastRun') => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('desc');
+    }
+  };
 
   const handleSettingChange = (key: keyof SystemSettings, value: any) => {
     setSettings(prev => ({ ...prev, [key]: value }));
@@ -776,9 +666,9 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
       const success = await saveSettingsToDB();
       if (success) {
         setSettingsDirty(false);
-        setActionSuccess('System settings saved successfully to database! All users will see the changes.');
+        setActionSuccess('✅ Settings saved to database!');
       } else {
-        setActionSuccess('Settings saved locally. Database save failed, but changes are applied.');
+        setActionSuccess('⚠️ Settings saved locally.');
       }
     } catch (err: any) {
       setError('Failed to save settings: ' + err.message);
@@ -792,8 +682,6 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     setSettings(DEFAULT_SETTINGS);
     setSettingsDirty(true);
   };
-
-  // ─── Announcements Functions ──────────────────────────────────────────────
 
   const sendAnnouncement = async () => {
     if (!announceForm.title || !announceForm.message) {
@@ -823,14 +711,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         setShowAnnounceModal(false);
         setAnnounceForm({ title: '', message: '', type: 'info', targetAll: true, targetEmails: [], pinned: false });
         setTargetEmailInput('');
-        setActionSuccess(`Announcement "${newAnn.title}" published to all users!`);
-        window.dispatchEvent(new CustomEvent('settingsUpdated'));
-      } else {
-        const updated = [newAnn, ...announcements];
-        localStorage.setItem('lot_announcements', JSON.stringify(updated));
-        setAnnouncements(updated);
-        setShowAnnounceModal(false);
-        setActionSuccess(`Announcement "${newAnn.title}" saved locally.`);
+        setActionSuccess(`📢 "${newAnn.title}" published!`);
       }
     } catch (err: any) {
       setError('Failed to publish announcement: ' + err.message);
@@ -841,24 +722,20 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
   };
 
   const togglePin = async (id: string) => {
-    const updated = announcements.map(a => 
-      a.id === id ? { ...a, pinned: !a.pinned } : a
-    );
-    const announcement = updated.find(a => a.id === id);
+    const announcement = announcements.find(a => a.id === id);
     if (announcement) {
-      await saveAnnouncementToDB(announcement);
-      setAnnouncements(updated);
+      const updated = { ...announcement, pinned: !announcement.pinned };
+      await saveAnnouncementToDB(updated);
+      setAnnouncements(prev => prev.map(a => a.id === id ? updated : a));
     }
   };
 
   const toggleActive = async (id: string) => {
-    const updated = announcements.map(a => 
-      a.id === id ? { ...a, active: !a.active } : a
-    );
-    const announcement = updated.find(a => a.id === id);
+    const announcement = announcements.find(a => a.id === id);
     if (announcement) {
-      await saveAnnouncementToDB(announcement);
-      setAnnouncements(updated);
+      const updated = { ...announcement, active: !announcement.active };
+      await saveAnnouncementToDB(updated);
+      setAnnouncements(prev => prev.map(a => a.id === id ? updated : a));
     }
   };
 
@@ -866,72 +743,134 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     const success = await deleteAnnouncementFromDB(id);
     if (success) {
       setAnnouncements(prev => prev.filter(a => a.id !== id));
-      setActionSuccess('Announcement deleted.');
+      setActionSuccess('🗑️ Announcement deleted.');
       setTimeout(() => setActionSuccess(null), 3000);
     }
   };
 
-  // ─── User Actions ───────────────────────────────────────────────────────────
-
-  const handleAddUser = async () => {
-    if (!newUserEmail || !newUserPassword) { setError('Please provide email and password'); return; }
-    setActionLoading(true); setError(null);
-    try {
-      const { error } = await supabaseAdmin.auth.admin.createUser({ email: newUserEmail, password: newUserPassword, email_confirm: true });
-      if (error) throw error;
-      setActionSuccess(`User ${newUserEmail} created successfully!`);
-      setIsAddingUser(false); setNewUserEmail(''); setNewUserPassword('');
-      await refreshData();
-    } catch (err: any) { setError(err.message || 'Failed to create user'); }
-    finally { setActionLoading(false); }
-  };
-
   const handleDeleteUser = async (userId: string) => {
-    if (!isValidUUID(userId)) { setError('Cannot delete user not in auth system.'); setShowDeleteConfirm(null); return; }
-    setActionLoading(true); setError(null);
+    const userToDelete = userStats.find(u => u.id === userId);
+    if (!userToDelete) return;
+    
+    if (!isSuperAdmin && ADMIN_EMAILS.includes(userToDelete.email)) {
+      setError('You cannot delete another admin user.');
+      setShowDeleteConfirm(null);
+      return;
+    }
+    
+    setActionLoading(true);
     try {
-      const userToDelete = userStats.find(u => u.id === userId);
       const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
       if (error) throw error;
       setUserStats(prev => prev.filter(u => u.id !== userId));
       setShowDeleteConfirm(null);
-      setActionSuccess(`User ${userToDelete?.email} deleted.`);
+      setActionSuccess(`🗑️ ${userToDelete.email} deleted.`);
       await refreshData();
-    } catch (err: any) { setError(err.message || 'Failed to delete user'); }
-    finally { setActionLoading(false); }
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete user');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleChangePassword = async () => {
-    if (!passwordUser || !newPassword || newPassword.length < 6) { setError('Password must be at least 6 characters'); return; }
-    if (!passwordUser.isFromAuth || !isValidUUID(passwordUser.id)) { setError('User not in auth system.'); return; }
-    setActionLoading(true); setError(null);
+    if (!passwordUser || !newPassword || newPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    
+    if (!isSuperAdmin && ADMIN_EMAILS.includes(passwordUser.email)) {
+      setError('You cannot change another admin\'s password.');
+      setShowPasswordModal(false);
+      return;
+    }
+    
+    setActionLoading(true);
     try {
       const { error } = await supabaseAdmin.auth.admin.updateUserById(passwordUser.id, { password: newPassword });
       if (error) throw error;
-      setActionSuccess(`Password for ${passwordUser.email} updated.`);
-      setShowPasswordModal(false); setPasswordUser(null); setNewPassword(''); setShowPassword(false);
-    } catch (err: any) { setError(err.message || 'Failed to update password'); }
-    finally { setActionLoading(false); }
+      setActionSuccess(`🔑 Password updated for ${passwordUser.email}`);
+      setShowPasswordModal(false);
+      setPasswordUser(null);
+      setNewPassword('');
+      setShowPassword(false);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update password');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAddUser = async () => {
+    if (!newUserEmail || !newUserPassword) { 
+      setError('Please provide email and password'); 
+      return; 
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      const { error } = await supabaseAdmin.auth.admin.createUser({ 
+        email: newUserEmail, 
+        password: newUserPassword, 
+        email_confirm: true 
+      });
+      if (error) throw error;
+      setActionSuccess(`✅ ${newUserEmail} created!`);
+      setIsAddingUser(false);
+      setNewUserEmail('');
+      setNewUserPassword('');
+      await refreshData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to create user');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleSendResetEmail = async (email: string) => {
-    const user = userStats.find(u => u.email === email);
-    if (!user?.isFromAuth) { setError('User not in auth system.'); return; }
-    setActionLoading(true); setError(null);
+    if (!isSuperAdmin && ADMIN_EMAILS.includes(email)) {
+      setError('You cannot send reset email to another admin.');
+      return;
+    }
+    
+    setActionLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/reset-password' });
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { 
+        redirectTo: window.location.origin + '/reset-password' 
+      });
       if (error) throw error;
-      setActionSuccess(`Reset email sent to ${email}`);
-    } catch (err: any) { setError(err.message || 'Failed to send reset email'); }
-    finally { setActionLoading(false); }
+      setActionSuccess(`📧 Reset email sent to ${email}`);
+    } catch (err: any) {
+      setError(err.message || 'Failed to send reset email');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  // ─── Helpers ────────────────────────────────────────────────────────────────
+  const openUserActivity = (user: UserStats) => {
+    setViewingUserActivity(user);
+    setActiveTab('activity');
+    setActivityPage(1);
+    setUserActivityLoading(true);
+    const userLogs = allActivities.filter(a => a.user_email === user.email);
+    setUserActivityLogs(userLogs);
+    setUserActivityLoading(false);
+  };
+
+  const closeUserActivity = () => {
+    setViewingUserActivity(null);
+    setActiveTab('overview');
+    setUserActivityLogs([]);
+    setActivityPage(1);
+  };
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
 
   const formatDate = (d: string | null) => {
     if (!d) return 'Never';
     return new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
+
   const formatDateShort = (d: string | null) => {
     if (!d) return 'N/A';
     return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -956,33 +895,29 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     }
   };
 
-  const filteredUsers = userStats.filter(user => {
-    const matchesSearch = user.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const isAdm = ADMIN_EMAILS.includes(user.email);
-    const isTeam = TEAM_MEMBERS.includes(user.email);
-    let matchesRole = true;
-    if (filterRole === 'admin') matchesRole = isAdm;
-    else if (filterRole === 'team') matchesRole = isTeam;
-    else if (filterRole === 'other') matchesRole = !isTeam && !isAdm;
-    return matchesSearch && matchesRole;
-  });
-
-  const openUserActivity = (user: UserStats) => {
-    setViewingUserActivity(user);
-    setActiveTab('activity');
-    setActivityPage(1);
-    setUserActivityLoading(true);
-    const userLogs = allActivities.filter(a => a.user_email === user.email);
-    setUserActivityLogs(userLogs);
-    setUserActivityLoading(false);
-  };
-
-  const closeUserActivity = () => {
-    setViewingUserActivity(null);
-    setActiveTab('overview');
-    setUserActivityLogs([]);
-    setActivityPage(1);
-  };
+  const filteredUsers = userStats
+    .filter(user => {
+      const matchesSearch = user.email.toLowerCase().includes(searchQuery.toLowerCase());
+      const isAdm = ADMIN_EMAILS.includes(user.email);
+      const isTeam = TEAM_MEMBERS.includes(user.email);
+      let matchesRole = true;
+      if (filterRole === 'admin') matchesRole = isAdm;
+      else if (filterRole === 'team') matchesRole = isTeam;
+      else if (filterRole === 'other') matchesRole = !isTeam && !isAdm;
+      return matchesSearch && matchesRole;
+    })
+    .sort((a, b) => {
+      let aVal: any = a[sortField];
+      let bVal: any = b[sortField];
+      if (sortField === 'lastRun') {
+        aVal = aVal ? new Date(aVal).getTime() : 0;
+        bVal = bVal ? new Date(bVal).getTime() : 0;
+      }
+      if (typeof aVal === 'string') {
+        return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+    });
 
   const paginatedActivity = userActivityLogs.slice(
     (activityPage - 1) * ACTIVITY_PAGE_SIZE,
@@ -998,7 +933,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         <Shield className="mx-auto h-16 w-16 text-red-400 opacity-50" />
         <h3 className={`mt-4 text-xl font-bold ${textClass}`}>Access Denied</h3>
         <p className={`mt-2 ${mutedTextClass}`}>{error}</p>
-        <button onClick={() => window.location.href = '/'} className="mt-4 rounded-lg bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500">
+        <button onClick={() => window.location.href = '/'} className="mt-4 rounded-lg bg-emerald-600 px-6 py-2 font-semibold text-white hover:bg-emerald-500 transition-colors">
           Return to Dashboard
         </button>
       </div>
@@ -1008,36 +943,41 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
   // ─── Render Content ────────────────────────────────────────────────────────
 
   const renderContent = () => {
-    console.log('renderContent called, isLoading:', isLoading);
-    
     if (isLoading) {
       return (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+        <div className="flex items-center justify-center py-16">
+          <div className="text-center">
+            <Loader2 className="h-10 w-10 animate-spin text-emerald-500 mx-auto" />
+            <p className={`mt-4 text-sm ${mutedTextClass}`}>Loading admin data...</p>
+          </div>
         </div>
       );
     }
 
-    // User Activity History Tab
+    // User Activity History
     if (activeTab === 'activity' && viewingUserActivity) {
-      const displayName = viewingUserActivity.email.split('@')[0];
-      const cap = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+      const displayName = viewingUserActivity.displayName || viewingUserActivity.email.split('@')[0];
       const toolBreakdown: Record<string, number> = {};
       userActivityLogs.forEach(l => { toolBreakdown[l.tool_type] = (toolBreakdown[l.tool_type] || 0) + 1; });
 
       return (
-        <div className="space-y-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={closeUserActivity}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Users
-            </button>
-            <div>
-              <h2 className={`text-xl font-bold ${textClass}`}>{cap}'s Activity History</h2>
-              <p className={`text-sm ${mutedTextClass}`}>{viewingUserActivity.email} · {userActivityLogs.length} total runs</p>
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={closeUserActivity}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </button>
+              <div>
+                <h2 className={`text-xl font-bold ${textClass}`}>{displayName}'s Activity</h2>
+                <p className={`text-sm ${mutedTextClass}`}>{viewingUserActivity.email}</p>
+              </div>
+            </div>
+            <div className={`text-sm ${mutedTextClass}`}>
+              {userActivityLogs.length} total runs
             </div>
           </div>
 
@@ -1063,7 +1003,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
 
           {Object.keys(toolBreakdown).length > 0 && (
             <div className={`rounded-xl border ${panelClass} p-4`}>
-              <h3 className={`mb-3 text-sm font-semibold ${textClass}`}>Tool Usage Breakdown</h3>
+              <h3 className={`mb-3 text-sm font-semibold ${textClass}`}>Tool Usage</h3>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(toolBreakdown)
                   .sort((a, b) => b[1] - a[1])
@@ -1093,7 +1033,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             ) : (
               <>
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full text-sm">
                     <thead className={isDark ? 'bg-slate-800/50' : 'bg-gray-50'}>
                       <tr>
                         {['Title', 'Tool', 'Status', 'Items', 'Date'].map(h => (
@@ -1104,22 +1044,22 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                     <tbody className={`divide-y ${borderClass}`}>
                       {paginatedActivity.map(log => (
                         <tr key={log.id} className={`transition-colors ${hoverRowClass}`}>
-                          <td className={`px-4 py-3 text-sm font-medium ${textClass}`}>{log.title}</td>
-                          <td className={`px-4 py-3 text-sm ${mutedTextClass}`}>{log.tool_type}</td>
+                          <td className={`px-4 py-3 font-medium ${textClass}`}>{log.title}</td>
+                          <td className={`px-4 py-3 ${mutedTextClass}`}>{log.tool_type}</td>
                           <td className="px-4 py-3">
                             <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getStatusBadgeColor(log.status)}`}>{log.status}</span>
                           </td>
-                          <td className={`px-4 py-3 text-sm ${mutedTextClass}`}>{log.total_count}</td>
-                          <td className={`px-4 py-3 text-sm ${mutedTextClass}`}>{formatDate(log.created_at)}</td>
+                          <td className={`px-4 py-3 ${mutedTextClass}`}>{log.total_count}</td>
+                          <td className={`px-4 py-3 ${mutedTextClass}`}>{formatDate(log.created_at)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
                 {totalActivityPages > 1 && (
-                  <div className={`flex items-center justify-between border-t px-6 py-3 ${borderClass}`}>
+                  <div className={`flex flex-col sm:flex-row items-center justify-between gap-3 border-t px-6 py-3 ${borderClass}`}>
                     <p className={`text-sm ${mutedTextClass}`}>
-                      Page {activityPage} of {totalActivityPages} · {userActivityLogs.length} runs
+                      Page {activityPage} of {totalActivityPages}
                     </p>
                     <div className="flex items-center gap-2">
                       <button
@@ -1149,42 +1089,35 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     // Settings Tab
     if (activeTab === 'settings') {
       return (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className={`text-xl font-bold ${textClass}`}>System Settings</h2>
               <p className={`text-sm ${mutedTextClass}`}>Configure site-wide behaviour and access controls</p>
-              <div className="mt-1 flex items-center gap-2">
-                <span className={`text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                  ✅ Changes apply to ALL users in real-time
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
               {settingsDirty && (
-                <span className={`text-xs ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>
-                  ● Unsaved changes
-                </span>
+                <span className={`text-xs ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>● Unsaved changes</span>
               )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={resetSettings}
                 className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
               >
-                Reset to Defaults
+                Reset
               </button>
               <button
                 onClick={saveSettings}
                 disabled={!settingsDirty || settingsSaving}
-                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors"
               >
                 {settingsSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Save to All Users
+                Save Changes
               </button>
             </div>
           </div>
 
           {actionSuccess && (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">
+            <div className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${isDark ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-emerald-300 bg-emerald-50 text-emerald-700'}`}>
               <CheckCircle className="h-4 w-4" /> {actionSuccess}
             </div>
           )}
@@ -1194,7 +1127,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
               <Globe className={`h-4 w-4 ${mutedTextClass}`} />
               <h3 className={`font-semibold ${textClass}`}>Site Configuration</h3>
             </div>
-            <div className="divide-y divide-slate-700/40 p-6 space-y-6">
+            <div className="p-6 space-y-6">
               <div className="grid gap-6 sm:grid-cols-2">
                 <div>
                   <label className={`block text-sm font-medium mb-1.5 ${mutedTextClass}`}>Site Name</label>
@@ -1215,7 +1148,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                   />
                 </div>
               </div>
-              <div className="grid gap-6 sm:grid-cols-2 pt-4">
+              <div className="grid gap-6 sm:grid-cols-2">
                 <div>
                   <label className={`block text-sm font-medium mb-1.5 ${mutedTextClass}`}>Max Runs Per User</label>
                   <input
@@ -1226,7 +1159,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                   />
                 </div>
                 <div>
-                  <label className={`block text-sm font-medium mb-1.5 ${mutedTextClass}`}>Auto-refresh Interval (seconds)</label>
+                  <label className={`block text-sm font-medium mb-1.5 ${mutedTextClass}`}>Auto-refresh (seconds)</label>
                   <input
                     type="number"
                     value={settings.autoRefreshInterval}
@@ -1235,7 +1168,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                   />
                 </div>
               </div>
-              <div className="pt-4">
+              <div>
                 <label className={`block text-sm font-medium mb-1.5 ${mutedTextClass}`}>Session Timeout (minutes)</label>
                 <input
                   type="number"
@@ -1254,26 +1187,11 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             </div>
             <div className="p-6 space-y-4">
               {[
-                {
-                  key: 'maintenanceMode' as keyof SystemSettings,
-                  label: 'Maintenance Mode',
-                  desc: 'Block all users (except admin) from accessing tools. Affects ALL users immediately.',
-                  danger: true,
-                },
-                {
-                  key: 'registrationOpen' as keyof SystemSettings,
-                  label: 'Open Registration',
-                  desc: 'Allow new users to create accounts via sign-up.',
-                  danger: false,
-                },
-                {
-                  key: 'debugMode' as keyof SystemSettings,
-                  label: 'Debug Mode',
-                  desc: 'Show extended error logs and developer info in the UI.',
-                  danger: false,
-                },
+                { key: 'maintenanceMode' as keyof SystemSettings, label: 'Maintenance Mode', desc: 'Block all users (except admin) from accessing tools.', danger: true },
+                { key: 'registrationOpen' as keyof SystemSettings, label: 'Open Registration', desc: 'Allow new users to create accounts via sign-up.', danger: false },
+                { key: 'debugMode' as keyof SystemSettings, label: 'Debug Mode', desc: 'Show extended error logs and developer info.', danger: false },
               ].map(({ key, label, desc, danger }) => (
-                <div key={key} className={`flex items-center justify-between rounded-xl border p-4 ${
+                <div key={key} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border p-4 ${
                   danger && settings[key]
                     ? isDark ? 'border-red-500/40 bg-red-500/10' : 'border-red-200 bg-red-50'
                     : isDark ? 'border-slate-700/60 bg-slate-800/30' : 'border-gray-100 bg-gray-50'
@@ -1311,20 +1229,15 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
     // Announcements Tab
     if (activeTab === 'announcements') {
       return (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className={`text-xl font-bold ${textClass}`}>Announcements</h2>
               <p className={`text-sm ${mutedTextClass}`}>Broadcast messages to all or specific team members</p>
-              <div className="mt-1 flex items-center gap-2">
-                <span className={`text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                  ✅ Announcements appear to ALL users in real-time
-                </span>
-              </div>
             </div>
             <button
               onClick={() => setShowAnnounceModal(true)}
-              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors"
             >
               <Megaphone className="h-4 w-4" />
               New Announcement
@@ -1332,7 +1245,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
           </div>
 
           {actionSuccess && (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">
+            <div className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${isDark ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-emerald-300 bg-emerald-50 text-emerald-700'}`}>
               <CheckCircle className="h-4 w-4" /> {actionSuccess}
             </div>
           )}
@@ -1350,24 +1263,20 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                 .map(ann => {
                   const color = getAnnounceColor(ann.type);
                   return (
-                    <div key={ann.id} className={`rounded-xl border p-5 transition-opacity ${color.bg} ${!ann.active ? 'opacity-50' : ''}`}>
-                      <div className="flex items-start justify-between gap-3">
+                    <div key={ann.id} className={`rounded-xl border p-5 transition-all ${color.bg} ${!ann.active ? 'opacity-50' : ''}`}>
+                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
                         <div className="flex items-start gap-3 min-w-0">
                           <span className={`mt-0.5 flex-shrink-0 ${color.text}`}>{color.icon}</span>
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex flex-wrap items-center gap-2">
                               <p className={`font-semibold text-sm ${textClass}`}>{ann.title}</p>
                               {ann.pinned && (
-                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
-                                  📌 Pinned
-                                </span>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>📌 Pinned</span>
                               )}
                               {!ann.active && (
-                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-200 text-gray-500'}`}>
-                                  Inactive
-                                </span>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-200 text-gray-500'}`}>Inactive</span>
                               )}
-                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700/60 text-slate-400' : 'bg-white/60 text-gray-500'}`}>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700/60 text-slate-400' : 'bg-gray-200 text-gray-500'}`}>
                                 {ann.targetAll ? 'All users' : `${ann.targetEmails.length} users`}
                               </span>
                             </div>
@@ -1379,20 +1288,20 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                           <button
                             onClick={() => togglePin(ann.id)}
                             title={ann.pinned ? 'Unpin' : 'Pin'}
-                            className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-amber-400' : 'hover:bg-white/60 text-gray-400 hover:text-amber-500'}`}
+                            className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-amber-400' : 'hover:bg-gray-200 text-gray-400 hover:text-amber-500'}`}
                           >
                             {ann.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
                           </button>
                           <button
                             onClick={() => toggleActive(ann.id)}
                             title={ann.active ? 'Deactivate' : 'Activate'}
-                            className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-white/60 text-gray-400'}`}
+                            className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-200 text-gray-400'}`}
                           >
                             {ann.active ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
                           </button>
                           <button
                             onClick={() => deleteAnnouncement(ann.id)}
-                            className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-red-500/20 text-slate-400 hover:text-red-400' : 'hover:bg-red-100/60 text-gray-400 hover:text-red-500'}`}
+                            className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-red-500/20 text-slate-400 hover:text-red-400' : 'hover:bg-red-100 text-gray-400 hover:text-red-500'}`}
                           >
                             <Trash className="h-4 w-4" />
                           </button>
@@ -1404,9 +1313,10 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             </div>
           )}
 
+          {/* Announcement Modal */}
           {showAnnounceModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-              <div className={`w-full max-w-lg rounded-2xl border p-6 shadow-2xl ${panelClass}`}>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+              <div className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border p-6 shadow-2xl ${panelClass}`}>
                 <div className="flex items-center justify-between mb-5">
                   <h3 className={`text-xl font-bold ${textClass}`}>New Announcement</h3>
                   <button onClick={() => setShowAnnounceModal(false)} className={`rounded-lg p-1 ${isDark ? 'hover:bg-slate-800' : 'hover:bg-gray-100'}`}>
@@ -1437,7 +1347,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className={`block text-sm font-medium mb-1.5 ${mutedTextClass}`}>Type</label>
                       <select
@@ -1488,7 +1398,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                               setTargetEmailInput('');
                             }
                           }}
-                          className="rounded-lg bg-emerald-600/20 px-3 py-2 text-sm text-emerald-400 hover:bg-emerald-600/30"
+                          className="rounded-lg bg-emerald-600/20 px-3 py-2 text-sm text-emerald-400 hover:bg-emerald-600/30 transition-colors"
                         >
                           Add
                         </button>
@@ -1506,7 +1416,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                     </div>
                   )}
 
-                  <div className={`flex items-center justify-between rounded-lg border px-4 py-3 ${isDark ? 'border-slate-700 bg-slate-800/40' : 'border-gray-100 bg-gray-50'}`}>
+                  <div className={`flex flex-col sm:flex-row items-center justify-between gap-3 rounded-lg border px-4 py-3 ${isDark ? 'border-slate-700 bg-slate-800/40' : 'border-gray-100 bg-gray-50'}`}>
                     <div>
                       <p className={`text-sm font-medium ${textClass}`}>Pin announcement</p>
                       <p className={`text-xs ${mutedTextClass}`}>Pinned announcements appear first</p>
@@ -1524,14 +1434,14 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                     </button>
                   </div>
 
-                  <div className="flex gap-3 pt-2">
+                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
                     <button
                       onClick={sendAnnouncement}
                       disabled={announceSending || !announceForm.title || !announceForm.message}
-                      className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                      className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors"
                     >
                       {announceSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      Publish to All Users
+                      Publish
                     </button>
                     <button
                       onClick={() => setShowAnnounceModal(false)}
@@ -1548,19 +1458,20 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
       );
     }
 
-    // ─── Overview Tab (default) ─────────────────────────────────────────────
+    // ─── Overview Tab ─────────────────────────────────────────────────────────
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-fade-in">
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
           {[
             { label: 'Total Users', value: stats.totalUsers, color: 'text-blue-400', bg: 'bg-blue-500/20', icon: <Users className="h-5 w-5 text-blue-400" /> },
             { label: 'Active (7d)', value: stats.activeUsers, color: 'text-emerald-400', bg: 'bg-emerald-500/20', icon: <Activity className="h-5 w-5 text-emerald-400" /> },
             { label: 'Total Runs', value: stats.totalRuns, color: 'text-purple-400', bg: 'bg-purple-500/20', icon: <TrendingUp className="h-5 w-5 text-purple-400" /> },
             { label: 'Success Rate', value: `${stats.successRate}%`, color: 'text-yellow-400', bg: 'bg-yellow-500/20', icon: <Target className="h-5 w-5 text-yellow-400" /> },
-            { label: 'With Runs', value: stats.usersWithRuns, color: 'text-cyan-400', bg: 'bg-cyan-500/20', icon: <User className="h-5 w-5 text-cyan-400" /> },
+            { label: 'Errors', value: stats.totalErrors, color: 'text-red-400', bg: 'bg-red-500/20', icon: <AlertTriangle className="h-5 w-5 text-red-400" /> },
+            { label: 'Avg Runs/User', value: stats.averageRunsPerUser, color: 'text-cyan-400', bg: 'bg-cyan-500/20', icon: <BarChart2 className="h-5 w-5 text-cyan-400" /> },
           ].map(card => (
-            <div key={card.label} className={`rounded-xl border p-4 ${panelClass}`}>
+            <div key={card.label} className={`rounded-xl border p-4 ${panelClass} transition-all hover:scale-[1.02]`}>
               <div className="flex items-center gap-3">
                 <div className={`rounded-lg p-2 ${card.bg}`}>{card.icon}</div>
                 <div>
@@ -1585,32 +1496,51 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                 className={`w-full rounded-lg border pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass}`}
               />
             </div>
-            <select
-              value={filterRole}
-              onChange={e => setFilterRole(e.target.value as any)}
-              className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass}`}
-            >
-              <option value="all">All Users</option>
-              <option value="admin">Admin Only</option>
-              <option value="team">Team Members</option>
-              <option value="other">Other</option>
-            </select>
+            <div className="flex gap-2">
+              <select
+                value={filterRole}
+                onChange={e => setFilterRole(e.target.value as any)}
+                className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass}`}
+              >
+                <option value="all">All Users</option>
+                <option value="admin">Admin Only</option>
+                <option value="team">Team Members</option>
+                <option value="other">Other</option>
+              </select>
+              <button
+                onClick={() => setSearchQuery('')}
+                className={`rounded-lg border px-3 py-2 text-sm transition-colors ${isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-gray-200 text-gray-500 hover:bg-gray-100'}`}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Users Table */}
         <div className={`rounded-xl border ${panelClass} overflow-hidden`}>
-          <div className={`border-b px-6 py-4 ${borderClass} flex items-center gap-2`}>
-            <Shield className={`h-5 w-5 ${mutedTextClass}`} />
-            <h3 className={`font-semibold ${textClass}`}>User Statistics</h3>
-            <span className={`rounded-full px-2 py-0.5 text-xs ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-100 text-gray-500'}`}>
-              {filteredUsers.length}
-            </span>
-            {usingFallbackData && (
-              <span className={`rounded-full px-2 py-0.5 text-xs ${isDark ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-700'}`}>
-                Fallback Mode
+          <div className={`border-b px-6 py-4 ${borderClass} flex flex-col sm:flex-row sm:items-center gap-3`}>
+            <div className="flex items-center gap-2">
+              <Shield className={`h-5 w-5 ${mutedTextClass}`} />
+              <h3 className={`font-semibold ${textClass}`}>User Statistics</h3>
+              <span className={`rounded-full px-2 py-0.5 text-xs ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-100 text-gray-500'}`}>
+                {filteredUsers.length}
               </span>
-            )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+              {usingFallbackData && (
+                <span className={`rounded-full px-2 py-0.5 text-xs ${isDark ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-700'}`}>
+                  ⚠️ Fallback Mode
+                </span>
+              )}
+              <button
+                onClick={() => setIsAddingUser(true)}
+                disabled={usingFallbackData}
+                className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${usingFallbackData ? 'opacity-50 cursor-not-allowed bg-slate-700 text-slate-400' : isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
+              >
+                <UserPlus className="h-4 w-4" /> Add User
+              </button>
+            </div>
           </div>
 
           {filteredUsers.length === 0 ? (
@@ -1620,12 +1550,24 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full text-sm">
                 <thead className={isDark ? 'bg-slate-800/50' : 'bg-gray-50'}>
                   <tr>
-                    {['User', 'Joined', 'Last Sign In', 'Total Runs', 'Completed', 'Failed', 'Success Rate', 'Last Active', 'Actions'].map(h => (
-                      <th key={h} className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${mutedTextClass}`}>{h}</th>
-                    ))}
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                      <button onClick={() => handleSort('email')} className="flex items-center gap-1 hover:text-emerald-400 transition-colors">
+                        User <ArrowUpDown className="h-3 w-3" />
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Joined</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Last Sign In</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                      <button onClick={() => handleSort('totalRuns')} className="flex items-center gap-1 hover:text-emerald-400 transition-colors">
+                        Runs <ArrowUpDown className="h-3 w-3" />
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Success Rate</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Last Active</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${borderClass}`}>
@@ -1635,8 +1577,7 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                     const isTeam = TEAM_MEMBERS.includes(user.email);
                     const hasRuns = user.totalRuns > 0;
                     const isFromAuth = user.isFromAuth && isValidUUID(user.id);
-                    const displayName = user.email.split('@')[0];
-                    const cap = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+                    const displayName = user.displayName || user.email.split('@')[0];
 
                     return (
                       <tr key={user.id} className={`transition-colors ${hoverRowClass} ${!hasRuns ? 'opacity-60' : ''}`}>
@@ -1645,8 +1586,8 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                             <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full ${isAdm ? 'bg-amber-500/20 text-amber-400' : isTeam ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-400'}`}>
                               {isAdm ? <Crown className="h-4 w-4" /> : <User className="h-4 w-4" />}
                             </div>
-                            <div>
-                              <p className={`font-medium text-sm ${textClass}`}>{cap}
+                            <div className="min-w-0">
+                              <p className={`font-medium text-sm ${textClass}`}>{displayName}
                                 {!isFromAuth && <span className={`ml-1 text-[9px] ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>(local)</span>}
                               </p>
                               <p className={`text-xs truncate max-w-[160px] ${mutedTextClass}`}>{user.email}</p>
@@ -1658,11 +1599,9 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                             </div>
                           </div>
                         </td>
-                        <td className={`px-4 py-3 text-sm ${mutedTextClass}`}>{formatDateShort(user.created_at)}</td>
-                        <td className={`px-4 py-3 text-sm ${mutedTextClass}`}>{user.last_sign_in_at ? formatDateShort(user.last_sign_in_at) : 'Never'}</td>
-                        <td className={`px-4 py-3 text-sm ${textClass}`}>{user.totalRuns}</td>
-                        <td className="px-4 py-3 text-sm text-emerald-400">{user.completedRuns}</td>
-                        <td className="px-4 py-3 text-sm text-red-400">{user.failedRuns}</td>
+                        <td className={`px-4 py-3 ${mutedTextClass}`}>{formatDateShort(user.created_at)}</td>
+                        <td className={`px-4 py-3 ${mutedTextClass}`}>{user.last_sign_in_at ? formatDateShort(user.last_sign_in_at) : 'Never'}</td>
+                        <td className={`px-4 py-3 ${textClass}`}>{user.totalRuns}</td>
                         <td className="px-4 py-3">
                           {hasRuns ? (
                             <div className="flex items-center gap-2">
@@ -1673,49 +1612,62 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                             </div>
                           ) : <span className={`text-sm ${mutedTextClass}`}>—</span>}
                         </td>
-                        <td className={`px-4 py-3 text-sm ${mutedTextClass}`}>{formatDate(user.lastRun)}</td>
+                        <td className={`px-4 py-3 ${mutedTextClass}`}>{formatDate(user.lastRun)}</td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex items-center justify-end gap-1 flex-wrap">
                             {hasRuns && (
                               <button
                                 onClick={() => openUserActivity(user)}
-                                title="View activity history"
+                                title="View activity"
                                 className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-blue-500/20 text-slate-400 hover:text-blue-400' : 'hover:bg-blue-100 text-gray-400 hover:text-blue-600'}`}
                               >
                                 <History className="h-4 w-4" />
                               </button>
                             )}
-
-                            {!isAdm && isFromAuth ? (
-                              <>
-                                <button onClick={() => { setEditingUser(user); setEditFormData({ email: user.email, role: user.role }); setShowUserModal(true); }} title="Edit" className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-gray-200 text-gray-400 hover:text-gray-700'}`}>
-                                  <Edit2 className="h-4 w-4" />
-                                </button>
-                                <button onClick={() => { setPasswordUser(user); setNewPassword(''); setShowPassword(false); setShowPasswordModal(true); }} title="Change password" className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-blue-500/20 text-slate-400 hover:text-blue-400' : 'hover:bg-blue-100 text-gray-400 hover:text-blue-600'}`}>
-                                  <Key className="h-4 w-4" />
-                                </button>
-                                <button onClick={() => handleSendResetEmail(user.email)} title="Send reset email" className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-amber-500/20 text-slate-400 hover:text-amber-400' : 'hover:bg-amber-100 text-gray-400 hover:text-amber-600'}`}>
-                                  <Send className="h-4 w-4" />
-                                </button>
-                                {showDeleteConfirm === user.id ? (
-                                  <>
-                                    <button onClick={() => handleDeleteUser(user.id)} className="rounded-lg bg-red-500/20 p-1.5 text-red-400 hover:bg-red-500/30" title="Confirm delete">
-                                      <Check className="h-4 w-4" />
-                                    </button>
-                                    <button onClick={() => setShowDeleteConfirm(null)} className={`rounded-lg p-1.5 ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-200 text-gray-400'}`}>
-                                      <X className="h-4 w-4" />
-                                    </button>
-                                  </>
-                                ) : (
-                                  <button onClick={() => setShowDeleteConfirm(user.id)} title="Delete" className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-red-500/20 text-slate-400 hover:text-red-400' : 'hover:bg-red-100 text-gray-400 hover:text-red-600'}`}>
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                )}
-                              </>
-                            ) : isAdm ? (
-                              <span className={`text-xs px-2 ${mutedTextClass}`}>Protected</span>
+                            {(isSuperAdmin || !isAdm) && isFromAuth ? (
+                              <button 
+                                onClick={() => { setEditingUser(user); setEditFormData({ email: user.email, role: user.role }); setShowUserModal(true); }} 
+                                title="Edit" 
+                                className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-gray-200 text-gray-400 hover:text-gray-700'}`}
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </button>
                             ) : (
-                              <span className={`text-xs ${mutedTextClass}`}><Info className="h-4 w-4" /></span>
+                              <span className="text-xs px-1 text-slate-400">Protected</span>
+                            )}
+                            {(isSuperAdmin || !isAdm) && isFromAuth && (
+                              <button 
+                                onClick={() => { setPasswordUser(user); setNewPassword(''); setShowPassword(false); setShowPasswordModal(true); }} 
+                                title="Change password" 
+                                className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-blue-500/20 text-slate-400 hover:text-blue-400' : 'hover:bg-blue-100 text-gray-400 hover:text-blue-600'}`}
+                              >
+                                <Key className="h-4 w-4" />
+                              </button>
+                            )}
+                            {(isSuperAdmin || !isAdm) && isFromAuth && (
+                              <button 
+                                onClick={() => handleSendResetEmail(user.email)} 
+                                title="Send reset email" 
+                                className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-amber-500/20 text-slate-400 hover:text-amber-400' : 'hover:bg-amber-100 text-gray-400 hover:text-amber-600'}`}
+                              >
+                                <Send className="h-4 w-4" />
+                              </button>
+                            )}
+                            {(isSuperAdmin || !isAdm) && isFromAuth && (
+                              showDeleteConfirm === user.id ? (
+                                <>
+                                  <button onClick={() => handleDeleteUser(user.id)} className="rounded-lg bg-red-500/20 p-1.5 text-red-400 hover:bg-red-500/30">
+                                    <Check className="h-4 w-4" />
+                                  </button>
+                                  <button onClick={() => setShowDeleteConfirm(null)} className={`rounded-lg p-1.5 ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-200 text-gray-400'}`}>
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </>
+                              ) : (
+                                <button onClick={() => setShowDeleteConfirm(user.id)} title="Delete" className={`rounded-lg p-1.5 transition-colors ${isDark ? 'hover:bg-red-500/20 text-slate-400 hover:text-red-400' : 'hover:bg-red-100 text-gray-400 hover:text-red-600'}`}>
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )
                             )}
                           </div>
                         </td>
@@ -1739,10 +1691,13 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             {activities.length === 0 ? (
               <div className={`py-8 text-center ${mutedTextClass}`}><p>No recent activity</p></div>
             ) : activities.map(a => (
-              <div key={a.id} className={`flex items-center gap-4 px-6 py-3 ${hoverRowClass}`}>
+              <div key={a.id} className={`flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 px-4 sm:px-6 py-3 ${hoverRowClass}`}>
                 <div className={`flex-shrink-0 w-2 h-2 rounded-full ${a.status === 'completed' ? 'bg-emerald-400' : a.status === 'failed' ? 'bg-red-400' : 'bg-blue-400'}`} />
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm ${textClass}`}><span className="font-medium">{a.user_email}</span> <span className={mutedTextClass}>{a.title}</span></p>
+                  <p className={`text-sm ${textClass}`}>
+                    <span className="font-medium">{a.user_email}</span>
+                    <span className={`${mutedTextClass} ml-1`}>{a.title}</span>
+                  </p>
                   <p className={`text-xs ${mutedTextClass}`}>{a.tool_type} · {a.total_count} items</p>
                 </div>
                 <span className={`text-xs ${mutedTextClass} flex-shrink-0`}>{formatDate(a.created_at)}</span>
@@ -1764,20 +1719,14 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
           <h2 className={`text-2xl font-bold ${textClass}`}>Admin Dashboard</h2>
           <p className={`text-sm ${mutedTextClass}`}>
             Logged in as <span className="font-semibold text-amber-400">{currentUser?.email}</span>
+            {isSuperAdmin && (
+              <span className="ml-2 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-bold text-amber-400">SUPER ADMIN</span>
+            )}
           </p>
-          <div className="mt-1 flex items-center gap-2">
-            <span className={`text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-              ✅ Changes apply to ALL users
-            </span>
-            <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>·</span>
-            <span className={`text-xs ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
-              🔄 Real-time sync enabled
-            </span>
-          </div>
           {usingFallbackData ? (
             <div className={`mt-1 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-2 text-xs ${isDark ? 'text-yellow-400' : 'text-yellow-700'}`}>
               <Info className="h-3 w-3 inline mr-1" />
-              Fallback mode — using localStorage. Some features may not sync across users.
+              Fallback mode — using localStorage. Some features may not sync.
               <button onClick={refreshData} className="ml-2 inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300">
                 <RefreshIcon className="h-3 w-3" /> Retry
               </button>
@@ -1788,17 +1737,10 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
             </p>
           )}
           {actionSuccess && (
-            <p className={`mt-1 text-xs text-emerald-400`}>✅ {actionSuccess}</p>
+            <p className={`mt-1 text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>{actionSuccess}</p>
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => setIsAddingUser(true)}
-            disabled={usingFallbackData}
-            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${usingFallbackData ? 'opacity-50 cursor-not-allowed bg-slate-700 text-slate-400' : isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
-          >
-            <UserPlus className="h-4 w-4" /> Add User
-          </button>
           <button
             onClick={refreshData}
             disabled={isRefreshing}
@@ -1817,7 +1759,6 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         isDark={isDark}
         textClass={textClass}
         mutedTextClass={mutedTextClass}
-        borderClass={borderClass}
       />
 
       {error && !error.includes('Access denied') && (
@@ -1828,11 +1769,10 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
 
       {renderContent()}
 
-      {/* ── Modals ── */}
-
-      {/* Add User */}
+      {/* Modals */}
+      {/* Add User Modal */}
       {isAddingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${panelClass}`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={`text-xl font-bold ${textClass}`}>Add New User</h3>
@@ -1847,8 +1787,8 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
                 <label className={`block text-sm font-medium mb-1 ${mutedTextClass}`}>Password</label>
                 <input type="password" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} placeholder="Min 6 characters" className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass}`} />
               </div>
-              <div className="flex gap-3 pt-2">
-                <button onClick={handleAddUser} disabled={actionLoading} className="flex-1 rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button onClick={handleAddUser} disabled={actionLoading} className="flex-1 rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors">
                   {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Create User'}
                 </button>
                 <button onClick={() => { setIsAddingUser(false); setNewUserEmail(''); setNewUserPassword(''); }} className={`flex-1 rounded-lg border py-2.5 font-semibold ${isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>Cancel</button>
@@ -1858,9 +1798,9 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         </div>
       )}
 
-      {/* Edit User */}
+      {/* Edit User Modal */}
       {showUserModal && editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${panelClass}`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={`text-xl font-bold ${textClass}`}>Edit User</h3>
@@ -1870,13 +1810,28 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
               <div><label className={`block text-sm font-medium mb-1 ${mutedTextClass}`}>Email</label><p className={`text-sm ${textClass}`}>{editingUser.email}</p></div>
               <div>
                 <label className={`block text-sm font-medium mb-1 ${mutedTextClass}`}>Role</label>
-                <select value={editFormData.role || 'user'} onChange={e => setEditFormData({ ...editFormData, role: e.target.value as 'admin' | 'user' })} disabled={ADMIN_EMAILS.includes(editingUser.email)} className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass} ${ADMIN_EMAILS.includes(editingUser.email) ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <select 
+                  value={editFormData.role || 'user'} 
+                  onChange={e => setEditFormData({ ...editFormData, role: e.target.value as 'admin' | 'user' })} 
+                  disabled={ADMIN_EMAILS.includes(editingUser.email) && !isSuperAdmin}
+                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass} ${ADMIN_EMAILS.includes(editingUser.email) && !isSuperAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
-              <div className="flex gap-3 pt-2">
-                <button onClick={() => { setUserStats(prev => prev.map(u => u.id === editingUser.id ? { ...u, role: editFormData.role as 'admin' | 'user' } : u)); setShowUserModal(false); setEditingUser(null); setActionSuccess('User updated.'); }} className="flex-1 rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-500">Save Changes</button>
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button 
+                  onClick={() => {
+                    setUserStats(prev => prev.map(u => u.id === editingUser.id ? { ...u, role: editFormData.role as 'admin' | 'user' } : u));
+                    setShowUserModal(false);
+                    setEditingUser(null);
+                    setActionSuccess('✅ User updated.');
+                  }} 
+                  className="flex-1 rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-500 transition-colors"
+                >
+                  Save Changes
+                </button>
                 <button onClick={() => { setShowUserModal(false); setEditingUser(null); }} className={`flex-1 rounded-lg border py-2.5 font-semibold ${isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>Cancel</button>
               </div>
             </div>
@@ -1884,9 +1839,9 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         </div>
       )}
 
-      {/* Change Password */}
+      {/* Change Password Modal */}
       {showPasswordModal && passwordUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${panelClass}`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={`text-xl font-bold ${textClass}`}>Change Password</h3>
@@ -1897,14 +1852,28 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
               <div>
                 <label className={`block text-sm font-medium mb-1 ${mutedTextClass}`}>New Password</label>
                 <div className="relative">
-                  <input type={showPassword ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 6 characters" className={`w-full rounded-lg border px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass}`} />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded ${isDark ? 'text-slate-400 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}>
+                  <input 
+                    type={showPassword ? 'text' : 'password'} 
+                    value={newPassword} 
+                    onChange={e => setNewPassword(e.target.value)} 
+                    placeholder="Min 6 characters" 
+                    className={`w-full rounded-lg border px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass}`} 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPassword(!showPassword)} 
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded ${isDark ? 'text-slate-400 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                  >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
-              <div className="flex gap-3 pt-2">
-                <button onClick={handleChangePassword} disabled={actionLoading || newPassword.length < 6} className="flex-1 rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button 
+                  onClick={handleChangePassword} 
+                  disabled={actionLoading || newPassword.length < 6} 
+                  className="flex-1 rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors"
+                >
                   {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Update Password'}
                 </button>
                 <button onClick={() => { setShowPasswordModal(false); setPasswordUser(null); setNewPassword(''); }} className={`flex-1 rounded-lg border py-2.5 font-semibold ${isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>Cancel</button>
@@ -1914,14 +1883,5 @@ export default function AdminDashboard({ theme = 'dark' }: { theme?: 'light' | '
         </div>
       )}
     </div>
-  );
-}
-
-// Inline Target icon
-function Target({ className }: { className?: string }) {
-  return (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" />
-    </svg>
   );
 }
