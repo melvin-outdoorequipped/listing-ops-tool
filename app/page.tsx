@@ -1,7 +1,8 @@
-// app/page.tsx - Redesigned with 2026 UI/UX Principles - LARGER FONTS
+// app/page.tsx - With Search Suggestions
 'use client';
 
 import React, { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
+import { motion, AnimatePresence, MotionConfig, LayoutGroup } from 'framer-motion';
 import {
   Bell,
   BellOff,
@@ -48,6 +49,9 @@ import {
   Check,
   AlertTriangle,
   Clock as ClockIcon,
+  Settings,
+  HelpCircle,
+  ExternalLink,
 } from 'lucide-react';
 
 import { MaintenanceProvider } from '../contexts/MaintenanceContext';
@@ -109,6 +113,26 @@ const DESIGN = {
   },
 };
 
+// --- Motion presets (spring-based, reduced-motion aware via MotionConfig) ---
+const SPRING = { type: 'spring', stiffness: 420, damping: 34, mass: 0.7 } as const;
+const SPRING_SOFT = { type: 'spring', stiffness: 260, damping: 28 } as const;
+const EASE = [0.16, 1, 0.3, 1] as const;
+
+const navItemVariants = {
+  hidden: { opacity: 0, x: -8 },
+  visible: (i: number) => ({
+    opacity: 1,
+    x: 0,
+    transition: { delay: i * 0.035, duration: 0.32, ease: EASE },
+  }),
+};
+
+const dropdownVariants = {
+  hidden: { opacity: 0, y: -8, scale: 0.97 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.16, ease: EASE } },
+  exit: { opacity: 0, y: -6, scale: 0.98, transition: { duration: 0.12, ease: EASE } },
+};
+
 // --- Status Badge Component ---
 const StatusBadge = ({ status, theme }: { status: 'completed' | 'pending' | 'ongoing' | 'cancelled'; theme: Theme }) => {
   const isDark = theme === 'dark';
@@ -120,10 +144,15 @@ const StatusBadge = ({ status, theme }: { status: 'completed' | 'pending' | 'ong
   };
   const { label, icon: Icon, bg, text, border } = config[status];
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium ${bg} ${text} ${border}`}>
+    <motion.span
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.2, ease: EASE }}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium ${bg} ${text} ${border}`}
+    >
       <Icon className="h-4 w-4" />
       {label}
-    </span>
+    </motion.span>
   );
 };
 
@@ -158,6 +187,15 @@ interface ToastItem {
   id: number;
   message: string;
   type: ToastType;
+}
+
+interface SearchSuggestion {
+  id: string;
+  label: string;
+  description?: string;
+  icon: ReactNode;
+  type: 'tool' | 'menu' | 'resource';
+  action: () => void;
 }
 
 const STORAGE_THEME_KEY = 'theme';
@@ -240,10 +278,24 @@ const ALL_COMMANDS = [
 ];
 
 const LoadingSpinner = () => (
-  <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
-    <Loader2 className="h-10 w-10 animate-spin text-emerald-400 motion-reduce:animate-none" />
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    transition={{ duration: 0.2 }}
+    className="flex h-64 items-center justify-center"
+    role="status"
+    aria-live="polite"
+  >
+    <motion.span
+      animate={{ rotate: 360 }}
+      transition={{ repeat: Infinity, duration: 0.9, ease: 'linear' }}
+      className="motion-reduce:animate-none"
+    >
+      <Loader2 className="h-10 w-10 text-emerald-400" />
+    </motion.span>
     <span className="sr-only">Loading…</span>
-  </div>
+  </motion.div>
 );
 
 function applyTheme(theme: Theme) {
@@ -289,33 +341,35 @@ export default function HomePage() {
   }, []);
 
   return (
-    <MaintenanceProvider>
-      <MaintenanceGuard theme={theme}>
-        {(user: AppUser, isAdmin: boolean) => {
-          const userName = user.email?.split('@')[0] || 'User';
-          return (
-            <NotificationProvider
-              userId={user.id}
-              currentUserName={userName}
-              currentUserEmail={user.email}
-              currentUserId={user.id}
-            >
-              <HomePageContent
-                theme={theme}
-                user={user}
-                isAdmin={isAdmin}
-                setTheme={setTheme}
-                userName={userName}
-                viewMode={viewMode}
-                setViewMode={setViewMode}
-                isFullscreen={isFullscreen}
-                toggleFullscreen={toggleFullscreen}
-              />
-            </NotificationProvider>
-          );
-        }}
-      </MaintenanceGuard>
-    </MaintenanceProvider>
+    <MotionConfig reducedMotion="user">
+      <MaintenanceProvider>
+        <MaintenanceGuard theme={theme}>
+          {(user: AppUser, isAdmin: boolean) => {
+            const userName = user.email?.split('@')[0] || 'User';
+            return (
+              <NotificationProvider
+                userId={user.id}
+                currentUserName={userName}
+                currentUserEmail={user.email}
+                currentUserId={user.id}
+              >
+                <HomePageContent
+                  theme={theme}
+                  user={user}
+                  isAdmin={isAdmin}
+                  setTheme={setTheme}
+                  userName={userName}
+                  viewMode={viewMode}
+                  setViewMode={setViewMode}
+                  isFullscreen={isFullscreen}
+                  toggleFullscreen={toggleFullscreen}
+                />
+              </NotificationProvider>
+            );
+          }}
+        </MaintenanceGuard>
+      </MaintenanceProvider>
+    </MotionConfig>
   );
 }
 
@@ -370,6 +424,13 @@ function HomePageContent({
   const notifPanelRef = useRef<HTMLDivElement>(null);
   const userPanelRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  
+  // Search suggestions state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchSuggestions, setSearchSuggestions] = useState<SearchSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const {
     notifications,
@@ -407,7 +468,8 @@ function HomePageContent({
     });
   }, []);
 
-  const togglePinTool = useCallback((toolId: string) => {
+  const togglePinTool = useCallback((toolId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     setPinnedTools(prev => {
       const newPinned = prev.includes(toolId)
         ? prev.filter(id => id !== toolId)
@@ -479,6 +541,9 @@ function HomePageContent({
       if (userOpen && userPanelRef.current && !userPanelRef.current.contains(e.target as Node)) {
         setUserOpen(false);
       }
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -486,32 +551,98 @@ function HomePageContent({
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      // If we're typing in an input or textarea, only handle Escape and search navigation
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        if (e.key === 'Escape') {
+          setIsMobileSidebarOpen(false);
+          setCmdOpen(false);
+          setNotifOpen(false);
+          setUserOpen(false);
+          setShowSuggestions(false);
+        }
+        // Handle arrow keys for suggestions
+        if (e.target === searchRef.current && showSuggestions) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setSelectedSuggestionIndex(prev => 
+              prev < searchSuggestions.length - 1 ? prev + 1 : prev
+            );
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
+          } else if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
+            e.preventDefault();
+            const suggestion = searchSuggestions[selectedSuggestionIndex];
+            if (suggestion) {
+              suggestion.action();
+              setSearchQuery('');
+              setShowSuggestions(false);
+              setSelectedSuggestionIndex(-1);
+            }
+          }
+        }
+        return;
+      }
+
+      // Command Palette: ⌘K or Ctrl+K
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setCmdOpen(prev => !prev);
+        return;
       }
+
+      // Close everything with Escape
       if (e.key === 'Escape') {
         setIsMobileSidebarOpen(false);
         setCmdOpen(false);
         setNotifOpen(false);
         setUserOpen(false);
+        return;
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === '1') { e.preventDefault(); navigateTo('Dashboard'); }
-      if ((e.metaKey || e.ctrlKey) && e.key === '2') { e.preventDefault(); navigateTo('Tools'); }
-      if ((e.metaKey || e.ctrlKey) && e.key === '3') { e.preventDefault(); navigateTo('Downloads'); }
+
+      // Focus Search: ⌘S or Ctrl+S
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        setTimeout(() => {
+          if (searchRef.current) {
+            searchRef.current.focus();
+            searchRef.current.select();
+          }
+        }, 50);
+        return;
+      }
+
+      // Navigation shortcuts
+      if ((e.metaKey || e.ctrlKey) && e.key === '1') { 
+        e.preventDefault(); 
+        navigateTo('Dashboard'); 
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '2') { 
+        e.preventDefault(); 
+        navigateTo('Tools'); 
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '3') { 
+        e.preventDefault(); 
+        navigateTo('Downloads'); 
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 't') {
+        e.preventDefault();
+        navigateTo('TaskManagement');
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault();
         toggleFullscreen();
-      }
-      // Focus search with Ctrl+/
-      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
-        e.preventDefault();
-        searchRef.current?.focus();
+        return;
       }
     };
+
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [toggleFullscreen, navigateTo]);
+  }, [toggleFullscreen, navigateTo, showSuggestions, searchSuggestions, selectedSuggestionIndex]);
 
   useEffect(() => {
     if (cmdOpen) {
@@ -566,6 +697,143 @@ function HomePageContent({
 
     setIsMobileSidebarOpen(false);
   };
+
+  // Generate search suggestions
+  const generateSuggestions = useCallback((query: string) => {
+    if (!query.trim()) {
+      setSearchSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const lowerQuery = query.toLowerCase().trim();
+    const suggestions: SearchSuggestion[] = [];
+
+    // Search in tools
+    toolsSubItems.forEach(tool => {
+      if (tool.comingSoon) return;
+      const matches = 
+        tool.name.toLowerCase().includes(lowerQuery) ||
+        tool.description.toLowerCase().includes(lowerQuery) ||
+        tool.tags?.some(tag => tag.toLowerCase().includes(lowerQuery));
+      
+      if (matches) {
+        suggestions.push({
+          id: `tool-${tool.id}`,
+          label: tool.name,
+          description: tool.description,
+          icon: tool.icon,
+          type: 'tool',
+          action: () => handleToolClick(tool.id, tool.comingSoon)
+        });
+      }
+    });
+
+    // Search in menu items
+    mainMenuItems.forEach(item => {
+      if (item.label.toLowerCase().includes(lowerQuery)) {
+        suggestions.push({
+          id: `menu-${item.id}`,
+          label: item.label,
+          description: `Navigate to ${item.label}`,
+          icon: item.icon,
+          type: 'menu',
+          action: () => handleMainMenuClick(item.id)
+        });
+      }
+    });
+
+    // Search in resource items
+    resourceMenuItems.forEach(item => {
+      if (item.label.toLowerCase().includes(lowerQuery)) {
+        suggestions.push({
+          id: `resource-${item.id}`,
+          label: item.label,
+          description: `View ${item.label}`,
+          icon: item.icon,
+          type: 'resource',
+          action: () => handleMainMenuClick(item.id)
+        });
+      }
+    });
+
+    // Limit suggestions to 8 for performance
+    const limited = suggestions.slice(0, 8);
+    setSearchSuggestions(limited);
+    setShowSuggestions(limited.length > 0);
+    setSelectedSuggestionIndex(-1);
+  }, [mainMenuItems, resourceMenuItems]);
+
+  // Handle search input change with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery) {
+        generateSuggestions(searchQuery);
+      } else {
+        setSearchSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, generateSuggestions]);
+
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  }, []);
+
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setShowSuggestions(false);
+      setSelectedSuggestionIndex(-1);
+      return;
+    }
+
+    if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
+      e.preventDefault();
+      const suggestion = searchSuggestions[selectedSuggestionIndex];
+      if (suggestion) {
+        suggestion.action();
+        setSearchQuery('');
+        setShowSuggestions(false);
+        setSelectedSuggestionIndex(-1);
+      }
+      return;
+    }
+
+    // If no suggestion selected and Enter is pressed, do a direct search
+    if (e.key === 'Enter' && selectedSuggestionIndex === -1) {
+      e.preventDefault();
+      const query = e.currentTarget.value;
+      if (query.trim()) {
+        // Try to find a match
+        const matchedTool = toolsSubItems.find(tool => 
+          tool.name.toLowerCase().includes(query.toLowerCase()) ||
+          tool.description.toLowerCase().includes(query.toLowerCase()) ||
+          tool.tags?.some(tag => tag.toLowerCase().includes(query.toLowerCase()))
+        );
+        if (matchedTool) {
+          handleToolClick(matchedTool.id, matchedTool.comingSoon);
+          setSearchQuery('');
+          setShowSuggestions(false);
+          return;
+        }
+
+        // Check menu items
+        const matchedMenu = mainMenuItems.find(item =>
+          item.label.toLowerCase().includes(query.toLowerCase())
+        );
+        if (matchedMenu) {
+          handleMainMenuClick(matchedMenu.id);
+          setSearchQuery('');
+          setShowSuggestions(false);
+          return;
+        }
+
+        showNotification(`No results found for "${query}"`, 'info');
+      }
+    }
+  }, [selectedSuggestionIndex, searchSuggestions, mainMenuItems]);
 
   const filteredCmds = useMemo(
     () =>
@@ -733,21 +1001,33 @@ function HomePageContent({
     if (activeMainMenu === 'Admin') {
       if (!isAdmin) {
         return (
-          <div className={`rounded-2xl border border-red-500/20 bg-red-500/5 p-8 text-center sm:p-10`}>
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: EASE }}
+            className={`rounded-2xl border border-red-500/20 bg-red-500/5 p-8 text-center sm:p-10`}
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.05, ...SPRING_SOFT }}
+              className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10"
+            >
               <Shield className="h-8 w-8 text-red-400" />
-            </div>
+            </motion.div>
             <h3 className={`mt-4 text-xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Access Denied</h3>
             <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
               Only administrators can access the admin panel.
             </p>
-            <button
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => navigateTo('Dashboard')}
               className="mt-5 rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
             >
               Return to Dashboard
-            </button>
-          </div>
+            </motion.button>
+          </motion.div>
         );
       }
       return (
@@ -788,6 +1068,26 @@ function HomePageContent({
     <div className={`relative flex h-screen overflow-hidden transition-colors duration-200 ${
       isDark ? 'bg-[#0A0F1F] text-slate-100' : 'bg-[#F6F8FA] text-gray-900'
     }`}>
+      {/* Ambient background glow */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <motion.div
+          aria-hidden
+          animate={{ x: [0, 40, 0], y: [0, 30, 0] }}
+          transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut' }}
+          className={`absolute -left-24 -top-24 h-[28rem] w-[28rem] rounded-full blur-3xl motion-reduce:hidden ${
+            isDark ? 'bg-emerald-500/[0.06]' : 'bg-emerald-300/[0.12]'
+          }`}
+        />
+        <motion.div
+          aria-hidden
+          animate={{ x: [0, -30, 0], y: [0, -20, 0] }}
+          transition={{ duration: 26, repeat: Infinity, ease: 'easeInOut' }}
+          className={`absolute -bottom-32 -right-24 h-[32rem] w-[32rem] rounded-full blur-3xl motion-reduce:hidden ${
+            isDark ? 'bg-cyan-500/[0.05]' : 'bg-cyan-300/[0.10]'
+          }`}
+        />
+      </div>
+
       {/* Skip link */}
       <a
         href="#main-content"
@@ -798,121 +1098,146 @@ function HomePageContent({
 
       {/* Toast Notifications */}
       <div className="pointer-events-none fixed top-20 right-4 z-[200] flex w-full max-w-sm flex-col gap-2">
-        {toasts.map(toast => (
-          <div
-            key={toast.id}
-            role="status"
-            className={`pointer-events-auto flex items-start gap-2.5 rounded-xl border p-3.5 shadow-lg backdrop-blur-md animate-in slide-in-from-top-2 fade-in duration-300 motion-reduce:animate-none ${
-              toast.type === 'error'
-                ? isDark ? 'border-red-500/20 bg-red-900/80 text-red-100' : 'border-red-500/20 bg-red-50 text-red-900'
-                : toast.type === 'success'
-                ? isDark ? 'border-emerald-500/20 bg-emerald-900/80 text-emerald-100' : 'border-emerald-500/20 bg-emerald-50 text-emerald-900'
-                : isDark ? 'border-blue-500/20 bg-blue-900/80 text-blue-100' : 'border-blue-500/20 bg-blue-50 text-blue-900'
-            }`}
-          >
-            <span className="mt-0.5">{toastIcon(toast.type)}</span>
-            <p className="flex-1 text-sm font-medium leading-snug">{toast.message}</p>
-            <button
-              type="button"
-              onClick={() => dismissToast(toast.id)}
-              className="flex-shrink-0 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current"
-              aria-label="Dismiss notification"
+        <AnimatePresence initial={false}>
+          {toasts.map(toast => (
+            <motion.div
+              key={toast.id}
+              layout
+              initial={{ opacity: 0, y: -16, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 64, scale: 0.95, transition: { duration: 0.2, ease: EASE } }}
+              transition={SPRING_SOFT}
+              role="status"
+              className={`pointer-events-auto flex items-start gap-2.5 rounded-xl border p-3.5 shadow-lg backdrop-blur-md ${
+                toast.type === 'error'
+                  ? isDark ? 'border-red-500/20 bg-red-900/80 text-red-100' : 'border-red-500/20 bg-red-50 text-red-900'
+                  : toast.type === 'success'
+                  ? isDark ? 'border-emerald-500/20 bg-emerald-900/80 text-emerald-100' : 'border-emerald-500/20 bg-emerald-50 text-emerald-900'
+                  : isDark ? 'border-blue-500/20 bg-blue-900/80 text-blue-100' : 'border-blue-500/20 bg-blue-50 text-blue-900'
+              }`}
             >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ))}
+              <span className="mt-0.5">{toastIcon(toast.type)}</span>
+              <p className="flex-1 text-sm font-medium leading-snug">{toast.message}</p>
+              <button
+                type="button"
+                onClick={() => dismissToast(toast.id)}
+                className="flex-shrink-0 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current"
+                aria-label="Dismiss notification"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
 
       {/* Command Palette */}
-      {cmdOpen && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center px-4 pt-[15vh]">
-          <button
-            type="button"
-            onClick={() => setCmdOpen(false)}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150"
-            aria-label="Close command palette"
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Command palette"
-            className={`relative z-10 w-full max-w-2xl overflow-hidden rounded-xl border shadow-xl animate-in fade-in zoom-in-95 duration-150 ${
-              isDark ? 'border-slate-700/60 bg-slate-900' : 'border-gray-200 bg-white'
-            }`}
-          >
-            <div className={`flex items-center gap-3 border-b px-4 py-3 ${
-              isDark ? 'border-slate-700/40' : 'border-gray-200'
-            }`}>
-              <Search className={`h-5 w-5 flex-shrink-0 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
-              <input
-                ref={cmdInputRef}
-                type="text"
-                placeholder="Search commands…"
-                value={cmdQuery}
-                onChange={e => setCmdQuery(e.target.value)}
-                onKeyDown={handleCmdKeyDown}
-                className={`flex-1 bg-transparent text-base outline-none placeholder:text-slate-500 ${
-                  isDark ? 'text-white' : 'text-gray-900'
-                }`}
-                aria-label="Search commands"
-                aria-activedescendant={filteredCmds[cmdHighlight] ? `cmd-${cmdHighlight}` : undefined}
-                role="combobox"
-                aria-expanded="true"
-                aria-controls="cmd-list"
-              />
-              <kbd className={`rounded px-1.5 py-0.5 text-xs font-medium ${
-                isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-100 text-gray-500'
-              }`}>ESC</kbd>
-            </div>
-            <div id="cmd-list" role="listbox" className="max-h-64 overflow-y-auto py-2">
-              {filteredCmds.length === 0 ? (
-                <div className="px-4 py-8 text-center">
-                  <Search className={`mx-auto h-6 w-6 opacity-30 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
-                  <p className={`mt-2 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                    No commands match “{cmdQuery}”.
-                  </p>
-                </div>
-              ) : (
-                filteredCmds.map((cmd, i) => (
-                  <button
-                    key={cmd.label}
-                    id={`cmd-${i}`}
-                    role="option"
-                    aria-selected={cmdHighlight === i}
-                    type="button"
-                    onMouseEnter={() => setCmdHighlight(i)}
-                    onClick={() => runCommand(cmd)}
-                    className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors ${
-                      cmdHighlight === i
-                        ? isDark ? 'bg-slate-800/80 text-white' : 'bg-gray-100 text-gray-900'
-                        : isDark ? 'text-slate-200' : 'text-gray-700'
-                    }`}
+      <AnimatePresence>
+        {cmdOpen && (
+          <div className="fixed inset-0 z-[100] flex items-start justify-center px-4 pt-[15vh]">
+            <motion.button
+              type="button"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              onClick={() => setCmdOpen(false)}
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              aria-label="Close command palette"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: -12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.97, y: -8, transition: { duration: 0.12 } }}
+              transition={SPRING}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Command palette"
+              className={`relative z-10 w-full max-w-2xl overflow-hidden rounded-xl border shadow-xl ${
+                isDark ? 'border-slate-700/60 bg-slate-900' : 'border-gray-200 bg-white'
+              }`}
+            >
+              <div className={`flex items-center gap-3 border-b px-4 py-3 ${
+                isDark ? 'border-slate-700/40' : 'border-gray-200'
+              }`}>
+                <Search className={`h-5 w-5 flex-shrink-0 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
+                <input
+                  ref={cmdInputRef}
+                  type="text"
+                  placeholder="Search commands…"
+                  value={cmdQuery}
+                  onChange={e => setCmdQuery(e.target.value)}
+                  onKeyDown={handleCmdKeyDown}
+                  className={`flex-1 bg-transparent text-base outline-none placeholder:text-slate-500 ${
+                    isDark ? 'text-white' : 'text-gray-900'
+                  }`}
+                  aria-label="Search commands"
+                  aria-activedescendant={filteredCmds[cmdHighlight] ? `cmd-${cmdHighlight}` : undefined}
+                  role="combobox"
+                  aria-expanded="true"
+                  aria-controls="cmd-list"
+                />
+                <kbd className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+                  isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-100 text-gray-500'
+                }`}>ESC</kbd>
+              </div>
+              <div id="cmd-list" role="listbox" className="max-h-64 overflow-y-auto py-2">
+                {filteredCmds.length === 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="px-4 py-8 text-center"
                   >
-                    <Command className="h-4 w-4 flex-shrink-0 opacity-40" />
-                    {cmd.label}
-                    {cmd.adminOnly && (
-                      <span className="ml-auto rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
-                        ADMIN
-                      </span>
-                    )}
-                  </button>
-                ))
-              )}
-            </div>
-            <div className={`flex items-center justify-between border-t px-4 py-2 ${isDark ? 'border-slate-700/40' : 'border-gray-100'}`}>
-              <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                <kbd className="rounded bg-slate-800 px-1 py-0.5 text-xs font-medium text-slate-400">↑↓</kbd> navigate
-                {'  '}
-                <kbd className="rounded bg-slate-800 px-1 py-0.5 text-xs font-medium text-slate-400">↵</kbd> select
-              </p>
-              <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                Press <kbd className="rounded px-1 py-0.5 text-xs font-medium bg-slate-800 text-slate-400">⌘K</kbd> to toggle
-              </p>
-            </div>
+                    <Search className={`mx-auto h-6 w-6 opacity-30 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
+                    <p className={`mt-2 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                      No commands match “{cmdQuery}”.
+                    </p>
+                  </motion.div>
+                ) : (
+                  filteredCmds.map((cmd, i) => (
+                    <motion.button
+                      key={cmd.label}
+                      id={`cmd-${i}`}
+                      role="option"
+                      aria-selected={cmdHighlight === i}
+                      type="button"
+                      custom={i}
+                      variants={navItemVariants}
+                      initial="hidden"
+                      animate="visible"
+                      onMouseEnter={() => setCmdHighlight(i)}
+                      onClick={() => runCommand(cmd)}
+                      className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors ${
+                        cmdHighlight === i
+                          ? isDark ? 'bg-slate-800/80 text-white' : 'bg-gray-100 text-gray-900'
+                          : isDark ? 'text-slate-200' : 'text-gray-700'
+                      }`}
+                    >
+                      <Command className="h-4 w-4 flex-shrink-0 opacity-40" />
+                      {cmd.label}
+                      {cmd.adminOnly && (
+                        <span className="ml-auto rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+                          ADMIN
+                        </span>
+                      )}
+                    </motion.button>
+                  ))
+                )}
+              </div>
+              <div className={`flex items-center justify-between border-t px-4 py-2 ${isDark ? 'border-slate-700/40' : 'border-gray-100'}`}>
+                <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                  <kbd className="rounded bg-slate-800 px-1 py-0.5 text-xs font-medium text-slate-400">↑↓</kbd> navigate
+                  {'  '}
+                  <kbd className="rounded bg-slate-800 px-1 py-0.5 text-xs font-medium text-slate-400">↵</kbd> select
+                </p>
+                <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                  Press <kbd className="rounded px-1 py-0.5 text-xs font-medium bg-slate-800 text-slate-400">⌘K</kbd> to toggle
+                </p>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* Mobile Overlay */}
       <button
@@ -925,7 +1250,7 @@ function HomePageContent({
         tabIndex={-1}
       />
 
-      {/* Sidebar - Floating, minimal, centered */}
+      {/* Sidebar */}
       <aside
         className={`fixed left-6 top-1/2 z-40 flex -translate-y-1/2 flex-col rounded-xl border shadow-lg backdrop-blur-xl
           transition-all duration-300 ease-out motion-reduce:transition-none
@@ -935,7 +1260,7 @@ function HomePageContent({
           w-80 max-h-[90vh]
           ${isDark ? 'border-slate-700/40 bg-[#141B2D]/95' : 'border-gray-200/60 bg-white/95'}`}
       >
-        {/* Sidebar Header - Simplified */}
+        {/* Sidebar Header */}
         <div className={`border-b px-4 py-3.5 ${isDark ? 'border-slate-700/40' : 'border-gray-200/60'}`}>
           <div className="flex items-center justify-between gap-2">
             <div className={`flex items-center gap-3 overflow-hidden transition-[width,opacity] duration-300 ease-out ${
@@ -957,7 +1282,9 @@ function HomePageContent({
             </div>
 
             <div className="flex flex-shrink-0 items-center gap-0.5">
-              <button
+              <motion.button
+                whileHover={{ scale: 1.06 }}
+                whileTap={{ scale: 0.92 }}
                 type="button"
                 onClick={toggleSidebar}
                 className={`hidden rounded-md p-1.5 transition-colors lg:block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
@@ -965,9 +1292,22 @@ function HomePageContent({
                 }`}
                 aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               >
-                {isSidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
-              </button>
-              <button
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.span
+                    key={isSidebarCollapsed ? 'open' : 'close'}
+                    initial={{ rotate: -90, opacity: 0 }}
+                    animate={{ rotate: 0, opacity: 1 }}
+                    exit={{ rotate: 90, opacity: 0 }}
+                    transition={{ duration: 0.18, ease: EASE }}
+                    className="block"
+                  >
+                    {isSidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+                  </motion.span>
+                </AnimatePresence>
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.06 }}
+                whileTap={{ scale: 0.92 }}
                 type="button"
                 onClick={() => setIsMobileSidebarOpen(false)}
                 className={`rounded-md p-1.5 transition-colors lg:hidden focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
@@ -976,7 +1316,7 @@ function HomePageContent({
                 aria-label="Close sidebar"
               >
                 <X className="h-5 w-5" />
-              </button>
+              </motion.button>
             </div>
           </div>
         </div>
@@ -984,7 +1324,9 @@ function HomePageContent({
         {/* Quick search */}
         {!isSidebarCollapsed && (
           <div className="px-4 pt-3">
-            <button
+            <motion.button
+              whileHover={{ scale: 1.015 }}
+              whileTap={{ scale: 0.985 }}
               type="button"
               onClick={() => setCmdOpen(true)}
               className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
@@ -998,7 +1340,7 @@ function HomePageContent({
               <kbd className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                 isDark ? 'bg-slate-800 text-slate-500' : 'bg-white text-gray-400'
               }`}>⌘K</kbd>
-            </button>
+            </motion.button>
           </div>
         )}
 
@@ -1008,31 +1350,257 @@ function HomePageContent({
             {isSidebarCollapsed ? <span className="mx-auto block h-0.5 w-0.5 rounded-full bg-slate-600" /> : "Menu"}
           </div>
 
-          <div className="space-y-0.5">
-            {mainMenuItems.map(item => {
-              const isActive = activeMainMenu === item.id || (item.isExpandable && activeMainMenu === 'Tools');
-              return (
-                <React.Fragment key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (item.adminOnly && !isAdmin) {
-                        showNotification('Access denied. Only admins can access the admin panel.', 'error');
-                        return;
-                      }
-                      if (item.isExpandable) {
-                        toggleToolsExpanded();
-                        if (activeMainMenu !== 'Tools') {
-                          navigateTo('Tools');
+          <LayoutGroup id="main-nav">
+            <div className="space-y-0.5">
+              {mainMenuItems.map((item, idx) => {
+                const isActive = activeMainMenu === item.id || (item.isExpandable && activeMainMenu === 'Tools');
+                return (
+                  <React.Fragment key={item.id}>
+                    <motion.button
+                      custom={idx}
+                      variants={navItemVariants}
+                      initial="hidden"
+                      animate="visible"
+                      whileHover={{ x: 2 }}
+                      whileTap={{ scale: 0.98 }}
+                      type="button"
+                      onClick={() => {
+                        if (item.adminOnly && !isAdmin) {
+                          showNotification('Access denied. Only admins can access the admin panel.', 'error');
+                          return;
                         }
-                      } else {
-                        handleMainMenuClick(item.id);
-                      }
-                    }}
+                        if (item.isExpandable) {
+                          toggleToolsExpanded();
+                          if (activeMainMenu !== 'Tools') {
+                            navigateTo('Tools');
+                          }
+                        } else {
+                          handleMainMenuClick(item.id);
+                        }
+                      }}
+                      title={isSidebarCollapsed ? item.label : undefined}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
+                        isActive
+                          ? isDark
+                            ? 'text-emerald-400'
+                            : 'text-emerald-700'
+                          : isDark
+                            ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white'
+                            : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                      }`}
+                    >
+                      {isActive && (
+                        <motion.span
+                          layoutId="nav-active-bg"
+                          transition={SPRING}
+                          className={`absolute inset-0 rounded-lg ${isDark ? 'bg-emerald-500/10' : 'bg-emerald-50'}`}
+                        />
+                      )}
+                      <span className={`relative z-10 flex-shrink-0 transition-colors ${
+                        isActive ? 'text-emerald-400' : 'group-hover:text-emerald-400'
+                      }`}>
+                        {item.icon}
+                      </span>
+                      <span className={`relative z-10 ${isSidebarCollapsed ? 'hidden' : 'block'} min-w-0 flex-1 truncate font-medium`}>
+                        {item.label}
+                      </span>
+                      {!isSidebarCollapsed && item.shortcut && (
+                        <kbd className={`relative z-10 hidden rounded px-1.5 py-0.5 text-[10px] font-medium lg:block ${
+                          isDark ? 'bg-slate-800 text-slate-500' : 'bg-gray-100 text-gray-400'
+                        }`}>{item.shortcut}</kbd>
+                      )}
+                      {item.badge !== undefined && item.badge > 0 && !isSidebarCollapsed && (
+                        <motion.span
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={SPRING}
+                          className="relative z-10 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white"
+                        >
+                          {item.badge > 9 ? '9+' : item.badge}
+                        </motion.span>
+                      )}
+                      {item.isExpandable && !isSidebarCollapsed && (
+                        <motion.span
+                          animate={{ rotate: isToolsExpanded ? 180 : 0 }}
+                          transition={{ duration: 0.2, ease: EASE }}
+                          className="relative z-10 ml-0.5"
+                        >
+                          <ChevronDown className="h-4 w-4 text-slate-400" />
+                        </motion.span>
+                      )}
+                      {isActive && !isSidebarCollapsed && (
+                        <span className="relative z-10 ml-0.5 h-5 w-0.5 rounded-full bg-emerald-400" />
+                      )}
+                      {item.adminOnly && activeMainMenu !== item.id && !isSidebarCollapsed && (
+                        <span className="relative z-10 ml-0.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+                          ADMIN
+                        </span>
+                      )}
+                      {isSidebarCollapsed && (
+                        <span className={`pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm opacity-0 shadow-lg transition-opacity group-hover:opacity-100 ${
+                          isDark ? 'border-slate-700 bg-slate-900 text-white' : 'border-gray-200 bg-white text-gray-900'
+                        }`}>
+                          {item.label}
+                        </span>
+                      )}
+                    </motion.button>
+
+                    {/* Tools Dropdown */}
+                    <AnimatePresence initial={false}>
+                      {item.isExpandable && isToolsExpanded && !isSidebarCollapsed && (
+                        <motion.div
+                          key="tools-dropdown"
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.22, ease: EASE }}
+                          className="overflow-hidden"
+                        >
+                          <div className={`ml-7 space-y-0.5 border-l-2 pl-3 ${
+                            isDark ? 'border-emerald-500/20' : 'border-emerald-500/30'
+                          }`}>
+                            {sortedTools.map((tool, tIdx) => {
+                              const accent = ACCENT_STYLES[tool.accent];
+                              const toolActive = activeTool === tool.id && activeMainMenu === 'Tools';
+                              const isPinned = pinnedTools.includes(tool.id);
+                              return (
+                                <motion.button
+                                  key={tool.id}
+                                  custom={tIdx}
+                                  variants={navItemVariants}
+                                  initial="hidden"
+                                  animate="visible"
+                                  whileHover={{ x: 2 }}
+                                  whileTap={{ scale: 0.98 }}
+                                  type="button"
+                                  onClick={() => handleToolClick(tool.id, tool.comingSoon)}
+                                  disabled={tool.comingSoon}
+                                  className={`group relative w-full rounded-lg px-3 py-2 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
+                                    tool.comingSoon ? 'cursor-not-allowed opacity-40'
+                                    : toolActive ? `${accent.bg} ${accent.text}`
+                                    : isDark ? 'hover:bg-slate-800/50' : 'hover:bg-gray-100'
+                                  }`}
+                                >
+                                  <div className="flex min-w-0 items-center gap-3">
+                                    <span className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md transition-colors ${
+                                      toolActive
+                                        ? isDark ? accent.iconBgDark : accent.iconBgLight
+                                        : isDark ? 'text-slate-500' : 'text-gray-400'
+                                    }`}>
+                                      {tool.icon}
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                      <span className={`block truncate text-sm font-medium transition-colors ${
+                                        toolActive
+                                          ? accent.text
+                                          : isDark ? 'text-slate-300' : 'text-gray-700'
+                                      }`}>
+                                        {tool.name}
+                                      </span>
+                                    </div>
+                                    <motion.div
+                                      whileHover={{ scale: 1.15 }}
+                                      whileTap={{ scale: 0.9 }}
+                                      onClick={(e) => togglePinTool(tool.id, e)}
+                                      className={`rounded p-0.5 transition-colors cursor-pointer ${
+                                        isPinned
+                                          ? isDark ? 'text-emerald-400' : 'text-emerald-600'
+                                          : isDark ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600'
+                                      }`}
+                                      role="button"
+                                      tabIndex={0}
+                                      aria-label={isPinned ? 'Unpin tool' : 'Pin tool'}
+                                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePinTool(tool.id, e as any); } }}
+                                    >
+                                      {isPinned ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
+                                    </motion.div>
+                                    {toolActive && (
+                                      <motion.span
+                                        layoutId="tool-active-dot"
+                                        transition={SPRING}
+                                        className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${accent.dot}`}
+                                      />
+                                    )}
+                                    {tool.comingSoon && (
+                                      <span className="ml-auto rounded bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-medium text-orange-400">Soon</span>
+                                    )}
+                                  </div>
+                                </motion.button>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Collapsed tools icons */}
+                    {item.isExpandable && isSidebarCollapsed && (
+                      <div className="my-1 hidden space-y-0.5 lg:block">
+                        {sortedTools.slice(0, 4).map(tool => {
+                          const accent = ACCENT_STYLES[tool.accent];
+                          const toolActive = activeTool === tool.id && activeMainMenu === 'Tools';
+                          return (
+                            <motion.button
+                              whileHover={{ scale: 1.08 }}
+                              whileTap={{ scale: 0.94 }}
+                              key={tool.id}
+                              type="button"
+                              onClick={() => handleToolClick(tool.id, tool.comingSoon)}
+                              disabled={tool.comingSoon}
+                              title={tool.comingSoon ? `${tool.name} (Coming Soon)` : tool.name}
+                              className={`group relative mx-auto flex h-8 w-8 items-center justify-center rounded-md border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
+                                toolActive
+                                  ? `${accent.border} ${accent.bg} ${accent.text}`
+                                  : isDark ? 'border-transparent text-slate-400 hover:bg-slate-800/50 hover:text-white'
+                                  : 'border-transparent text-gray-400 hover:bg-gray-100 hover:text-gray-900'
+                              } ${tool.comingSoon ? 'cursor-not-allowed opacity-40' : ''}`}
+                            >
+                              {tool.icon}
+                              <span className={`pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm opacity-0 shadow-lg transition-opacity group-hover:opacity-100 ${
+                                isDark ? 'border-slate-700 bg-slate-900 text-white' : 'border-gray-200 bg-white text-gray-900'
+                              }`}>
+                                {tool.name}{tool.comingSoon ? ' (Coming Soon)' : ''}
+                              </span>
+                            </motion.button>
+                          );
+                        })}
+                        {sortedTools.length > 4 && (
+                          <button
+                            type="button"
+                            onClick={() => { setIsSidebarCollapsed(false); }}
+                            className="mx-auto flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium text-slate-500 hover:bg-slate-800/50 hover:text-white"
+                          >
+                            +{sortedTools.length - 4}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            <div className="mt-4">
+              <div className={`mb-3 px-2 text-[10px] font-medium uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                {isSidebarCollapsed ? <span className="mx-auto block h-0.5 w-0.5 rounded-full bg-slate-600" /> : "Resources"}
+              </div>
+              <div className="space-y-0.5">
+                {resourceMenuItems.map((item, idx) => (
+                  <motion.button
+                    key={item.id}
+                    custom={idx}
+                    variants={navItemVariants}
+                    initial="hidden"
+                    animate="visible"
+                    whileHover={{ x: 2 }}
+                    whileTap={{ scale: 0.98 }}
+                    type="button"
+                    onClick={() => handleMainMenuClick(item.id)}
                     title={isSidebarCollapsed ? item.label : undefined}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
-                      isActive
+                    aria-current={activeMainMenu === item.id ? 'page' : undefined}
+                    className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
+                      activeMainMenu === item.id
                         ? isDark
                           ? 'bg-emerald-500/10 text-emerald-400'
                           : 'bg-emerald-50 text-emerald-700'
@@ -1042,41 +1610,15 @@ function HomePageContent({
                     }`}
                   >
                     <span className={`flex-shrink-0 transition-colors ${
-                      isActive
-                        ? 'text-emerald-400'
-                        : 'group-hover:text-emerald-400'
+                      activeMainMenu === item.id ? 'text-emerald-400' : 'group-hover:text-emerald-400'
                     }`}>
                       {item.icon}
                     </span>
                     <span className={`${isSidebarCollapsed ? 'hidden' : 'block'} min-w-0 flex-1 truncate font-medium`}>
                       {item.label}
                     </span>
-                    {!isSidebarCollapsed && item.shortcut && (
-                      <kbd className={`hidden rounded px-1.5 py-0.5 text-[10px] font-medium lg:block ${
-                        isDark ? 'bg-slate-800 text-slate-500' : 'bg-gray-100 text-gray-400'
-                      }`}>{item.shortcut}</kbd>
-                    )}
-                    {item.badge !== undefined && item.badge > 0 && !isSidebarCollapsed && (
-                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
-                        {item.badge > 9 ? '9+' : item.badge}
-                      </span>
-                    )}
-                    {item.isExpandable && !isSidebarCollapsed && (
-                      <span className="ml-0.5 transition-transform duration-150">
-                        {isToolsExpanded ? (
-                          <ChevronUp className="h-4 w-4 text-slate-400" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 text-slate-400" />
-                        )}
-                      </span>
-                    )}
-                    {isActive && !isSidebarCollapsed && (
+                    {activeMainMenu === item.id && !isSidebarCollapsed && (
                       <span className="ml-0.5 h-5 w-0.5 rounded-full bg-emerald-400" />
-                    )}
-                    {item.adminOnly && activeMainMenu !== item.id && !isSidebarCollapsed && (
-                      <span className="ml-0.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
-                        ADMIN
-                      </span>
                     )}
                     {isSidebarCollapsed && (
                       <span className={`pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm opacity-0 shadow-lg transition-opacity group-hover:opacity-100 ${
@@ -1085,163 +1627,14 @@ function HomePageContent({
                         {item.label}
                       </span>
                     )}
-                  </button>
-
-                  {/* Tools Dropdown */}
-                  {item.isExpandable && isToolsExpanded && !isSidebarCollapsed && (
-                    <div className={`ml-7 space-y-0.5 border-l-2 pl-3 ${
-                      isDark ? 'border-emerald-500/20' : 'border-emerald-500/30'
-                    }`}>
-                      {sortedTools.map(tool => {
-                        const accent = ACCENT_STYLES[tool.accent];
-                        const toolActive = activeTool === tool.id && activeMainMenu === 'Tools';
-                        const isPinned = pinnedTools.includes(tool.id);
-                        return (
-                          <button
-                            key={tool.id}
-                            type="button"
-                            onClick={() => handleToolClick(tool.id, tool.comingSoon)}
-                            disabled={tool.comingSoon}
-                            className={`group w-full rounded-lg px-3 py-2 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
-                              tool.comingSoon ? 'cursor-not-allowed opacity-40'
-                              : toolActive ? `${accent.bg} ${accent.text}`
-                              : isDark ? 'hover:bg-slate-800/50' : 'hover:bg-gray-100'
-                            }`}
-                          >
-                            <div className="flex min-w-0 items-center gap-3">
-                              <span className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md transition-colors ${
-                                toolActive
-                                  ? isDark ? accent.iconBgDark : accent.iconBgLight
-                                  : isDark ? 'text-slate-500' : 'text-gray-400'
-                              }`}>
-                                {tool.icon}
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <span className={`block truncate text-sm font-medium transition-colors ${
-                                  toolActive
-                                    ? accent.text
-                                    : isDark ? 'text-slate-300' : 'text-gray-700'
-                                }`}>
-                                  {tool.name}
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); togglePinTool(tool.id); }}
-                                className={`rounded p-0.5 transition-colors ${
-                                  isPinned
-                                    ? isDark ? 'text-emerald-400' : 'text-emerald-600'
-                                    : isDark ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600'
-                                }`}
-                                aria-label={isPinned ? 'Unpin tool' : 'Pin tool'}
-                              >
-                                {isPinned ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
-                              </button>
-                              {toolActive && (
-                                <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${accent.dot}`} />
-                              )}
-                              {tool.comingSoon && (
-                                <span className="ml-auto rounded bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-medium text-orange-400">Soon</span>
-                              )}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Collapsed tools icons */}
-                  {item.isExpandable && isSidebarCollapsed && (
-                    <div className="my-1 hidden space-y-0.5 lg:block">
-                      {sortedTools.slice(0, 4).map(tool => {
-                        const accent = ACCENT_STYLES[tool.accent];
-                        const toolActive = activeTool === tool.id && activeMainMenu === 'Tools';
-                        return (
-                          <button
-                            key={tool.id}
-                            type="button"
-                            onClick={() => handleToolClick(tool.id, tool.comingSoon)}
-                            disabled={tool.comingSoon}
-                            title={tool.comingSoon ? `${tool.name} (Coming Soon)` : tool.name}
-                            className={`group relative mx-auto flex h-8 w-8 items-center justify-center rounded-md border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
-                              toolActive
-                                ? `${accent.border} ${accent.bg} ${accent.text}`
-                                : isDark ? 'border-transparent text-slate-400 hover:bg-slate-800/50 hover:text-white'
-                                : 'border-transparent text-gray-400 hover:bg-gray-100 hover:text-gray-900'
-                            } ${tool.comingSoon ? 'cursor-not-allowed opacity-40' : ''}`}
-                          >
-                            {tool.icon}
-                            <span className={`pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm opacity-0 shadow-lg transition-opacity group-hover:opacity-100 ${
-                              isDark ? 'border-slate-700 bg-slate-900 text-white' : 'border-gray-200 bg-white text-gray-900'
-                            }`}>
-                              {tool.name}{tool.comingSoon ? ' (Coming Soon)' : ''}
-                            </span>
-                          </button>
-                        );
-                      })}
-                      {sortedTools.length > 4 && (
-                        <button
-                          type="button"
-                          onClick={() => { setIsSidebarCollapsed(false); }}
-                          className="mx-auto flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium text-slate-500 hover:bg-slate-800/50 hover:text-white"
-                        >
-                          +{sortedTools.length - 4}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </div>
-
-          <div className="mt-4">
-            <div className={`mb-3 px-2 text-[10px] font-medium uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-              {isSidebarCollapsed ? <span className="mx-auto block h-0.5 w-0.5 rounded-full bg-slate-600" /> : "Resources"}
+                  </motion.button>
+                ))}
+              </div>
             </div>
-            <div className="space-y-0.5">
-              {resourceMenuItems.map(item => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleMainMenuClick(item.id)}
-                  title={isSidebarCollapsed ? item.label : undefined}
-                  aria-current={activeMainMenu === item.id ? 'page' : undefined}
-                  className={`group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
-                    activeMainMenu === item.id
-                      ? isDark
-                        ? 'bg-emerald-500/10 text-emerald-400'
-                        : 'bg-emerald-50 text-emerald-700'
-                      : isDark
-                        ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white'
-                        : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-                  }`}
-                >
-                  <span className={`flex-shrink-0 transition-colors ${
-                    activeMainMenu === item.id ? 'text-emerald-400' : 'group-hover:text-emerald-400'
-                  }`}>
-                    {item.icon}
-                  </span>
-                  <span className={`${isSidebarCollapsed ? 'hidden' : 'block'} min-w-0 flex-1 truncate font-medium`}>
-                    {item.label}
-                  </span>
-                  {activeMainMenu === item.id && !isSidebarCollapsed && (
-                    <span className="ml-0.5 h-5 w-0.5 rounded-full bg-emerald-400" />
-                  )}
-                  {isSidebarCollapsed && (
-                    <span className={`pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm opacity-0 shadow-lg transition-opacity group-hover:opacity-100 ${
-                      isDark ? 'border-slate-700 bg-slate-900 text-white' : 'border-gray-200 bg-white text-gray-900'
-                    }`}>
-                      {item.label}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
+          </LayoutGroup>
         </nav>
 
-        {/* Sidebar Footer - Minimal */}
+        {/* Sidebar Footer */}
         <div className={`border-t px-4 py-3 ${isDark ? 'border-slate-700/40' : 'border-gray-200/60'}`}>
           {!isSidebarCollapsed ? (
             <div className="flex items-center gap-2">
@@ -1270,7 +1663,7 @@ function HomePageContent({
         ref={mainContentRef}
         className="flex h-full min-w-0 flex-1 flex-col"
       >
-        {/* Top Header - Clean, minimal, with search */}
+        {/* Top Header */}
         <header className={`sticky top-0 z-20 border-b px-4 py-3 shadow-sm backdrop-blur-md sm:px-6 lg:px-8 ${
           isDark ? 'border-slate-700/40 bg-[#0A0F1F]/90' : 'border-gray-200/60 bg-white/90'
         }`}>
@@ -1288,41 +1681,153 @@ function HomePageContent({
               </button>
 
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className={`hidden sm:inline-flex ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                    {pageMeta.icon}
-                  </span>
-                  <h2 className={`truncate text-xl font-semibold sm:text-2xl ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    {pageMeta.title}
-                  </h2>
-                  <span className={`hidden text-sm sm:inline ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                    {pageMeta.breadcrumb}
-                  </span>
-                </div>
-                <p className={`hidden truncate text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} sm:block`}>
-                  {pageMeta.description}
-                </p>
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={`${activeMainMenu}-${activeTool}`}
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 6 }}
+                    transition={{ duration: 0.18, ease: EASE }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`hidden sm:inline-flex ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                        {pageMeta.icon}
+                      </span>
+                      <h2 className={`truncate text-xl font-semibold sm:text-2xl ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {pageMeta.title}
+                      </h2>
+                      <span className={`hidden text-sm sm:inline ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                        {pageMeta.breadcrumb}
+                      </span>
+                    </div>
+                    <p className={`hidden truncate text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} sm:block`}>
+                      {pageMeta.description}
+                    </p>
+                  </motion.div>
+                </AnimatePresence>
               </div>
             </div>
 
             <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
-              {/* Search Bar - Always visible */}
-              <div className={`hidden items-center rounded-lg border px-3 py-2 md:flex ${
-                isDark ? 'border-slate-700/40 bg-slate-800/30' : 'border-gray-200 bg-gray-50/50'
-              }`}>
-                <Search className={`h-4 w-4 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
-                <input
-                  ref={searchRef}
-                  type="text"
-                  placeholder="Search tools, tasks..."
-                  className={`w-48 bg-transparent px-2 text-sm outline-none placeholder:text-slate-500 lg:w-64 ${
-                    isDark ? 'text-white' : 'text-gray-900'
-                  }`}
-                  aria-label="Global search"
-                />
-                <kbd className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                  isDark ? 'bg-slate-800 text-slate-500' : 'bg-white text-gray-400'
-                }`}>⌘/</kbd>
+              {/* Search Bar with Suggestions */}
+              <div ref={searchContainerRef} className="relative hidden md:block">
+                <div className={`flex items-center rounded-lg border px-3 py-2 ${
+                  isDark ? 'border-slate-700/40 bg-slate-800/30' : 'border-gray-200 bg-gray-50/50'
+                }`}>
+                  <Search className={`h-4 w-4 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
+                  <input
+                    ref={searchRef}
+                    type="text"
+                    placeholder="Search tools, tasks..."
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    onKeyDown={handleSearchKeyDown}
+                    onFocus={() => {
+                      if (searchQuery.trim()) {
+                        generateSuggestions(searchQuery);
+                      }
+                    }}
+                    className={`w-48 bg-transparent px-2 text-sm outline-none placeholder:text-slate-500 lg:w-64 ${
+                      isDark ? 'text-white' : 'text-gray-900'
+                    }`}
+                    aria-label="Global search"
+                    aria-expanded={showSuggestions}
+                    aria-controls="search-suggestions"
+                    role="combobox"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setShowSuggestions(false);
+                        searchRef.current?.focus();
+                      }}
+                      className={`rounded p-0.5 transition-colors ${
+                        isDark ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                      aria-label="Clear search"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <kbd className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                    isDark ? 'bg-slate-800 text-slate-500' : 'bg-white text-gray-400'
+                  }`}>⌘S</kbd>
+                </div>
+
+                {/* Search Suggestions Dropdown */}
+                <AnimatePresence>
+                  {showSuggestions && searchSuggestions.length > 0 && (
+                    <motion.div
+                      id="search-suggestions"
+                      initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                      transition={{ duration: 0.15, ease: EASE }}
+                      className={`absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-lg border shadow-lg ${
+                        isDark ? 'border-slate-700/40 bg-slate-900' : 'border-gray-200 bg-white'
+                      }`}
+                      role="listbox"
+                    >
+                      {searchSuggestions.map((suggestion, index) => (
+                        <motion.button
+                          key={suggestion.id}
+                          custom={index}
+                          variants={navItemVariants}
+                          initial="hidden"
+                          animate="visible"
+                          className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors ${
+                            selectedSuggestionIndex === index
+                              ? isDark ? 'bg-slate-800/80' : 'bg-gray-100'
+                              : isDark ? 'hover:bg-slate-800/50' : 'hover:bg-gray-50'
+                          }`}
+                          onClick={() => {
+                            suggestion.action();
+                            setSearchQuery('');
+                            setShowSuggestions(false);
+                            setSelectedSuggestionIndex(-1);
+                          }}
+                          onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                          role="option"
+                          aria-selected={selectedSuggestionIndex === index}
+                        >
+                          <span className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded ${
+                            suggestion.type === 'tool'
+                              ? isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-600'
+                              : suggestion.type === 'menu'
+                              ? isDark ? 'bg-blue-500/15 text-blue-400' : 'bg-blue-50 text-blue-600'
+                              : isDark ? 'bg-purple-500/15 text-purple-400' : 'bg-purple-50 text-purple-600'
+                          }`}>
+                            {suggestion.icon}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                              {suggestion.label}
+                            </div>
+                            {suggestion.description && (
+                              <div className={`text-xs truncate ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                                {suggestion.description}
+                              </div>
+                            )}
+                          </div>
+                          <span className={`text-[10px] font-medium uppercase ${
+                            suggestion.type === 'tool'
+                              ? 'text-emerald-400'
+                              : suggestion.type === 'menu'
+                              ? 'text-blue-400'
+                              : 'text-purple-400'
+                          }`}>
+                            {suggestion.type}
+                          </span>
+                        </motion.button>
+                      ))}
+                      <div className={`border-t px-3 py-1.5 text-[10px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                        Press <kbd className="rounded px-1 bg-slate-700 text-slate-300">Enter</kbd> to select, <kbd className="rounded px-1 bg-slate-700 text-slate-300">↑↓</kbd> to navigate
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {isAdmin && (
@@ -1339,67 +1844,11 @@ function HomePageContent({
                 </span>
               )}
 
-              {/* View Mode Toggle - Compact */}
-              <div className={`hidden items-center gap-0.5 rounded-lg border p-0.5 sm:flex ${
-                isDark ? 'border-slate-700/40 bg-slate-800/30' : 'border-gray-200 bg-white'
-              }`}>
-                <button
-                  type="button"
-                  onClick={() => { setViewMode('grid'); localStorage.setItem(STORAGE_VIEW_MODE_KEY, 'grid'); }}
-                  className={`rounded p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
-                    viewMode === 'grid'
-                      ? isDark ? 'bg-slate-700 text-white' : 'bg-gray-200 text-gray-900'
-                      : isDark ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-900'
-                  }`}
-                  aria-label="Grid view"
-                  aria-pressed={viewMode === 'grid'}
-                >
-                  <Grid3x3 className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setViewMode('list'); localStorage.setItem(STORAGE_VIEW_MODE_KEY, 'list'); }}
-                  className={`rounded p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
-                    viewMode === 'list'
-                      ? isDark ? 'bg-slate-700 text-white' : 'bg-gray-200 text-gray-900'
-                      : isDark ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-900'
-                  }`}
-                  aria-label="List view"
-                  aria-pressed={viewMode === 'list'}
-                >
-                  <List className="h-4 w-4" />
-                </button>
-              </div>
-
-              {/* Fullscreen */}
-              <button
-                type="button"
-                onClick={toggleFullscreen}
-                className={`hidden rounded-md border p-2 transition-colors sm:flex focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
-                  isDark ? 'border-slate-700/40 bg-slate-800/30 text-slate-400 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-100'
-                }`}
-                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-              >
-                {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-              </button>
-
-              {/* Theme toggle */}
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className={`rounded-md border p-2 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
-                  isDark ? 'border-slate-700/40 bg-slate-800/30 text-slate-400 hover:bg-slate-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-100'
-                }`}
-                aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-              >
-                <span className="block transition-transform duration-300">
-                  {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                </span>
-              </button>
-
               {/* Notification Bell */}
               <div className="relative" ref={notifPanelRef}>
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.06 }}
+                  whileTap={{ scale: 0.92 }}
                   type="button"
                   onClick={() => { setNotifOpen(o => !o); setUserOpen(false); }}
                   className={`relative rounded-md border p-2 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
@@ -1415,135 +1864,157 @@ function HomePageContent({
                   ) : (
                     <Bell className="h-4 w-4" />
                   )}
-                  {unreadCount > 0 && (
-                    <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                  )}
-                </button>
+                  <AnimatePresence>
+                    {unreadCount > 0 && (
+                      <motion.span
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        exit={{ scale: 0 }}
+                        transition={SPRING}
+                        className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white"
+                      >
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </motion.button>
 
-                {notifOpen && (
-                  <div className={`absolute right-0 top-full z-50 mt-1.5 max-h-[400px] w-80 overflow-hidden rounded-xl border shadow-lg animate-in fade-in slide-in-from-top-2 duration-150 ${
-                    isDark ? 'border-slate-700/40 bg-slate-900' : 'border-gray-200 bg-white'
-                  }`}>
-                    <div className={`flex items-center justify-between border-b px-3 py-2.5 ${isDark ? 'border-slate-700/40' : 'border-gray-100'}`}>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                          Notifications
-                        </span>
-                        {isSupported && permission === 'denied' && (
-                          <span className="text-xs text-amber-400" title="Desktop notifications are blocked">
-                            <AlertCircle className="inline h-3 w-3" />
+                <AnimatePresence>
+                  {notifOpen && (
+                    <motion.div
+                      variants={dropdownVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className={`absolute right-0 top-full z-50 mt-1.5 max-h-[400px] w-80 overflow-hidden rounded-xl border shadow-lg ${
+                        isDark ? 'border-slate-700/40 bg-slate-900' : 'border-gray-200 bg-white'
+                      }`}
+                    >
+                      <div className={`flex items-center justify-between border-b px-3 py-2.5 ${isDark ? 'border-slate-700/40' : 'border-gray-100'}`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                            Notifications
                           </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={refreshNotifications}
-                          className="flex items-center gap-1 text-xs text-emerald-400 hover:underline"
-                        >
-                          <RefreshCw className="h-3 w-3" />
-                          Refresh
-                        </button>
-                        {isSupported && permission !== 'granted' && permission !== 'denied' && (
+                          {isSupported && permission === 'denied' && (
+                            <span className="text-xs text-amber-400" title="Desktop notifications are blocked">
+                              <AlertCircle className="inline h-3 w-3" />
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={requestPermission}
-                            className="text-xs text-emerald-400 hover:underline"
+                            onClick={refreshNotifications}
+                            className="flex items-center gap-1 text-xs text-emerald-400 hover:underline"
                           >
-                            Enable desktop
+                            <RefreshCw className="h-3 w-3" />
+                            Refresh
                           </button>
-                        )}
-                        {unreadCount > 0 && (
-                          <button
-                            type="button"
-                            onClick={markAllAsRead}
-                            className="text-xs text-emerald-400 hover:underline"
-                          >
-                            Mark all read
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="max-h-[300px] divide-y divide-slate-800/40 overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="px-3 py-6 text-center">
-                          <Bell className="mx-auto h-6 w-6 opacity-20" />
-                          <p className={`mt-1.5 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                            No notifications yet
-                          </p>
-                          {isSupported && permission === 'default' && (
+                          {isSupported && permission !== 'granted' && permission !== 'denied' && (
                             <button
                               type="button"
                               onClick={requestPermission}
-                              className="mt-2 text-xs text-emerald-400 hover:underline"
+                              className="text-xs text-emerald-400 hover:underline"
                             >
-                              Enable desktop notifications
+                              Enable desktop
+                            </button>
+                          )}
+                          {unreadCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={markAllAsRead}
+                              className="text-xs text-emerald-400 hover:underline"
+                            >
+                              Mark all read
                             </button>
                           )}
                         </div>
-                      ) : (
-                        notifications.map(n => (
-                          <div
-                            key={n.id}
-                            role="button"
-                            tabIndex={0}
-                            className={`flex cursor-pointer items-start gap-2.5 px-3 py-2.5 transition-colors ${
-                              !n.read ? (isDark ? 'bg-slate-800/30' : 'bg-blue-50/30') : ''
-                            } ${isDark ? 'hover:bg-slate-800/20' : 'hover:bg-gray-50'}`}
-                            onClick={() => markAsRead(n.id)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') markAsRead(n.id); }}
-                          >
-                            <span className={`mt-0.5 h-1.5 w-1.5 flex-shrink-0 rounded-full ${
-                              n.type === 'success' ? 'bg-emerald-400'
-                              : n.type === 'warning' ? 'bg-amber-400'
-                              : n.type === 'error' ? 'bg-red-400'
-                              : 'bg-blue-400'
-                            }`} />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className={`text-sm font-medium ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>
-                                  {n.title}
-                                </p>
-                                {n.agent_name && n.agent_name !== 'System' && (
-                                  <span className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${
-                                    isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-100 text-gray-600'
-                                  }`}>
-                                    @{n.agent_name}
-                                  </span>
-                                )}
-                              </div>
-                              <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                                {n.message}
-                              </p>
-                              <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                                <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                                  {new Date(n.created_at).toLocaleString()}
-                                </p>
-                                {n.tool_name && (
-                                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${
-                                    isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
-                                  }`}>
-                                    {n.tool_name.replace('_', ' ')}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            {!n.read && (
-                              <span className="mt-0.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
+                      </div>
+                      <div className="max-h-[300px] divide-y divide-slate-800/40 overflow-y-auto">
+                        {notifications.length === 0 ? (
+                          <div className="px-3 py-6 text-center">
+                            <Bell className="mx-auto h-6 w-6 opacity-20" />
+                            <p className={`mt-1.5 text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                              No notifications yet
+                            </p>
+                            {isSupported && permission === 'default' && (
+                              <button
+                                type="button"
+                                onClick={requestPermission}
+                                className="mt-2 text-xs text-emerald-400 hover:underline"
+                              >
+                                Enable desktop notifications
+                              </button>
                             )}
                           </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
+                        ) : (
+                          notifications.map((n, nIdx) => (
+                            <motion.div
+                              key={n.id}
+                              custom={nIdx}
+                              variants={navItemVariants}
+                              initial="hidden"
+                              animate="visible"
+                              role="button"
+                              tabIndex={0}
+                              className={`flex cursor-pointer items-start gap-2.5 px-3 py-2.5 transition-colors ${
+                                !n.read ? (isDark ? 'bg-slate-800/30' : 'bg-blue-50/30') : ''
+                              } ${isDark ? 'hover:bg-slate-800/20' : 'hover:bg-gray-50'}`}
+                              onClick={() => markAsRead(n.id)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') markAsRead(n.id); }}
+                            >
+                              <span className={`mt-0.5 h-1.5 w-1.5 flex-shrink-0 rounded-full ${
+                                n.type === 'success' ? 'bg-emerald-400'
+                                : n.type === 'warning' ? 'bg-amber-400'
+                                : n.type === 'error' ? 'bg-red-400'
+                                : 'bg-blue-400'
+                              }`} />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className={`text-sm font-medium ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>
+                                    {n.title}
+                                  </p>
+                                  {n.agent_name && n.agent_name !== 'System' && (
+                                    <span className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${
+                                      isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-100 text-gray-600'
+                                    }`}>
+                                      @{n.agent_name}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                                  {n.message}
+                                </p>
+                                <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                                  <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                                    {new Date(n.created_at).toLocaleString()}
+                                  </p>
+                                  {n.tool_name && (
+                                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${
+                                      isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                                    }`}>
+                                      {n.tool_name.replace('_', ' ')}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {!n.read && (
+                                <span className="mt-0.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
+                              )}
+                            </motion.div>
+                          ))
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* User Menu */}
               <div className="relative" ref={userPanelRef}>
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.06 }}
+                  whileTap={{ scale: 0.92 }}
                   type="button"
                   onClick={() => { setUserOpen(o => !o); setNotifOpen(false); }}
                   className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
@@ -1553,58 +2024,156 @@ function HomePageContent({
                   aria-expanded={userOpen}
                 >
                   <UserIcon className="h-4 w-4" />
-                </button>
+                </motion.button>
 
-                {userOpen && (
-                  <div className={`absolute right-0 top-full z-50 mt-1.5 w-48 overflow-hidden rounded-xl border shadow-lg animate-in fade-in slide-in-from-top-2 duration-150 ${
-                    isDark ? 'border-slate-700/40 bg-slate-900' : 'border-gray-200 bg-white'
-                  }`}>
-                    <div className={`border-b px-3 py-2.5 ${isDark ? 'border-slate-700/40' : 'border-gray-100'}`}>
-                      <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                        {user?.email || 'LOT User'}
-                      </p>
-                      <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                        {isAdmin ? 'Admin Access' : 'Beta Access'}
-                      </p>
-                    </div>
-                    <div className="py-1">
-                      <button
-                        type="button"
-                        onClick={toggleTheme}
-                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
-                          isDark ? 'text-slate-300 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-50'
-                        }`}
-                      >
-                        {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                        {isDark ? 'Light' : 'Dark'} Mode
-                      </button>
-                      <button
-                        type="button"
-                        onClick={toggleFullscreen}
-                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
-                          isDark ? 'text-slate-300 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-50'
-                        }`}
-                      >
-                        {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                        {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const { supabase } = await import('@/lib/supabase/client');
-                          await supabase.auth.signOut();
-                          window.location.reload();
-                        }}
-                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
-                          isDark ? 'text-red-400 hover:bg-slate-800' : 'text-red-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        <LogOut className="h-4 w-4" />
-                        Sign Out
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <AnimatePresence>
+                  {userOpen && (
+                    <motion.div
+                      variants={dropdownVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className={`absolute right-0 top-full z-50 mt-1.5 w-56 overflow-hidden rounded-xl border shadow-lg ${
+                        isDark ? 'border-slate-700/40 bg-slate-900' : 'border-gray-200 bg-white'
+                      }`}
+                    >
+                      <div className={`border-b px-3 py-2.5 ${isDark ? 'border-slate-700/40' : 'border-gray-100'}`}>
+                        <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          {user?.email || 'LOT User'}
+                        </p>
+                        <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                          {isAdmin ? 'Admin Access' : 'Beta Access'}
+                        </p>
+                      </div>
+                      
+                      <div className="py-1">
+                        {/* View Mode */}
+                        <div className="flex items-center justify-between px-3 py-1.5">
+                          <span className={`text-xs font-medium ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>View</span>
+                          <div className={`flex items-center gap-0.5 rounded-lg border p-0.5 ${
+                            isDark ? 'border-slate-700/40 bg-slate-800/30' : 'border-gray-200 bg-white'
+                          }`}>
+                            <button
+                              type="button"
+                              onClick={() => { setViewMode('grid'); localStorage.setItem(STORAGE_VIEW_MODE_KEY, 'grid'); }}
+                              className={`rounded p-1 transition-colors ${
+                                viewMode === 'grid'
+                                  ? isDark ? 'bg-slate-700 text-white' : 'bg-gray-200 text-gray-900'
+                                  : isDark ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-900'
+                              }`}
+                              aria-label="Grid view"
+                            >
+                              <Grid3x3 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setViewMode('list'); localStorage.setItem(STORAGE_VIEW_MODE_KEY, 'list'); }}
+                              className={`rounded p-1 transition-colors ${
+                                viewMode === 'list'
+                                  ? isDark ? 'bg-slate-700 text-white' : 'bg-gray-200 text-gray-900'
+                                  : isDark ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-900'
+                              }`}
+                              aria-label="List view"
+                            >
+                              <List className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className={`my-1 border-t ${isDark ? 'border-slate-700/40' : 'border-gray-100'}`} />
+
+                        {/* Theme Toggle */}
+                        <button
+                          type="button"
+                          onClick={toggleTheme}
+                          className={`flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
+                            isDark ? 'text-slate-300 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                          {isDark ? 'Light Mode' : 'Dark Mode'}
+                          <span className="ml-auto text-xs opacity-40">⌘T</span>
+                        </button>
+
+                        {/* Fullscreen Toggle */}
+                        <button
+                          type="button"
+                          onClick={toggleFullscreen}
+                          className={`flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
+                            isDark ? 'text-slate-300 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                          {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                          <span className="ml-auto text-xs opacity-40">⌘F</span>
+                        </button>
+
+                        {/* Keyboard Shortcuts */}
+                        <button
+                          type="button"
+                          onClick={() => setCmdOpen(true)}
+                          className={`flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
+                            isDark ? 'text-slate-300 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <Command className="h-4 w-4" />
+                          Keyboard Shortcuts
+                          <span className="ml-auto text-xs opacity-40">⌘K</span>
+                        </button>
+
+                        {/* Search shortcut in menu */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTimeout(() => {
+                              if (searchRef.current) {
+                                searchRef.current.focus();
+                                searchRef.current.select();
+                              }
+                            }, 50);
+                          }}
+                          className={`flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
+                            isDark ? 'text-slate-300 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <Search className="h-4 w-4" />
+                          Quick Search
+                          <span className="ml-auto text-xs opacity-40">⌘S</span>
+                        </button>
+
+                        {/* Help */}
+                        <button
+                          type="button"
+                          onClick={() => navigateTo('Documentation')}
+                          className={`flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
+                            isDark ? 'text-slate-300 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <HelpCircle className="h-4 w-4" />
+                          Help & Documentation
+                        </button>
+
+                        <div className={`my-1 border-t ${isDark ? 'border-slate-700/40' : 'border-gray-100'}`} />
+
+                        {/* Sign Out */}
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const { supabase } = await import('@/lib/supabase/client');
+                            await supabase.auth.signOut();
+                            window.location.reload();
+                          }}
+                          className={`flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
+                            isDark ? 'text-red-400 hover:bg-slate-800' : 'text-red-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          <LogOut className="h-4 w-4" />
+                          Sign Out
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           </div>
@@ -1613,13 +2182,17 @@ function HomePageContent({
         {/* Page Content */}
         <main id="main-content" className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
-            <div
-              className={`transition-all duration-150 motion-reduce:transition-none ${
-                isTransitioning ? 'translate-y-0.5 opacity-0' : 'translate-y-0 opacity-100'
-              }`}
-            >
-              {renderContent()}
-            </div>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${activeMainMenu}-${activeTool}-${isLoading}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.22, ease: EASE }}
+              >
+                {renderContent()}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </main>
       </div>
