@@ -264,5 +264,39 @@ export const brandConfigs = [
       gender: "",              // No gender column
       // Additional columns in sheet: PO #, Smart, Unit price, MSRP, Discount, Disc. pct.
     }
-  }
+  },
+{
+    brandName: "Smith Optics",
+    spreadsheetId: "1ZjgpCDmcx-oBQ57Es3nTPFFkR6PI3nAKD5hBLnJ7pfo",
+    sheetName: "Sheet1",
+    columns: {
+      upc: "UPC",              // ✓ Matches header
+      sku: "SKU Genereted",              // ✓ Matches header
+      style_number: "Item number", // ✓ Matches header
+      name: "Shopkeep Title",                 // No Shopkeep Name column
+    }
+  },
+  {
+    brandName: "Socksmith ",
+    spreadsheetId: "15xq55oHn5JO3Q8CKa7mA3TryHM7-DmOhmpSv1Ji3zrY",
+    sheetName: "Sheet1",
+    columns: {
+      upc: "UPC",              // ✓ Matches header
+      sku: "SKU No",              // ✓ Matches header
+      name: "Item",                 // No Shopkeep Name column
+    }
+  },
+  {
+      brandName: "Sorel",
+      // Replace the old broken ID with the correct one from your URL:
+      spreadsheetId: "1aBOYH2ShWyW8ASamH23WAFdoi0NR8bIebsQGuAnU67A", 
+      sheetName: "Sorel", 
+      columns: {
+        upc: "UPC/EAN",              
+        sku: "SKU",              
+        name: "Shopkeep Name (Max Length: 35)",       
+        style_number: "Style No",
+        description: "Item Name",   
+      }
+  },
 ];

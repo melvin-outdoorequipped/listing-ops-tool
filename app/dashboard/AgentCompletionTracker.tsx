@@ -55,8 +55,15 @@ interface AgentCompletionTrackerProps {
 
 // ─── UTILITY FUNCTIONS ─────────────────────────────────────────────────────
 
+// FIXED: Build the date string from LOCAL date components instead of
+// toISOString(), which converts to UTC and shifts the date by a day
+// (or more, once combined with the prev/next handlers) for any timezone
+// that isn't UTC+0.
 function toDateInputValue(d: Date) {
-  return d.toISOString().split('T')[0];
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function parseDateInput(value: string): Date {
@@ -855,13 +862,17 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
     };
   }, [allStats]);
 
-  const shiftDate = (days: number) => {
+  const shiftDate = useCallback((days: number) => {
     const d = new Date(targetDate);
     d.setDate(d.getDate() + days);
-    setSelectedDate(toDateInputValue(d));
-  };
+    const newDateStr = toDateInputValue(d);
+    setSelectedDate(newDateStr);
+  }, [targetDate]);
 
-  const goToToday = () => setSelectedDate(toDateInputValue(new Date()));
+  const goToToday = useCallback(() => {
+    const todayStr = toDateInputValue(new Date());
+    setSelectedDate(todayStr);
+  }, []);
 
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
@@ -940,7 +951,11 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
             {/* Date Navigation */}
             <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
               <button
-                onClick={() => shiftDate(-1)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  shiftDate(-1);
+                }}
                 aria-label="Previous day"
                 className={cn(
                   'rounded-xl p-2 border transition-all duration-200 hover:scale-105',
@@ -959,7 +974,10 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
                 <input
                   type="date"
                   value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
+                  onChange={(e) => {
+                    e.preventDefault();
+                    setSelectedDate(e.target.value);
+                  }}
                   aria-label="Selected date"
                   className={cn(
                     'rounded-xl border pl-9 pr-3 py-2 text-sm w-[140px] sm:w-[160px] transition-all duration-200',
@@ -970,7 +988,11 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
               </div>
 
               <button
-                onClick={() => shiftDate(1)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  shiftDate(1);
+                }}
                 aria-label="Next day"
                 className={cn(
                   'rounded-xl p-2 border transition-all duration-200 hover:scale-105',
@@ -985,7 +1007,11 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
                 theme={theme}
                 variant="secondary"
                 size="sm"
-                onClick={goToToday}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  goToToday();
+                }}
                 className="font-medium"
               >
                 Today
