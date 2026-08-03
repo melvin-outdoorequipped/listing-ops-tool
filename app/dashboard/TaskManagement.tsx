@@ -422,8 +422,6 @@ function AnalyticsCard({ title, value, icon, color, gradient, isDark, delay = 0,
   );
 }
 
-
-
 // ─── TASK NAME GENERATOR MODAL ───────────────────────────────────────────
 
 interface TaskNameGeneratorModalProps {
@@ -444,6 +442,22 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isEditingBrand, setIsEditingBrand] = useState(false);
   const [showRecentTasks, setShowRecentTasks] = useState(true);
+  
+  // NEW: PO# state
+  const [poNumber, setPoNumber] = useState('');
+  
+  // NEW: Extract Basecamp ID from task
+  const basecampId = useMemo(() => {
+    if (!task?.bc_links) return '';
+    const links = task.bc_links.split(',').map(link => link.trim());
+    for (const link of links) {
+      const match = link.match(/todos\/(\d+)/);
+      if (match) {
+        return match[1];
+      }
+    }
+    return '';
+  }, [task]);
 
   const isDark = theme === 'dark';
 
@@ -457,6 +471,7 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
       setSelectedBrand(task.brand || '');
       setCustomBrand('');
       setIsEditingBrand(false);
+      setPoNumber(''); // Reset PO# when modal opens
       
       const category = findCategoryByTaskName(task.task);
       setSelectedCategory(category?.category || '');
@@ -479,10 +494,21 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
 
   const handleCopy = (template: string) => {
     const brandToUse = selectedBrand || task.brand;
-    const generated = generateTaskName(template, { 
+    
+    let generated = generateTaskName(template, { 
       brand: brandToUse, 
       agent: task.agent 
     });
+    
+    // Append Basecamp ID if found
+    if (basecampId) {
+      generated = `${generated} ${basecampId}`;
+    }
+    
+    // Append PO# if provided
+    if (poNumber.trim()) {
+      generated = `${generated} ${poNumber.trim()}`;
+    }
 
     navigator.clipboard.writeText(generated);
     setCopiedTemplate(template);
@@ -544,6 +570,7 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
     setIsEditingBrand(false);
     setCustomBrand('');
     setSearchQuery('');
+    setPoNumber(''); // Add this line
   };
 
   const mutedText = isDark ? 'text-slate-400' : 'text-gray-500';
@@ -557,6 +584,23 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
 
   const brandToUse = selectedBrand || task.brand;
   const isBrandInOptions = brandToUse && BRAND_OPTIONS.includes(brandToUse);
+
+  // Get preview text for each template
+    // Add this function before the return statement
+  const getPreviewText = (template: string) => {
+    const base = generateTaskName(template, { 
+      brand: brandToUse, 
+      agent: task.agent 
+    });
+    let preview = base;
+    if (basecampId) {
+      preview = `${preview} ${basecampId}`;
+    }
+    if (poNumber.trim()) {
+      preview = `${preview} ${poNumber.trim()}`;
+    }
+    return preview;
+  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} theme={theme} maxWidth="max-w-3xl" labelledBy="generator-title">
@@ -684,6 +728,60 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
           </div>
         </div>
 
+        {/* NEW: PO# Input Section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div className="space-y-1.5">
+            <label className={labelCls}>
+              PO# <span className="text-xs text-slate-500">(optional)</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Enter PO# (e.g., PO-2024-001)"
+                value={poNumber}
+                onChange={(e) => setPoNumber(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                  }
+                }}
+                className={cn('flex-1 rounded-lg border px-3 py-2 text-sm', focusRing, inputCls)}
+              />
+              {poNumber && (
+                <Button
+                  theme={theme}
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setPoNumber('');
+                  }}
+                  className="px-3"
+                  title="Clear PO#"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            <p className={cn('text-[10px]', mutedText)}>
+              {poNumber ? 'Will be appended to task name' : 'Add PO number for duplicate tasks'}
+            </p>
+          </div>
+
+          {/* Display Basecamp ID if found */}
+          {basecampId && (
+            <div className="space-y-1.5">
+              <label className={labelCls}>
+                Basecamp ID
+              </label>
+              <div className={cn('flex items-center gap-2 rounded-lg border px-3 py-2 text-sm', isDark ? 'bg-slate-800/50 border-slate-600' : 'bg-gray-50 border-gray-300')}>
+                <Link className={cn('h-4 w-4', isDark ? 'text-slate-400' : 'text-gray-400')} />
+                <span className={cn('font-mono', isDark ? 'text-white' : 'text-gray-900')}>BC#{basecampId}</span>
+                <span className={cn('text-xs ml-auto', mutedText)}>Auto-detected</span>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="mt-4">
           <div className="relative">
             <Search className={cn('absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4', mutedText)} />
@@ -718,6 +816,18 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
           {selectedCategory && (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-400">
               {selectedCategory}
+            </span>
+          )}
+          {poNumber && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/20 px-2.5 py-0.5 text-xs font-medium text-cyan-400">
+              <Hash className="h-3 w-3" />
+              PO#{poNumber}
+            </span>
+          )}
+          {basecampId && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-2.5 py-0.5 text-xs font-medium text-orange-400">
+              <Link className="h-3 w-3" />
+              BC#{basecampId}
             </span>
           )}
           <button
@@ -787,10 +897,7 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
         ) : (
           <div className="space-y-2">
             {filteredTemplates.map((template, idx) => {
-              const generated = generateTaskName(template, { 
-                brand: brandToUse, 
-                agent: task.agent 
-              });
+              const previewText = getPreviewText(template);
               const isCopied = copiedTemplate === template;
               const usesBrandToken = template.includes('{brand}');
               const usesAgentToken = template.includes('{agent}');
@@ -817,7 +924,7 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
                       'text-sm font-medium break-all',
                       isCopied ? 'text-emerald-400' : isDark ? 'text-white' : 'text-gray-900'
                     )}>
-                      {generated}
+                      {previewText}
                     </p>
                     <div className="flex flex-wrap gap-1.5 mt-1.5">
                       {hasPlaceholder && (
@@ -834,6 +941,18 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
                       {!usesAgentToken && (
                         <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium', isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-500')}>
                           No agent
+                        </span>
+                      )}
+                      {poNumber && (
+                        <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium', isDark ? 'bg-cyan-500/20 text-cyan-400' : 'bg-cyan-100 text-cyan-700')}>
+                          <Hash className="h-2.5 w-2.5" />
+                          PO#
+                        </span>
+                      )}
+                      {basecampId && (
+                        <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium', isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-700')}>
+                          <Link className="h-2.5 w-2.5" />
+                          BC#
                         </span>
                       )}
                     </div>
@@ -864,6 +983,18 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
             {brandToUse && `Brand: ${brandToUse}`}
             {selectedCategory && ` · ${selectedCategory}`}
           </span>
+          {poNumber && (
+            <>
+              <span className={cn('w-px h-4', isDark ? 'bg-slate-700' : 'bg-gray-200')} />
+              <span className={cn('text-cyan-400')}>PO#{poNumber}</span>
+            </>
+          )}
+          {basecampId && (
+            <>
+              <span className={cn('w-px h-4', isDark ? 'bg-slate-700' : 'bg-gray-200')} />
+              <span className={cn('text-orange-400')}>BC#{basecampId}</span>
+            </>
+          )}
           <span className={cn('text-[10px]', mutedText)}>
             · Esc to close
           </span>
@@ -2695,8 +2826,6 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               trend={3}
             />
           </div>
-
-
 
           {/* ─── TASK LIST HEADER ─────────────────────────────────────────── */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
