@@ -55,10 +55,7 @@ interface AgentCompletionTrackerProps {
 
 // ─── UTILITY FUNCTIONS ─────────────────────────────────────────────────────
 
-// FIXED: Build the date string from LOCAL date components instead of
-// toISOString(), which converts to UTC and shifts the date by a day
-// (or more, once combined with the prev/next handlers) for any timezone
-// that isn't UTC+0.
+// Build the date string from LOCAL date components
 function toDateInputValue(d: Date) {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -677,7 +674,7 @@ function TaskDetailModal({ task, isOpen, onClose, isDark }: TaskDetailModalProps
                   Task Completed Late
                 </p>
                 <p className={cn('text-sm', isDark ? 'text-slate-300' : 'text-gray-700')}>
-                  Assigned on {assignedDate?.toLocaleDateString()} but completed on {completedDate?.toLocaleDateString()}.
+                  Assigned on {assignedDate?.toLocaleDateString('en-US')} but completed on {completedDate?.toLocaleDateString('en-US')}.
                   {assignedDate && completedDate && (
                     <span className="block mt-1 text-xs font-medium">
                       ⏱️ Delay: {Math.ceil((completedDate.getTime() - assignedDate.getTime()) / (1000 * 60 * 60 * 24))} day(s)
@@ -773,7 +770,13 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [selectedDate, setSelectedDate] = useState(() => toDateInputValue(new Date()));
+  // Use US Eastern Time for the selected date
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const now = new Date();
+    const usDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    return toDateInputValue(usDate);
+  });
+  
   const [selectedAgent, setSelectedAgent] = useState<string>('all');
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -870,7 +873,9 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
   }, [targetDate]);
 
   const goToToday = useCallback(() => {
-    const todayStr = toDateInputValue(new Date());
+    const now = new Date();
+    const usDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const todayStr = toDateInputValue(usDate);
     setSelectedDate(todayStr);
   }, []);
 

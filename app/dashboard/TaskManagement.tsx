@@ -257,10 +257,17 @@ function DashboardHeader({
   const [greeting, setGreeting] = useState('Good Morning');
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
-    const hour = new Date().getHours();
-    if (hour < 12) setGreeting('Good Morning');
-    else if (hour < 17) setGreeting('Good Afternoon');
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000);
+    
+    const usHour = parseInt(new Date().toLocaleString('en-US', { 
+      hour: '2-digit', 
+      hour12: false,
+      timeZone: 'America/New_York'
+    }));
+    if (usHour < 12) setGreeting('Good Morning');
+    else if (usHour < 17) setGreeting('Good Afternoon');
     else setGreeting('Good Evening');
     return () => clearInterval(timer);
   }, []);
@@ -290,14 +297,29 @@ function DashboardHeader({
                 Task Management
               </h1>
               <p className={cn('text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
-                {greeting}{userName ? `, ${userName}` : ''} · {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                {greeting}{userName ? `, ${userName}` : ''} · {
+                  new Date().toLocaleString('en-US', { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    hour12: true,
+                    timeZone: 'America/New_York'
+                  })
+                }
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-4 mt-3">
             <div className={cn('flex items-center gap-1.5 text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
               <Calendar className="h-4 w-4" />
-              {currentTime.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              {
+                new Date().toLocaleDateString('en-US', { 
+                  weekday: 'long', 
+                  month: 'long', 
+                  day: 'numeric', 
+                  year: 'numeric',
+                  timeZone: 'America/New_York'
+                })
+              }
             </div>
             <div className={cn('flex items-center gap-1.5 text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
               <Users className="h-4 w-4" />
@@ -443,10 +465,8 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
   const [isEditingBrand, setIsEditingBrand] = useState(false);
   const [showRecentTasks, setShowRecentTasks] = useState(true);
   
-  // PO# state
   const [poNumber, setPoNumber] = useState('');
   
-  // Extract Basecamp ID from task
   const basecampId = useMemo(() => {
     if (!task?.bc_links) return '';
     const links = task.bc_links.split(',').map(link => link.trim());
@@ -500,12 +520,10 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
       agent: task.agent 
     });
     
-    // Append Basecamp ID if found
     if (basecampId) {
       generated = `${generated} ${basecampId}`;
     }
     
-    // Append PO# if provided
     if (poNumber.trim()) {
       generated = `${generated} ${poNumber.trim()}`;
     }
@@ -585,7 +603,6 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
   const brandToUse = selectedBrand || task.brand;
   const isBrandInOptions = brandToUse && BRAND_OPTIONS.includes(brandToUse);
 
-  // Get preview text for each template
   const getPreviewText = (template: string) => {
     const base = generateTaskName(template, { 
       brand: brandToUse, 
@@ -727,7 +744,6 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
           </div>
         </div>
 
-        {/* PO# Input Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           <div className="space-y-1.5">
             <label className={labelCls}>
@@ -766,7 +782,6 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
             </p>
           </div>
 
-          {/* Display Basecamp ID if found */}
           {basecampId && (
             <div className="space-y-1.5">
               <label className={labelCls}>
@@ -1947,7 +1962,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
       setFilterDateRange('custom');
       setCurrentPage(1);
       setShowDateRangePicker(false);
-      showToast('success', 'Date Range Applied', `Filtering from ${new Date(customDateStart).toLocaleDateString()} to ${new Date(customDateEnd).toLocaleDateString()}`);
+      showToast('success', 'Date Range Applied', `Filtering from ${new Date(customDateStart).toLocaleDateString('en-US')} to ${new Date(customDateEnd).toLocaleDateString('en-US')}`);
     }
   }, [customDateStart, customDateEnd, showToast]);
 
@@ -2057,6 +2072,15 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     return VALID_TASK_STATUSES.filter((s) => s.toLowerCase() !== currentStatus.toLowerCase());
   }, []);
 
+  // ─── HELPER: Get US Date ──────────────────────────────────────────────
+
+  const getUSDate = useCallback(() => {
+    const now = new Date();
+    const usDateStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+    const usDate = new Date(usDateStr);
+    return new Date(usDate.getFullYear(), usDate.getMonth(), usDate.getDate());
+  }, []);
+
   // ─── DERIVED DATA ─────────────────────────────────────────────────────
 
   const activeTasks = viewMode === 'all' ? allTasks : tasks;
@@ -2069,16 +2093,16 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     const pending = activeTasks.filter(t => t.status === 'Pending').length;
     const ongoing = activeTasks.filter(t => t.status === 'Ongoing').length;
     const cancelled = activeTasks.filter(t => t.status === 'Cancelled').length;
+    const usToday = getUSDate();
     const overdue = activeTasks.filter(t => {
       if (!t.due_date) return false;
       const dueDate = new Date(t.due_date);
-      const today = new Date();
-      return dueDate < today && t.status !== 'Completed' && t.status !== 'Cancelled';
+      return dueDate < usToday && t.status !== 'Completed' && t.status !== 'Cancelled';
     }).length;
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
     return { total, completed, pending, ongoing, cancelled, overdue, completionRate };
-  }, [activeTasks]);
+  }, [activeTasks, getUSDate]);
 
   const uniqueBrands = useMemo(() => {
     const brands = new Set<string>();
@@ -2111,7 +2135,6 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     if (filterBrand !== 'all') filtered = filtered.filter((task) => task.brand === filterBrand);
     if (filterAgent !== 'all') filtered = filtered.filter((task) => task.agent === filterAgent);
     
-    // SBS/Non-SBS Filter
     if (filterSBS !== 'all') {
       filtered = filtered.filter((task) => {
         const remarks = (task.remarks || '').toLowerCase();
@@ -2124,8 +2147,8 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
       });
     }
 
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // Use US timezone for date comparisons
+    const usToday = getUSDate();
 
     if (filterDateRange !== 'all') {
       filtered = filtered.filter((task) => {
@@ -2139,16 +2162,16 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
 
         const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
 
-        if (filterDateRange === 'overdue') return dueDateOnly < today && task.status !== 'Completed' && task.status !== 'Cancelled';
-        if (filterDateRange === 'today') return dueDateOnly.getTime() === today.getTime();
+        if (filterDateRange === 'overdue') return dueDateOnly < usToday && task.status !== 'Completed' && task.status !== 'Cancelled';
+        if (filterDateRange === 'today') return dueDateOnly.getTime() === usToday.getTime();
         if (filterDateRange === 'week') {
-          const weekEnd = new Date(today);
+          const weekEnd = new Date(usToday);
           weekEnd.setDate(weekEnd.getDate() + 7);
-          return dueDateOnly >= today && dueDateOnly <= weekEnd;
+          return dueDateOnly >= usToday && dueDateOnly <= weekEnd;
         }
         if (filterDateRange === 'month') {
-          const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-          return dueDateOnly >= today && dueDateOnly <= monthEnd;
+          const monthEnd = new Date(usToday.getFullYear(), usToday.getMonth() + 1, 0);
+          return dueDateOnly >= usToday && dueDateOnly <= monthEnd;
         }
         if (filterDateRange === 'custom') {
           const startDate = customDateStart ? new Date(customDateStart) : null;
@@ -2258,7 +2281,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     }
 
     return filtered;
-  }, [activeTasks, debouncedSearchTerm, filterStatus, filterBrand, filterAgent, filterSBS, sortField, sortOrder, filterDateRange, customDateStart, customDateEnd, showOnlyNew, newTaskIds]);
+  }, [activeTasks, debouncedSearchTerm, filterStatus, filterBrand, filterAgent, filterSBS, sortField, sortOrder, filterDateRange, customDateStart, customDateEnd, showOnlyNew, newTaskIds, getUSDate]);
 
   // ─── PAGINATION ────────────────────────────────────────────────────────
 
@@ -2344,7 +2367,10 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
 
   // ─── RENDER TABLE VIEW ──────────────────────────────────────────────────
 
-  const renderTableView = () => (
+  const renderTableView = () => {
+    const usToday = getUSDate();
+    
+    return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -2369,7 +2395,10 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
             {paginatedTasks.map((task, rowIdx) => {
               const isUpdating = updatingTaskId === task.id;
               const isNew = newTaskIds.has(task.id);
-              const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
+              const isOverdue = task.due_date && (() => {
+                const dueDate = new Date(task.due_date);
+                return dueDate < usToday && task.status !== 'Completed' && task.status !== 'Cancelled';
+              })();
               const hasRemarks = task.remarks && task.remarks.trim() !== '';
               const statusOptions = getStatusOptions(task.status);
               const remarksLower = task.remarks.toLowerCase();
@@ -2490,15 +2519,21 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
         </table>
       </div>
     </motion.div>
-  );
+  )};
 
   // ─── RENDER CARD VIEW ───────────────────────────────────────────────────
 
-  const renderCardView = () => (
+  const renderCardView = () => {
+    const usToday = getUSDate();
+    
+    return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
       {paginatedTasks.map((task) => {
         const isNew = newTaskIds.has(task.id);
-        const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
+        const isOverdue = task.due_date && (() => {
+          const dueDate = new Date(task.due_date);
+          return dueDate < usToday && task.status !== 'Completed' && task.status !== 'Cancelled';
+        })();
         const hasRemarks = task.remarks && task.remarks.trim() !== '';
         const statusOptions = getStatusOptions(task.status);
         const remarksLower = task.remarks.toLowerCase();
@@ -2588,15 +2623,21 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
         );
       })}
     </div>
-  );
+  )};
 
   // ─── RENDER LIST VIEW ───────────────────────────────────────────────────
 
-  const renderListView = () => (
+  const renderListView = () => {
+    const usToday = getUSDate();
+    
+    return (
     <div className="space-y-2 sm:space-y-3">
       {paginatedTasks.map((task) => {
         const isNew = newTaskIds.has(task.id);
-        const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
+        const isOverdue = task.due_date && (() => {
+          const dueDate = new Date(task.due_date);
+          return dueDate < usToday && task.status !== 'Completed' && task.status !== 'Cancelled';
+        })();
         const hasRemarks = task.remarks && task.remarks.trim() !== '';
         const statusOptions = getStatusOptions(task.status);
         const remarksLower = task.remarks.toLowerCase();
@@ -2673,7 +2714,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
         );
       })}
     </div>
-  );
+  )};
 
   // ─── RENDER TASKS ──────────────────────────────────────────────────────
 
@@ -3195,7 +3236,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                   <span className="hidden xs:inline">Custom Range</span>
                   {filterDateRange === 'custom' && (
                     <span className="ml-1 text-[10px] opacity-70 hidden lg:inline">
-                      ({customDateStart ? new Date(customDateStart).toLocaleDateString() : '...'} - {customDateEnd ? new Date(customDateEnd).toLocaleDateString() : '...'})
+                      ({customDateStart ? new Date(customDateStart).toLocaleDateString('en-US') : '...'} - {customDateEnd ? new Date(customDateEnd).toLocaleDateString('en-US') : '...'})
                     </span>
                   )}
                 </button>
@@ -3320,7 +3361,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                     : filterDateRange === 'month'
                     ? '📅 This Month'
                     : filterDateRange === 'custom'
-                    ? `📅 ${customDateStart ? new Date(customDateStart).toLocaleDateString() : '...'} - ${customDateEnd ? new Date(customDateEnd).toLocaleDateString() : '...'}`
+                    ? `📅 ${customDateStart ? new Date(customDateStart).toLocaleDateString('en-US') : '...'} - ${customDateEnd ? new Date(customDateEnd).toLocaleDateString('en-US') : '...'}`
                     : ''}
                 </span>
               )}
@@ -3359,7 +3400,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                 </div>
               )}
 
-              <span className={cn('text-[10px] sm:text-sm', isDark ? 'text-slate-500' : 'text-gray-400')}>{isLoading ? 'Refreshing...' : `Updated: ${new Date().toLocaleTimeString()}`}</span>
+              <span className={cn('text-[10px] sm:text-sm', isDark ? 'text-slate-500' : 'text-gray-400')}>{isLoading ? 'Refreshing...' : `Updated: ${new Date().toLocaleTimeString('en-US')}`}</span>
             </div>
           </div>
         </div>
