@@ -443,10 +443,10 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
   const [isEditingBrand, setIsEditingBrand] = useState(false);
   const [showRecentTasks, setShowRecentTasks] = useState(true);
   
-  // NEW: PO# state
+  // PO# state
   const [poNumber, setPoNumber] = useState('');
   
-  // NEW: Extract Basecamp ID from task
+  // Extract Basecamp ID from task
   const basecampId = useMemo(() => {
     if (!task?.bc_links) return '';
     const links = task.bc_links.split(',').map(link => link.trim());
@@ -471,7 +471,7 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
       setSelectedBrand(task.brand || '');
       setCustomBrand('');
       setIsEditingBrand(false);
-      setPoNumber(''); // Reset PO# when modal opens
+      setPoNumber('');
       
       const category = findCategoryByTaskName(task.task);
       setSelectedCategory(category?.category || '');
@@ -570,7 +570,7 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
     setIsEditingBrand(false);
     setCustomBrand('');
     setSearchQuery('');
-    setPoNumber(''); // Add this line
+    setPoNumber('');
   };
 
   const mutedText = isDark ? 'text-slate-400' : 'text-gray-500';
@@ -586,7 +586,6 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
   const isBrandInOptions = brandToUse && BRAND_OPTIONS.includes(brandToUse);
 
   // Get preview text for each template
-    // Add this function before the return statement
   const getPreviewText = (template: string) => {
     const base = generateTaskName(template, { 
       brand: brandToUse, 
@@ -728,7 +727,7 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
           </div>
         </div>
 
-        {/* NEW: PO# Input Section */}
+        {/* PO# Input Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           <div className="space-y-1.5">
             <label className={labelCls}>
@@ -775,7 +774,7 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
               </label>
               <div className={cn('flex items-center gap-2 rounded-lg border px-3 py-2 text-sm', isDark ? 'bg-slate-800/50 border-slate-600' : 'bg-gray-50 border-gray-300')}>
                 <Link className={cn('h-4 w-4', isDark ? 'text-slate-400' : 'text-gray-400')} />
-                <span className={cn('font-mono', isDark ? 'text-white' : 'text-gray-900')}>BC#{basecampId}</span>
+                <span className={cn('font-mono', isDark ? 'text-white' : 'text-gray-900')}>{basecampId}</span>
                 <span className={cn('text-xs ml-auto', mutedText)}>Auto-detected</span>
               </div>
             </div>
@@ -827,7 +826,7 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
           {basecampId && (
             <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-2.5 py-0.5 text-xs font-medium text-orange-400">
               <Link className="h-3 w-3" />
-              BC#{basecampId}
+              {basecampId}
             </span>
           )}
           <button
@@ -952,7 +951,7 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
                       {basecampId && (
                         <span className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-medium', isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-700')}>
                           <Link className="h-2.5 w-2.5" />
-                          BC#
+                          ID
                         </span>
                       )}
                     </div>
@@ -992,7 +991,7 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
           {basecampId && (
             <>
               <span className={cn('w-px h-4', isDark ? 'bg-slate-700' : 'bg-gray-200')} />
-              <span className={cn('text-orange-400')}>BC#{basecampId}</span>
+              <span className={cn('text-orange-400')}>{basecampId}</span>
             </>
           )}
           <span className={cn('text-[10px]', mutedText)}>
@@ -1309,6 +1308,7 @@ const STORAGE_KEYS = {
   showOnlyNew: 'task_management_show_only_new',
   itemsPerPage: 'task_management_items_per_page',
   activeTab: 'task_management_active_tab',
+  filterSBS: 'task_management_filter_sbs',
 };
 
 export default function TaskManagement({ theme, currentUserEmail, currentUserName = '' }: TaskManagementProps) {
@@ -1364,6 +1364,14 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
 
   const [filterAgent, setFilterAgent] = useState<string>(() => {
     if (typeof window !== 'undefined') return localStorage.getItem(STORAGE_KEYS.filterAgent) || 'all';
+    return 'all';
+  });
+
+  const [filterSBS, setFilterSBS] = useState<'all' | 'sbs' | 'non-sbs'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEYS.filterSBS);
+      if (saved === 'sbs' || saved === 'non-sbs') return saved;
+    }
     return 'all';
   });
 
@@ -1475,6 +1483,10 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
   useEffect(() => {
     if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEYS.filterAgent, filterAgent);
   }, [filterAgent]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEYS.filterSBS, filterSBS);
+  }, [filterSBS]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEYS.filterDateRange, filterDateRange);
@@ -1726,6 +1738,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
       setFilterStatus('all');
       setFilterBrand('all');
       setFilterAgent('all');
+      setFilterSBS('all');
       setFilterDateRange('all');
       setSearchTerm('');
       setDebouncedSearchTerm('');
@@ -2097,6 +2110,19 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     if (filterStatus !== 'all') filtered = filtered.filter((task) => task.status === filterStatus);
     if (filterBrand !== 'all') filtered = filtered.filter((task) => task.brand === filterBrand);
     if (filterAgent !== 'all') filtered = filtered.filter((task) => task.agent === filterAgent);
+    
+    // SBS/Non-SBS Filter
+    if (filterSBS !== 'all') {
+      filtered = filtered.filter((task) => {
+        const remarks = (task.remarks || '').toLowerCase();
+        const hasSBS = remarks.includes('sbs') && !remarks.includes('non-sbs');
+        const hasNonSBS = remarks.includes('non-sbs');
+        
+        if (filterSBS === 'sbs') return hasSBS;
+        if (filterSBS === 'non-sbs') return hasNonSBS;
+        return true;
+      });
+    }
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -2232,7 +2258,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     }
 
     return filtered;
-  }, [activeTasks, debouncedSearchTerm, filterStatus, filterBrand, filterAgent, sortField, sortOrder, filterDateRange, customDateStart, customDateEnd, showOnlyNew, newTaskIds]);
+  }, [activeTasks, debouncedSearchTerm, filterStatus, filterBrand, filterAgent, filterSBS, sortField, sortOrder, filterDateRange, customDateStart, customDateEnd, showOnlyNew, newTaskIds]);
 
   // ─── PAGINATION ────────────────────────────────────────────────────────
 
@@ -2244,7 +2270,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterStatus, filterBrand, filterAgent, searchTerm, viewMode, filterDateRange, showOnlyNew]);
+  }, [filterStatus, filterBrand, filterAgent, filterSBS, searchTerm, viewMode, filterDateRange, showOnlyNew]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
@@ -2261,12 +2287,13 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     setCurrentPage(1);
   };
 
-  const hasActiveFilters = filterStatus !== 'all' || filterBrand !== 'all' || filterAgent !== 'all' || filterDateRange !== 'all' || !!searchTerm || showOnlyNew;
+  const hasActiveFilters = filterStatus !== 'all' || filterBrand !== 'all' || filterAgent !== 'all' || filterSBS !== 'all' || filterDateRange !== 'all' || !!searchTerm || showOnlyNew;
 
   const clearFilters = () => {
     setFilterStatus('all');
     setFilterBrand('all');
     setFilterAgent('all');
+    setFilterSBS('all');
     setFilterDateRange('all');
     setSearchTerm('');
     setDebouncedSearchTerm('');
@@ -2345,6 +2372,9 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
               const hasRemarks = task.remarks && task.remarks.trim() !== '';
               const statusOptions = getStatusOptions(task.status);
+              const remarksLower = task.remarks.toLowerCase();
+              const hasSBS = remarksLower.includes('sbs') && !remarksLower.includes('non-sbs');
+              const hasNonSBS = remarksLower.includes('non-sbs');
 
               return (
                 <motion.tr
@@ -2398,14 +2428,20 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                   <td className={cn('px-2 sm:px-4 py-2 sm:py-4 max-w-[120px] sm:max-w-[200px] text-xs sm:text-sm', isDark ? 'text-slate-300' : 'text-gray-700')}>
                     {hasRemarks ? (
                       <div className="relative group">
-                        <div className="flex items-start gap-1 sm:gap-2">
-                          {task.remarks.toLowerCase().includes('sbs') && (
+                        <div className="flex items-start gap-1 sm:gap-2 flex-wrap">
+                          {hasSBS && (
                             <span className={cn('inline-flex items-center gap-1 rounded-full px-1.5 sm:px-2.5 py-0.5 text-[8px] sm:text-xs font-semibold flex-shrink-0', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
                               <Eye className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" />
                               SBS
                             </span>
                           )}
-                          <span className="line-clamp-2 break-words">{task.remarks}</span>
+                          {hasNonSBS && (
+                            <span className={cn('inline-flex items-center gap-1 rounded-full px-1.5 sm:px-2.5 py-0.5 text-[8px] sm:text-xs font-semibold flex-shrink-0', isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700')}>
+                              <EyeOff className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" />
+                              Non-SBS
+                            </span>
+                          )}
+                          <span className="line-clamp-2 break-words flex-1">{task.remarks}</span>
                         </div>
                         {task.remarks.length > 60 && (
                           <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-20">
@@ -2465,6 +2501,9 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
         const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
         const hasRemarks = task.remarks && task.remarks.trim() !== '';
         const statusOptions = getStatusOptions(task.status);
+        const remarksLower = task.remarks.toLowerCase();
+        const hasSBS = remarksLower.includes('sbs') && !remarksLower.includes('non-sbs');
+        const hasNonSBS = remarksLower.includes('non-sbs');
 
         return (
           <motion.div
@@ -2504,13 +2543,19 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                     {isOverdue && <span className="text-rose-500 text-[10px] sm:text-xs font-medium">(Overdue)</span>}
                   </div>
                   {hasRemarks && (
-                    <div className={cn('flex items-start gap-1.5 sm:gap-2 truncate', isDark ? 'text-slate-400' : 'text-gray-500')}>
+                    <div className={cn('flex items-start gap-1.5 sm:gap-2 truncate flex-wrap', isDark ? 'text-slate-400' : 'text-gray-500')}>
                       <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 mt-0.5" />
-                      <span className="truncate text-xs sm:text-sm">{task.remarks}</span>
-                      {task.remarks.toLowerCase().includes('sbs') && (
+                      <span className="truncate text-xs sm:text-sm flex-1">{task.remarks}</span>
+                      {hasSBS && (
                         <span className={cn('inline-flex items-center gap-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs font-semibold flex-shrink-0', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
                           <Eye className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                           SBS
+                        </span>
+                      )}
+                      {hasNonSBS && (
+                        <span className={cn('inline-flex items-center gap-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs font-semibold flex-shrink-0', isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700')}>
+                          <EyeOff className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                          Non-SBS
                         </span>
                       )}
                     </div>
@@ -2554,6 +2599,9 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
         const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'Completed' && task.status !== 'Cancelled';
         const hasRemarks = task.remarks && task.remarks.trim() !== '';
         const statusOptions = getStatusOptions(task.status);
+        const remarksLower = task.remarks.toLowerCase();
+        const hasSBS = remarksLower.includes('sbs') && !remarksLower.includes('non-sbs');
+        const hasNonSBS = remarksLower.includes('non-sbs');
 
         return (
           <motion.div
@@ -2581,13 +2629,19 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                     {isOverdue && <span className="ml-1 text-rose-500 font-medium">(Overdue)</span>}
                   </span>
                   {hasRemarks && (
-                    <span className={cn('truncate max-w-[120px] sm:max-w-[200px]', isDark ? 'text-slate-500' : 'text-gray-400')}>
-                      <MessageSquare className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                      {task.remarks}
-                      {task.remarks.toLowerCase().includes('sbs') && (
-                        <span className={cn('ml-1 inline-flex items-center gap-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs font-semibold', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
+                    <span className={cn('truncate max-w-[120px] sm:max-w-[200px] flex items-center gap-1 flex-wrap', isDark ? 'text-slate-500' : 'text-gray-400')}>
+                      <MessageSquare className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1 flex-shrink-0" />
+                      <span className="truncate">{task.remarks}</span>
+                      {hasSBS && (
+                        <span className={cn('ml-1 inline-flex items-center gap-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs font-semibold flex-shrink-0', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
                           <Eye className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                           SBS
+                        </span>
+                      )}
+                      {hasNonSBS && (
+                        <span className={cn('ml-1 inline-flex items-center gap-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs font-semibold flex-shrink-0', isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700')}>
+                          <EyeOff className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                          Non-SBS
                         </span>
                       )}
                     </span>
@@ -2893,9 +2947,9 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                 className={cn('flex-shrink-0', showFilters || hasActiveFilters ? (isDark ? '!bg-emerald-500/10 !text-emerald-400 !shadow-none border !border-emerald-500/40' : '!bg-emerald-50 !text-emerald-700 !shadow-none border !border-emerald-300') : '')}
               >
                 <span className="hidden xs:inline">Filters</span>
-                {(filterStatus !== 'all' || filterBrand !== 'all' || filterAgent !== 'all') && (
+                {(filterStatus !== 'all' || filterBrand !== 'all' || filterAgent !== 'all' || filterSBS !== 'all') && (
                   <span className="ml-1 rounded-full bg-emerald-500 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs text-white">
-                    {[filterStatus, filterBrand, filterAgent].filter((f) => f !== 'all').length}
+                    {[filterStatus, filterBrand, filterAgent, filterSBS].filter((f) => f !== 'all').length}
                   </span>
                 )}
               </Button>
@@ -2985,6 +3039,86 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                       </button>
                     );
                   })}
+              </div>
+
+              {/* SBS/Non-SBS Filter Buttons */}
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
+                <button
+                  onClick={() => {
+                    setFilterSBS('all');
+                    setCurrentPage(1);
+                  }}
+                  className={cn(
+                    'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                    focusRing,
+                    filterSBS === 'all'
+                      ? isDark
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                      : isDark
+                      ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  )}
+                >
+                  All Tasks
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setFilterSBS('sbs');
+                    setCurrentPage(1);
+                  }}
+                  className={cn(
+                    'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                    focusRing,
+                    filterSBS === 'sbs'
+                      ? isDark
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        : 'bg-amber-100 text-amber-700 border border-amber-300'
+                      : isDark
+                      ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  )}
+                >
+                  <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
+                  SBS
+                  <span className={cn(
+                    'ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs',
+                    filterSBS === 'sbs' ? (isDark ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-200 text-amber-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
+                  )}>
+                    {activeTasks.filter(t => {
+                      const remarks = (t.remarks || '').toLowerCase();
+                      return remarks.includes('sbs') && !remarks.includes('non-sbs');
+                    }).length}
+                  </span>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setFilterSBS('non-sbs');
+                    setCurrentPage(1);
+                  }}
+                  className={cn(
+                    'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                    focusRing,
+                    filterSBS === 'non-sbs'
+                      ? isDark
+                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                        : 'bg-blue-100 text-blue-700 border border-blue-300'
+                      : isDark
+                      ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  )}
+                >
+                  <EyeOff className="h-3 w-3 sm:h-4 sm:w-4" />
+                  Non-SBS
+                  <span className={cn(
+                    'ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs',
+                    filterSBS === 'non-sbs' ? (isDark ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-200 text-blue-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
+                  )}>
+                    {activeTasks.filter(t => (t.remarks || '').toLowerCase().includes('non-sbs')).length}
+                  </span>
+                </button>
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
@@ -3143,6 +3277,16 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               {filteredAndSortedTasks.length !== activeTasks.length && ` (filtered from ${activeTasks.length})`}
               {showOnlyNew && (
                 <span className={cn('ml-2 px-1.5 sm:px-2 py-0.5 rounded text-[8px] sm:text-xs', isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}>🆕 New Tasks</span>
+              )}
+              {filterSBS !== 'all' && (
+                <span className={cn(
+                  'ml-2 px-1.5 sm:px-2 py-0.5 rounded text-[8px] sm:text-xs',
+                  filterSBS === 'sbs' 
+                    ? isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'
+                    : isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'
+                )}>
+                  {filterSBS === 'sbs' ? '👁️ SBS' : '🚫 Non-SBS'}
+                </span>
               )}
               {filterDateRange !== 'all' && (
                 <span
@@ -3305,12 +3449,20 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               <div>
                 <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Remarks</label>
                 <p className={cn('text-sm sm:text-base mt-1', isDark ? 'text-white' : 'text-gray-900')}>{selectedTask.remarks}</p>
-                {selectedTask.remarks.toLowerCase().includes('sbs') && (
-                  <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold mt-2', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
-                    <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                    SBS - Side by Side Observing
-                  </span>
-                )}
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {selectedTask.remarks.toLowerCase().includes('sbs') && !selectedTask.remarks.toLowerCase().includes('non-sbs') && (
+                    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
+                      <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      SBS - Side by Side Observing
+                    </span>
+                  )}
+                  {selectedTask.remarks.toLowerCase().includes('non-sbs') && (
+                    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold', isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700')}>
+                      <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      Non-SBS
+                    </span>
+                  )}
+                </div>
               </div>
             )}
 
