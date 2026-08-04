@@ -2126,6 +2126,10 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     return counts;
   }, [activeTasks]);
 
+  // ─── FILTERED AND SORTED TASKS ─────────────────────────────────────────
+
+  // ─── FILTERED AND SORTED TASKS ─────────────────────────────────────────
+
   const filteredAndSortedTasks = useMemo(() => {
     if (activeTasks.length === 0) return [];
 
@@ -2155,36 +2159,59 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
       filtered = filtered.filter((task) => {
         if (filterDateRange === 'unassigned') return !task.agent || task.agent.trim() === '';
 
-        const dueDateStr = task.due_date;
-        if (!dueDateStr) return false;
+        // Use date_assigned for filtering
+        const assignedDateStr = task.date_assigned;
+        if (!assignedDateStr) return false;
 
-        const dueDate = new Date(dueDateStr);
-        if (isNaN(dueDate.getTime())) return false;
+        const assignedDate = new Date(assignedDateStr);
+        if (isNaN(assignedDate.getTime())) return false;
 
-        const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+        const assignedDateOnly = new Date(assignedDate.getFullYear(), assignedDate.getMonth(), assignedDate.getDate());
 
-        if (filterDateRange === 'overdue') return dueDateOnly < usToday && task.status !== 'Completed' && task.status !== 'Cancelled';
-        if (filterDateRange === 'today') return dueDateOnly.getTime() === usToday.getTime();
+        if (filterDateRange === 'overdue') {
+          // For overdue, check if it's past due date AND not completed/cancelled
+          if (!task.due_date) return false;
+          const dueDate = new Date(task.due_date);
+          if (isNaN(dueDate.getTime())) return false;
+          const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+          return dueDateOnly < usToday && task.status !== 'Completed' && task.status !== 'Cancelled';
+        }
+        
+        if (filterDateRange === 'today') {
+          // Only tasks assigned today
+          return assignedDateOnly.getTime() === usToday.getTime();
+        }
+        
         if (filterDateRange === 'week') {
+          // Next 7 days: from tomorrow to 7 days from now (excludes today)
+          const tomorrow = new Date(usToday);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          
           const weekEnd = new Date(usToday);
           weekEnd.setDate(weekEnd.getDate() + 7);
-          return dueDateOnly >= usToday && dueDateOnly <= weekEnd;
+          
+          return assignedDateOnly >= tomorrow && assignedDateOnly <= weekEnd;
         }
+        
         if (filterDateRange === 'month') {
+          // This month: from the 1st of the current month to the last day
+          const monthStart = new Date(usToday.getFullYear(), usToday.getMonth(), 1);
           const monthEnd = new Date(usToday.getFullYear(), usToday.getMonth() + 1, 0);
-          return dueDateOnly >= usToday && dueDateOnly <= monthEnd;
+          
+          return assignedDateOnly >= monthStart && assignedDateOnly <= monthEnd;
         }
+        
         if (filterDateRange === 'custom') {
           const startDate = customDateStart ? new Date(customDateStart) : null;
           const endDate = customDateEnd ? new Date(customDateEnd) : null;
 
           if (startDate) {
             const startOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-            if (dueDateOnly < startOnly) return false;
+            if (assignedDateOnly < startOnly) return false;
           }
           if (endDate) {
             const endOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-            if (dueDateOnly > endOnly) return false;
+            if (assignedDateOnly > endOnly) return false;
           }
           return true;
         }
@@ -2287,7 +2314,6 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
 
     return filtered;
   }, [activeTasks, debouncedSearchTerm, filterStatus, filterBrand, filterAgent, filterSBS, sortField, sortOrder, filterDateRange, customDateStart, customDateEnd, showOnlyNew, newTaskIds, getUSDate]);
-
   // ─── PAGINATION ────────────────────────────────────────────────────────
 
   const totalPages = Math.ceil(filteredAndSortedTasks.length / itemsPerPage);
@@ -2766,10 +2792,10 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
   const dateChips: { key: typeof filterDateRange; label: string; emoji: string; activeClass: string }[] = [
     { key: 'all', label: 'All Dates', emoji: '', activeClass: isDark ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-blue-100 text-blue-700 border border-blue-300' },
     { key: 'unassigned', label: 'Unassigned', emoji: '👤', activeClass: isDark ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'bg-violet-100 text-violet-700 border border-violet-300' },
-    { key: 'overdue', label: 'Overdue', emoji: '🔴', activeClass: isDark ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-rose-100 text-rose-700 border border-rose-300' },
-    { key: 'today', label: 'Today', emoji: '📅', activeClass: isDark ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-amber-100 text-amber-700 border border-amber-300' },
-    { key: 'week', label: 'Next 7 Days', emoji: '📅', activeClass: isDark ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-cyan-100 text-cyan-700 border border-cyan-300' },
-    { key: 'month', label: 'This Month', emoji: '📅', activeClass: isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-700 border border-emerald-300' },
+    { key: 'overdue', label: 'Overdue (Due Date)', emoji: '🔴', activeClass: isDark ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-rose-100 text-rose-700 border border-rose-300' },
+    { key: 'today', label: 'Assigned Today', emoji: '📅', activeClass: isDark ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-amber-100 text-amber-700 border border-amber-300' },
+    { key: 'week', label: 'Assigned Next 7 Days', emoji: '📅', activeClass: isDark ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-cyan-100 text-cyan-700 border border-cyan-300' },
+    { key: 'month', label: 'Assigned This Month', emoji: '📅', activeClass: isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-700 border border-emerald-300' },
   ];
 
   // ─── MAIN RENDER ───────────────────────────────────────────────────────
