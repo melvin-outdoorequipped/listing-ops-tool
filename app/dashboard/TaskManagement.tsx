@@ -1408,10 +1408,10 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     return '';
   });
 
-  const [sortField, setSortField] = useState<'rowIndex' | 'dueDate' | 'status' | 'brand' | 'agent' | 'dateRequested'>(() => {
+  const [sortField, setSortField] = useState<'rowIndex' | 'dueDate' | 'status' | 'brand' | 'agent' | 'dateRequested' | 'dateAssigned'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(STORAGE_KEYS.sortField);
-      if (saved === 'rowIndex' || saved === 'dueDate' || saved === 'status' || saved === 'brand' || saved === 'agent' || saved === 'dateRequested') return saved;
+      if (saved === 'rowIndex' || saved === 'dueDate' || saved === 'status' || saved === 'brand' || saved === 'agent' || saved === 'dateRequested' || saved === 'dateAssigned') return saved;
     }
     return 'rowIndex';
   });
@@ -1557,6 +1557,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     const taskCol = columnMap['task'];
     const statusCol = columnMap['status'];
     const dateRequestedCol = columnMap['date requested'];
+    const dateAssignedCol = columnMap['date assigned'];
     const dueDateCol = columnMap['due date'];
     const dateCompletedCol = columnMap['date completed'];
     const tatCol = columnMap['tat'];
@@ -1584,12 +1585,12 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
         id: `task-${rowIndex}`,
         rowIndex,
         date_requested: get(row, dateRequestedCol).toString(),
+        date_assigned: get(row, dateAssignedCol).toString(),
         tat: get(row, tatCol).toString(),
         segment: get(row, segmentCol).toString(),
         type: get(row, typeCol).toString(),
         task: taskName.toString(),
         brand: get(row, brandCol).toString(),
-        date_assigned: get(row, dateRequestedCol).toString(),
         agent: get(row, agentCol).toString(),
         due_date: get(row, dueDateCol).toString(),
         date_completed: get(row, dateCompletedCol).toString() || null,
@@ -2253,6 +2254,10 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
             aVal = a.due_date || '';
             bVal = b.due_date || '';
             break;
+          case 'dateAssigned':
+            aVal = a.date_assigned || '';
+            bVal = b.date_assigned || '';
+            break;
           case 'status':
             aVal = a.status;
             bVal = b.status;
@@ -2381,7 +2386,8 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
           <thead className={cn('sticky top-0 z-10 backdrop-blur', isDark ? 'bg-slate-800/95' : 'bg-gray-50/95')}>
             <tr>
               <SortHeader field="rowIndex">#</SortHeader>
-              <SortHeader field="dateRequested">Date</SortHeader>
+              <SortHeader field="dateRequested">Date Requested</SortHeader>
+              <SortHeader field="dateAssigned">Date Assigned</SortHeader>
               <SortHeader field="brand">Brand</SortHeader>
               <th className={cn('px-2 sm:px-4 py-2 sm:py-4 text-left text-xs sm:text-sm font-semibold uppercase tracking-wider', isDark ? 'text-slate-300' : 'text-gray-600')}>Task</th>
               {viewMode === 'all' && <SortHeader field="agent">Agent</SortHeader>}
@@ -2432,6 +2438,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                     )}
                   </td>
                   <td className={cn('px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>{formatDate(task.date_requested)}</td>
+                  <td className={cn('px-2 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>{formatDate(task.date_assigned)}</td>
                   <td className={cn('px-2 sm:px-4 py-2 sm:py-4 font-medium text-sm sm:text-base', isDark ? 'text-white' : 'text-gray-900')}>{task.brand}</td>
                   <td className={cn('px-2 sm:px-4 py-2 sm:py-4 text-sm sm:text-base', isDark ? 'text-white' : 'text-gray-900')}>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
@@ -2574,6 +2581,10 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                   </div>
                   <div className={cn('flex items-center gap-1.5 sm:gap-2', isDark ? 'text-slate-400' : 'text-gray-500')}>
                     <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span>Assigned: {formatDate(task.date_assigned)}</span>
+                  </div>
+                  <div className={cn('flex items-center gap-1.5 sm:gap-2', isDark ? 'text-slate-400' : 'text-gray-500')}>
+                    <ClockIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                     <span>Due: {formatDate(task.due_date)}</span>
                     {isOverdue && <span className="text-rose-500 text-[10px] sm:text-xs font-medium">(Overdue)</span>}
                   </div>
@@ -2666,7 +2677,11 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                   </span>
                   <span className={isDark ? 'text-slate-400' : 'text-gray-500'}>
                     <Calendar className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                    {formatDate(task.due_date)}
+                    Assigned: {formatDate(task.date_assigned)}
+                  </span>
+                  <span className={isDark ? 'text-slate-400' : 'text-gray-500'}>
+                    <ClockIcon className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    Due: {formatDate(task.due_date)}
                     {isOverdue && <span className="ml-1 text-rose-500 font-medium">(Overdue)</span>}
                   </span>
                   {hasRemarks && (
@@ -2741,7 +2756,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
   };
 
   const renderSkeleton = () => {
-    if (layoutMode === 'table') return <TableSkeleton theme={theme} columns={viewMode === 'all' ? 8 : 7} />;
+    if (layoutMode === 'table') return <TableSkeleton theme={theme} columns={viewMode === 'all' ? 9 : 8} />;
     return <CardSkeleton theme={theme} />;
   };
 
@@ -3473,6 +3488,10 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
               <div>
                 <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Date Requested</label>
                 <p className={cn('text-base sm:text-lg', isDark ? 'text-white' : 'text-gray-900')}>{formatDate(selectedTask.date_requested)}</p>
+              </div>
+              <div>
+                <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Date Assigned</label>
+                <p className={cn('text-base sm:text-lg', isDark ? 'text-white' : 'text-gray-900')}>{formatDate(selectedTask.date_assigned)}</p>
               </div>
               <div>
                 <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Due Date</label>
