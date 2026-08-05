@@ -520,13 +520,17 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
       agent: task.agent 
     });
     
-    if (basecampId) {
-      generated = `${generated} ${basecampId}`;
-    }
-    
+    // Add PO# first (if provided)
     if (poNumber.trim()) {
       generated = `${generated} ${poNumber.trim()}`;
     }
+    
+    // Then add Basecamp ID
+    if (basecampId) {
+      generated = `${generated} ${basecampId}`;
+    }
+
+    navigator.clipboard.writeText(generated);
 
     navigator.clipboard.writeText(generated);
     setCopiedTemplate(template);
@@ -609,12 +613,17 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
       agent: task.agent 
     });
     let preview = base;
-    if (basecampId) {
-      preview = `${preview} ${basecampId}`;
-    }
+    
+    // Add PO# first
     if (poNumber.trim()) {
       preview = `${preview} ${poNumber.trim()}`;
     }
+    
+    // Then add Basecamp ID
+    if (basecampId) {
+      preview = `${preview} ${basecampId}`;
+    }
+    
     return preview;
   };
 
@@ -2128,8 +2137,6 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
 
   // ─── FILTERED AND SORTED TASKS ─────────────────────────────────────────
 
-  // ─── FILTERED AND SORTED TASKS ─────────────────────────────────────────
-
   const filteredAndSortedTasks = useMemo(() => {
     if (activeTasks.length === 0) return [];
 
@@ -2314,6 +2321,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
 
     return filtered;
   }, [activeTasks, debouncedSearchTerm, filterStatus, filterBrand, filterAgent, filterSBS, sortField, sortOrder, filterDateRange, customDateStart, customDateEnd, showOnlyNew, newTaskIds, getUSDate]);
+
   // ─── PAGINATION ────────────────────────────────────────────────────────
 
   const totalPages = Math.ceil(filteredAndSortedTasks.length / itemsPerPage);
@@ -3003,350 +3011,352 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
             </div>
           </div>
 
-          {/* ─── FILTER TOOLBAR ───────────────────────────────────────────── */}
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-              <div className="relative flex-1">
-                <Search className={cn('absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5', isDark ? 'text-slate-400' : 'text-gray-400')} />
-                <input
-                  type="text"
-                  placeholder="Search by row#, task, brand, agent, due date..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  aria-label="Search tasks"
-                  className={cn('w-full rounded-xl border pl-9 sm:pl-12 pr-3 sm:pr-4 py-2 sm:py-3 text-sm sm:text-base transition-all duration-200', focusRing, isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400')}
-                />
-                <span className={cn('absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-[10px] sm:text-xs hidden md:block', isDark ? 'text-slate-500' : 'text-gray-400')}>
-                  💡 Try: Dec 25, 12/25, 2024-12-25
-                </span>
-              </div>
-
-              <Button
-                theme={theme}
-                variant={showFilters || hasActiveFilters ? 'primary' : 'outline'}
-                icon={Filter}
-                onClick={() => setShowFilters(!showFilters)}
-                className={cn('flex-shrink-0', showFilters || hasActiveFilters ? (isDark ? '!bg-emerald-500/10 !text-emerald-400 !shadow-none border !border-emerald-500/40' : '!bg-emerald-50 !text-emerald-700 !shadow-none border !border-emerald-300') : '')}
-              >
-                <span className="hidden xs:inline">Filters</span>
-                {(filterStatus !== 'all' || filterBrand !== 'all' || filterAgent !== 'all' || filterSBS !== 'all') && (
-                  <span className="ml-1 rounded-full bg-emerald-500 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs text-white">
-                    {[filterStatus, filterBrand, filterAgent, filterSBS].filter((f) => f !== 'all').length}
+          {/* ─── FILTER TOOLBAR WITH STICKY CONTAINER ────────────────────── */}
+          <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 sm:py-4 -mt-1" style={{ backgroundColor: isDark ? 'rgb(15 23 42 / 0.92)' : 'rgb(255 255 255 / 0.92)', backdropFilter: 'blur(12px)', borderBottom: isDark ? '1px solid rgb(51 65 85 / 0.5)' : '1px solid rgb(229 231 235 / 0.8)' }}>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                <div className="relative flex-1">
+                  <Search className={cn('absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5', isDark ? 'text-slate-400' : 'text-gray-400')} />
+                  <input
+                    type="text"
+                    placeholder="Search by row#, task, brand, agent, due date..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    aria-label="Search tasks"
+                    className={cn('w-full rounded-xl border pl-9 sm:pl-12 pr-3 sm:pr-4 py-2 sm:py-3 text-sm sm:text-base transition-all duration-200', focusRing, isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400')}
+                  />
+                  <span className={cn('absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-[10px] sm:text-xs hidden md:block', isDark ? 'text-slate-500' : 'text-gray-400')}>
+                    💡 Try: Dec 25, 12/25, 2024-12-25
                   </span>
-                )}
-              </Button>
+                </div>
 
-              <div className={cn('flex rounded-xl border overflow-hidden flex-shrink-0', isDark ? 'border-slate-700' : 'border-gray-200')}>
-                {[
-                  { mode: 'table' as const, Icon: Table, label: 'Table View' },
-                  { mode: 'card' as const, Icon: LayoutGrid, label: 'Card View' },
-                  { mode: 'list' as const, Icon: List, label: 'List View' },
-                ].map(({ mode, Icon, label }, i) => (
-                  <button
-                    key={mode}
-                    onClick={() => setLayoutMode(mode)}
-                    title={label}
-                    aria-label={label}
-                    aria-pressed={layoutMode === mode}
-                    className={cn(
-                      'px-2.5 sm:px-4 py-2 sm:py-3 text-sm transition-all',
-                      focusRing,
-                      i > 0 && (isDark ? 'border-l border-slate-700' : 'border-l border-gray-200'),
-                      layoutMode === mode ? (isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700') : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-white text-gray-500 hover:bg-gray-100'
-                    )}
-                  >
-                    <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <div className="flex gap-1 sm:gap-2 overflow-x-auto pb-1">
-                <button
-                  onClick={() => {
-                    setFilterStatus('all');
-                    setCurrentPage(1);
-                  }}
-                  className={cn(
-                    'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                    focusRing,
-                    filterStatus === 'all'
-                      ? isDark
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                      : isDark
-                      ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  )}
+                <Button
+                  theme={theme}
+                  variant={showFilters || hasActiveFilters ? 'primary' : 'outline'}
+                  icon={Filter}
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={cn('flex-shrink-0', showFilters || hasActiveFilters ? (isDark ? '!bg-emerald-500/10 !text-emerald-400 !shadow-none border !border-emerald-500/40' : '!bg-emerald-50 !text-emerald-700 !shadow-none border !border-emerald-300') : '')}
                 >
-                  All ({taskCounts.all || 0})
-                </button>
-
-                {Object.keys(taskCounts)
-                  .filter((k) => k !== 'all')
-                  .sort()
-                  .map((status) => {
-                    const count = taskCounts[status] || 0;
-                    const isActive = filterStatus === status;
-
-                    return (
-                      <button
-                        key={status}
-                        onClick={() => {
-                          setFilterStatus(status);
-                          setCurrentPage(1);
-                        }}
-                        className={cn(
-                          'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                          focusRing,
-                          isActive
-                            ? isDark
-                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                              : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                            : isDark
-                            ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        )}
-                      >
-                        <span>{status}</span>
-                        <span
-                          className={cn(
-                            'ml-1 sm:ml-2 rounded-full px-1 sm:px-2 py-0.5 text-[8px] sm:text-xs',
-                            isActive ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
-                          )}
-                        >
-                          {count}
-                        </span>
-                      </button>
-                    );
-                  })}
-              </div>
-
-              {/* SBS/Non-SBS Filter Buttons */}
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
-                <button
-                  onClick={() => {
-                    setFilterSBS('all');
-                    setCurrentPage(1);
-                  }}
-                  className={cn(
-                    'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                    focusRing,
-                    filterSBS === 'all'
-                      ? isDark
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                      : isDark
-                      ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  )}
-                >
-                  All Tasks
-                </button>
-                
-                <button
-                  onClick={() => {
-                    setFilterSBS('sbs');
-                    setCurrentPage(1);
-                  }}
-                  className={cn(
-                    'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                    focusRing,
-                    filterSBS === 'sbs'
-                      ? isDark
-                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                        : 'bg-amber-100 text-amber-700 border border-amber-300'
-                      : isDark
-                      ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  )}
-                >
-                  <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
-                  SBS
-                  <span className={cn(
-                    'ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs',
-                    filterSBS === 'sbs' ? (isDark ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-200 text-amber-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
-                  )}>
-                    {activeTasks.filter(t => {
-                      const remarks = (t.remarks || '').toLowerCase();
-                      return remarks.includes('sbs') && !remarks.includes('non-sbs');
-                    }).length}
-                  </span>
-                </button>
-                
-                <button
-                  onClick={() => {
-                    setFilterSBS('non-sbs');
-                    setCurrentPage(1);
-                  }}
-                  className={cn(
-                    'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                    focusRing,
-                    filterSBS === 'non-sbs'
-                      ? isDark
-                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                        : 'bg-blue-100 text-blue-700 border border-blue-300'
-                      : isDark
-                      ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  )}
-                >
-                  <EyeOff className="h-3 w-3 sm:h-4 sm:w-4" />
-                  Non-SBS
-                  <span className={cn(
-                    'ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs',
-                    filterSBS === 'non-sbs' ? (isDark ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-200 text-blue-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
-                  )}>
-                    {activeTasks.filter(t => (t.remarks || '').toLowerCase().includes('non-sbs')).length}
-                  </span>
-                </button>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
-                <button
-                  onClick={() => setShowOnlyNew(!showOnlyNew)}
-                  className={cn(
-                    'inline-flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                    focusRing,
-                    showOnlyNew
-                      ? isDark
-                        ? 'bg-emerald-500/30 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                      : isDark
-                      ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  )}
-                >
-                  <Bell className="h-3 w-3 sm:h-4 sm:w-4" />
-                  <span className="hidden xs:inline">{showOnlyNew ? 'Showing New Tasks' : 'Show New Tasks'}</span>
-                  {newTaskIds.size > 0 && (
-                    <span className={cn('ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs', showOnlyNew ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}>
-                      {newTaskIds.size}
+                  <span className="hidden xs:inline">Filters</span>
+                  {(filterStatus !== 'all' || filterBrand !== 'all' || filterAgent !== 'all' || filterSBS !== 'all') && (
+                    <span className="ml-1 rounded-full bg-emerald-500 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs text-white">
+                      {[filterStatus, filterBrand, filterAgent, filterSBS].filter((f) => f !== 'all').length}
                     </span>
                   )}
-                </button>
+                </Button>
 
-                {newTaskIds.size > 0 && (
-                  <button
-                    onClick={onMarkAllViewed}
-                    className={cn(
-                      'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                      focusRing,
-                      isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                    )}
-                  >
-                    <Check className="h-3 w-3 sm:h-4 sm:w-4" />
-                    <span className="hidden xs:inline">Mark All Viewed</span>
-                  </button>
-                )}
+                <div className={cn('flex rounded-xl border overflow-hidden flex-shrink-0', isDark ? 'border-slate-700' : 'border-gray-200')}>
+                  {[
+                    { mode: 'table' as const, Icon: Table, label: 'Table View' },
+                    { mode: 'card' as const, Icon: LayoutGrid, label: 'Card View' },
+                    { mode: 'list' as const, Icon: List, label: 'List View' },
+                  ].map(({ mode, Icon, label }, i) => (
+                    <button
+                      key={mode}
+                      onClick={() => setLayoutMode(mode)}
+                      title={label}
+                      aria-label={label}
+                      aria-pressed={layoutMode === mode}
+                      className={cn(
+                        'px-2.5 sm:px-4 py-2 sm:py-3 text-sm transition-all',
+                        focusRing,
+                        i > 0 && (isDark ? 'border-l border-slate-700' : 'border-l border-gray-200'),
+                        layoutMode === mode ? (isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700') : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-white text-gray-500 hover:bg-gray-100'
+                      )}
+                    >
+                      <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-                {dateChips.map((chip) => (
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-1 sm:gap-2 overflow-x-auto pb-1">
                   <button
-                    key={chip.key}
                     onClick={() => {
-                      setFilterDateRange(chip.key);
+                      setFilterStatus('all');
                       setCurrentPage(1);
                     }}
                     className={cn(
-                      'px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                      'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
                       focusRing,
-                      filterDateRange === chip.key ? chip.activeClass : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      filterStatus === 'all'
+                        ? isDark
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                        : isDark
+                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     )}
                   >
-                    {chip.emoji && <span className="mr-1">{chip.emoji}</span>}
-                    {chip.label}
+                    All ({taskCounts.all || 0})
                   </button>
-                ))}
 
-                <button
-                  onClick={() => setShowDateRangePicker(!showDateRangePicker)}
-                  className={cn(
-                    'px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap inline-flex items-center gap-1',
-                    focusRing,
-                    filterDateRange === 'custom'
-                      ? isDark
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                      : isDark
-                      ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  )}
-                >
-                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
-                  <span className="hidden xs:inline">Custom Range</span>
-                  {filterDateRange === 'custom' && (
-                    <span className="ml-1 text-[10px] opacity-70 hidden lg:inline">
-                      ({customDateStart ? new Date(customDateStart).toLocaleDateString('en-US') : '...'} - {customDateEnd ? new Date(customDateEnd).toLocaleDateString('en-US') : '...'})
-                    </span>
-                  )}
-                </button>
+                  {Object.keys(taskCounts)
+                    .filter((k) => k !== 'all')
+                    .sort()
+                    .map((status) => {
+                      const count = taskCounts[status] || 0;
+                      const isActive = filterStatus === status;
 
-                {filterDateRange !== 'all' && (
+                      return (
+                        <button
+                          key={status}
+                          onClick={() => {
+                            setFilterStatus(status);
+                            setCurrentPage(1);
+                          }}
+                          className={cn(
+                            'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                            focusRing,
+                            isActive
+                              ? isDark
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                              : isDark
+                              ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          )}
+                        >
+                          <span>{status}</span>
+                          <span
+                            className={cn(
+                              'ml-1 sm:ml-2 rounded-full px-1 sm:px-2 py-0.5 text-[8px] sm:text-xs',
+                              isActive ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
+                            )}
+                          >
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                </div>
+
+                {/* SBS/Non-SBS Filter Buttons */}
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
                   <button
-                    onClick={clearCustomDateRange}
-                    className={cn('px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap', focusRing, isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300')}
+                    onClick={() => {
+                      setFilterSBS('all');
+                      setCurrentPage(1);
+                    }}
+                    className={cn(
+                      'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                      focusRing,
+                      filterSBS === 'all'
+                        ? isDark
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                        : isDark
+                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
                   >
-                    <X className="h-3 w-3 sm:h-4 sm:w-4 inline" /> Clear
+                    All Tasks
                   </button>
+                  
+                  <button
+                    onClick={() => {
+                      setFilterSBS('sbs');
+                      setCurrentPage(1);
+                    }}
+                    className={cn(
+                      'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                      focusRing,
+                      filterSBS === 'sbs'
+                        ? isDark
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                          : 'bg-amber-100 text-amber-700 border border-amber-300'
+                        : isDark
+                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
+                    SBS
+                    <span className={cn(
+                      'ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs',
+                      filterSBS === 'sbs' ? (isDark ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-200 text-amber-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
+                    )}>
+                      {activeTasks.filter(t => {
+                        const remarks = (t.remarks || '').toLowerCase();
+                        return remarks.includes('sbs') && !remarks.includes('non-sbs');
+                      }).length}
+                    </span>
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      setFilterSBS('non-sbs');
+                      setCurrentPage(1);
+                    }}
+                    className={cn(
+                      'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                      focusRing,
+                      filterSBS === 'non-sbs'
+                        ? isDark
+                          ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                          : 'bg-blue-100 text-blue-700 border border-blue-300'
+                        : isDark
+                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <EyeOff className="h-3 w-3 sm:h-4 sm:w-4" />
+                    Non-SBS
+                    <span className={cn(
+                      'ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs',
+                      filterSBS === 'non-sbs' ? (isDark ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-200 text-blue-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
+                    )}>
+                      {activeTasks.filter(t => (t.remarks || '').toLowerCase().includes('non-sbs')).length}
+                    </span>
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
+                  <button
+                    onClick={() => setShowOnlyNew(!showOnlyNew)}
+                    className={cn(
+                      'inline-flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                      focusRing,
+                      showOnlyNew
+                        ? isDark
+                          ? 'bg-emerald-500/30 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                        : isDark
+                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <Bell className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden xs:inline">{showOnlyNew ? 'Showing New Tasks' : 'Show New Tasks'}</span>
+                    {newTaskIds.size > 0 && (
+                      <span className={cn('ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs', showOnlyNew ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}>
+                        {newTaskIds.size}
+                      </span>
+                    )}
+                  </button>
+
+                  {newTaskIds.size > 0 && (
+                    <button
+                      onClick={onMarkAllViewed}
+                      className={cn(
+                        'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                        focusRing,
+                        isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                      )}
+                    >
+                      <Check className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden xs:inline">Mark All Viewed</span>
+                    </button>
+                  )}
+
+                  {dateChips.map((chip) => (
+                    <button
+                      key={chip.key}
+                      onClick={() => {
+                        setFilterDateRange(chip.key);
+                        setCurrentPage(1);
+                      }}
+                      className={cn(
+                        'px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                        focusRing,
+                        filterDateRange === chip.key ? chip.activeClass : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                    >
+                      {chip.emoji && <span className="mr-1">{chip.emoji}</span>}
+                      {chip.label}
+                    </button>
+                  ))}
+
+                  <button
+                    onClick={() => setShowDateRangePicker(!showDateRangePicker)}
+                    className={cn(
+                      'px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap inline-flex items-center gap-1',
+                      focusRing,
+                      filterDateRange === 'custom'
+                        ? isDark
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                        : isDark
+                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden xs:inline">Custom Range</span>
+                    {filterDateRange === 'custom' && (
+                      <span className="ml-1 text-[10px] opacity-70 hidden lg:inline">
+                        ({customDateStart ? new Date(customDateStart).toLocaleDateString('en-US') : '...'} - {customDateEnd ? new Date(customDateEnd).toLocaleDateString('en-US') : '...'})
+                      </span>
+                    )}
+                  </button>
+
+                  {filterDateRange !== 'all' && (
+                    <button
+                      onClick={clearCustomDateRange}
+                      className={cn('px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap', focusRing, isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300')}
+                    >
+                      <X className="h-3 w-3 sm:h-4 sm:w-4 inline" /> Clear
+                    </button>
+                  )}
+                </div>
+
+                {showDateRangePicker && (
+                  <Card theme={theme} className="mt-1 sm:mt-2 p-3 sm:p-4 shadow-lg">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+                      <div className="flex-1 w-full sm:w-auto">
+                        <FieldLabel theme={theme}>Start Date</FieldLabel>
+                        <input type="date" value={customDateStart} onChange={(e) => setCustomDateStart(e.target.value)} className={inputClasses(theme)} />
+                      </div>
+                      <div className="flex-1 w-full sm:w-auto">
+                        <FieldLabel theme={theme}>End Date</FieldLabel>
+                        <input type="date" value={customDateEnd} onChange={(e) => setCustomDateEnd(e.target.value)} className={inputClasses(theme)} />
+                      </div>
+                      <div className="flex gap-2 sm:gap-3 w-full sm:w-auto mt-2 sm:mt-6">
+                        <Button theme={theme} variant="primary" icon={Check} disabled={!customDateStart || !customDateEnd} onClick={applyCustomDateRange} className="flex-1 sm:flex-none">
+                          Apply
+                        </Button>
+                        <Button theme={theme} variant="secondary" onClick={() => setShowDateRangePicker(false)} className="flex-1 sm:flex-none">
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
                 )}
               </div>
 
-              {showDateRangePicker && (
-                <Card theme={theme} className="mt-1 sm:mt-2 p-3 sm:p-4 shadow-lg">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-                    <div className="flex-1 w-full sm:w-auto">
-                      <FieldLabel theme={theme}>Start Date</FieldLabel>
-                      <input type="date" value={customDateStart} onChange={(e) => setCustomDateStart(e.target.value)} className={inputClasses(theme)} />
-                    </div>
-                    <div className="flex-1 w-full sm:w-auto">
-                      <FieldLabel theme={theme}>End Date</FieldLabel>
-                      <input type="date" value={customDateEnd} onChange={(e) => setCustomDateEnd(e.target.value)} className={inputClasses(theme)} />
-                    </div>
-                    <div className="flex gap-2 sm:gap-3 w-full sm:w-auto mt-2 sm:mt-6">
-                      <Button theme={theme} variant="primary" icon={Check} disabled={!customDateStart || !customDateEnd} onClick={applyCustomDateRange} className="flex-1 sm:flex-none">
-                        Apply
-                      </Button>
-                      <Button theme={theme} variant="secondary" onClick={() => setShowDateRangePicker(false)} className="flex-1 sm:flex-none">
-                        Cancel
-                      </Button>
-                    </div>
+              {showFilters && (
+                <Card theme={theme} className={cn('grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-4', isDark ? 'bg-slate-800/50' : 'bg-gray-50')}>
+                  <div>
+                    <FieldLabel theme={theme}>Brand</FieldLabel>
+                    <select value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)} className={inputClasses(theme)}>
+                      <option value="all">All Brands</option>
+                      {uniqueBrands.map((brand) => (
+                        <option key={brand} value={brand}>
+                          {brand}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <FieldLabel theme={theme}>Agent</FieldLabel>
+                    <select value={filterAgent} onChange={(e) => setFilterAgent(e.target.value)} className={inputClasses(theme)}>
+                      <option value="all">All Agents</option>
+                      {uniqueAgents.map((agent) => (
+                        <option key={agent} value={agent}>
+                          {agent}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <Button theme={theme} variant="secondary" onClick={clearFilters} className="w-full">
+                      Clear All Filters
+                    </Button>
                   </div>
                 </Card>
               )}
             </div>
-
-            {showFilters && (
-              <Card theme={theme} className={cn('grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-4', isDark ? 'bg-slate-800/50' : 'bg-gray-50')}>
-                <div>
-                  <FieldLabel theme={theme}>Brand</FieldLabel>
-                  <select value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)} className={inputClasses(theme)}>
-                    <option value="all">All Brands</option>
-                    {uniqueBrands.map((brand) => (
-                      <option key={brand} value={brand}>
-                        {brand}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <FieldLabel theme={theme}>Agent</FieldLabel>
-                  <select value={filterAgent} onChange={(e) => setFilterAgent(e.target.value)} className={inputClasses(theme)}>
-                    <option value="all">All Agents</option>
-                    {uniqueAgents.map((agent) => (
-                      <option key={agent} value={agent}>
-                        {agent}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex items-end">
-                  <Button theme={theme} variant="secondary" onClick={clearFilters} className="w-full">
-                    Clear All Filters
-                  </Button>
-                </div>
-              </Card>
-            )}
           </div>
 
           {/* ─── TASK LIST ────────────────────────────────────────────────── */}
