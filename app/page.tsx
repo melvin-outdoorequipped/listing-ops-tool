@@ -70,9 +70,10 @@ const Documentation = lazy(() => import('./components/documentation'));
 const Terms = lazy(() => import('./components/terms'));
 const DownloadPage = lazy(() => import('./components/download'));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const SkuTracker = lazy(() => import('./components/SkuTracker')); // New component for V2 SKU Tracker
 
 type Theme = 'light' | 'dark';
-type ToolId = 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer' | 'get-brand';
+type ToolId = 'sku' | 'asin' | 'basecamp' | 'bulk-analyzer' | 'get-brand' | 'v2-sku-tracker';
 type MainMenuId = 'Dashboard' | 'TaskManagement' | 'Tools' | 'Downloads' | 'Documentation' | 'Terms' | 'Admin';
 type ViewMode = 'grid' | 'list' | 'compact';
 type ToastType = 'info' | 'error' | 'success';
@@ -261,6 +262,16 @@ const toolsSubItems: ToolItem[] = [
     category: 'utility',
     tags: ['Brand', 'Lookup', 'Info'],
   },
+  // Add the new tool here
+  {
+    id: 'v2-sku-tracker',
+    name: 'V2 SKU Tracker',
+    description: 'Check if SKU exists in the tracking sheet.',
+    icon: <GitBranch className="h-5 w-5" />,
+    accent: 'emerald',
+    category: 'validation',
+    tags: ['SKU', 'Tracking', 'Validation'],
+  },
 ];
 
 const ALL_COMMANDS = [
@@ -275,6 +286,8 @@ const ALL_COMMANDS = [
   { label: 'Open Basecamp Generator', menuId: 'Tools' as MainMenuId, toolId: 'basecamp' as ToolId },
   { label: 'Open File Generator', menuId: 'Tools' as MainMenuId, toolId: 'bulk-analyzer' as ToolId },
   { label: 'Open Get Brand Tool', menuId: 'Tools' as MainMenuId, toolId: 'get-brand' as ToolId },
+  // Add the new command
+  { label: 'Open V2 SKU Tracker', menuId: 'Tools' as MainMenuId, toolId: 'v2-sku-tracker' as ToolId },
 ];
 
 const LoadingSpinner = () => (
@@ -520,10 +533,13 @@ function HomePageContent({
   }, [activeMainMenu]);
 
   useEffect(() => {
-    const handler = (event: Event) => {
+  const handler = (event: Event) => {
       const e = event as CustomEvent<{ toolId: ToolId }>;
       const toolId = e.detail?.toolId;
-      if (!['sku', 'asin', 'basecamp', 'bulk-analyzer', 'get-brand'].includes(toolId)) return;
+      // ✅ Add 'v2-sku-tracker' to the allowed list
+      if (!['sku', 'asin', 'basecamp', 'bulk-analyzer', 'get-brand', 'v2-sku-tracker'].includes(toolId)) {
+        return;
+      }
       const found = toolsSubItems.find(t => t.id === toolId);
       if (found?.comingSoon) return;
       navigateTo('Tools', toolId);
@@ -1044,6 +1060,7 @@ function HomePageContent({
         basecamp: BasecampGenerator,
         'bulk-analyzer': FileGenerator,
         'get-brand': GetBrand,
+        'v2-sku-tracker': SkuTracker,
       };
       const Component = toolComponents[activeTool];
       if (Component) {

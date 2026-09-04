@@ -8,7 +8,8 @@ import {
   SearchCheck, 
   MessageSquare, 
   FileSpreadsheet, 
-  Building2 
+  Building2,
+  GitBranch
 } from 'lucide-react';
 
 export interface Task {
@@ -130,6 +131,15 @@ export const operationTools = [
     status: 'Beta',
     accent: 'blue',
     icon: <Building2 className="h-4 w-4" />,
+  },
+  {
+    id: 'v2-sku-tracker',
+    title: 'V2 SKU Tracker',
+    description: 'Check if SKU exists in the tracking sheet.',
+    icon: <GitBranch className="h-4 w-4" />,
+    category: 'Validation',
+    status: 'Active',
+    accent: 'emerald',
   },
 ];
 

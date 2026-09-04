@@ -753,12 +753,14 @@ export default function DashboardClient({
     if (id === 'asin') return metrics.asinRuns;
     if (id === 'basecamp') return metrics.basecampRuns;
     if (id === 'bulk-analyzer') return metrics.bulkAnalyzerRuns;
+    if (id === 'v2-sku-tracker') return 0; // ✅ Add this
     return 0;
   };
 
   const getSparklineForTool = (id: string) => {
     if (id === 'bulk-analyzer') return sparklineData.bulkAnalyzer;
     if (id === 'get-brand') return [0, 0, 0, 0, 0, 0, 0];
+    if (id === 'v2-sku-tracker') return [0, 0, 0, 0, 0, 0, 0]; // ✅ Add this
     return sparklineData[id as keyof typeof sparklineData] || [0, 0, 0, 0, 0, 0, 0];
   };
 
@@ -768,6 +770,7 @@ export default function DashboardClient({
     basecamp: 'Basecamp',
     'bulk-analyzer': 'File Generator',
     'get-brand': 'Get Brand',
+    'v2-sku-tracker': 'SKU Tracker',
   };
 
   const panelClass = isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white';
