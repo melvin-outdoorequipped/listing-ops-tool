@@ -1,7 +1,7 @@
 // app/components/SkuTracker.tsx
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   Search,
   Loader2,
@@ -14,6 +14,9 @@ import {
   Copy,
   Check,
   FileText,
+  Filter,
+  X,
+  ListFilter,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -44,6 +47,8 @@ interface BatchResult {
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
+type FilterType = 'all' | 'found' | 'not-found';
+
 export default function SkuTracker({ theme }: SkuTrackerProps) {
   const isDark = theme === 'dark';
   const [skuInput, setSkuInput] = useState('');
@@ -52,6 +57,8 @@ export default function SkuTracker({ theme }: SkuTrackerProps) {
   const [batchResult, setBatchResult] = useState<BatchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [filterType, setFilterType] = useState<FilterType>('all');
+  const [showNotFoundOnly, setShowNotFoundOnly] = useState(false);
 
   const TRACKER_SHEET_ID = '1HBTuNJUFmHIGT0Ly4qiPwK0h16v0JglmtsMxl2O5qb8';
 
@@ -64,6 +71,7 @@ export default function SkuTracker({ theme }: SkuTrackerProps) {
     setError(null);
     setResults([]);
     setBatchResult(null);
+    setFilterType('all');
 
     try {
       const response = await fetch('/api/google-sheets/check-skus', {
@@ -75,7 +83,6 @@ export default function SkuTracker({ theme }: SkuTrackerProps) {
         }),
       });
 
-      // Check if response is OK
       if (!response.ok) {
         const text = await response.text();
         console.error('Response error:', text);
@@ -106,7 +113,6 @@ export default function SkuTracker({ theme }: SkuTrackerProps) {
       return;
     }
 
-    // Split by newline, comma, or semicolon
     const skus = skuInput
       .split(/[\n,;]+/)
       .map(s => s.trim())
@@ -132,39 +138,43 @@ export default function SkuTracker({ theme }: SkuTrackerProps) {
     setResults([]);
     setBatchResult(null);
     setError(null);
+    setFilterType('all');
   };
 
-  const copyResults = () => {
-    if (results.length === 0) return;
+  const copyResults = useCallback((type: 'all' | 'found' | 'not-found' = 'all') => {
+    const filteredResults = getFilteredResults(type);
+    if (filteredResults.length === 0) return;
+
+    let text = '';
+    const typeLabel = type === 'found' ? 'FOUND' : type === 'not-found' ? 'NOT FOUND' : 'RESULTS';
     
-    let text = 'SKU Check Results:\n';
+    text += `SKU ${typeLabel}:\n`;
     text += '='.repeat(50) + '\n\n';
     
-    const foundItems = results.filter(r => r.exists);
-    const notFoundItems = results.filter(r => !r.exists);
-    
-    if (foundItems.length > 0) {
-      text += '✅ FOUND:\n';
-      foundItems.forEach(r => {
-        text += `  ${r.sku}`;
-        if (r.sheetName) text += ` (${r.sheetName})`;
-        if (r.status) text += ` - ${r.status}`;
-        text += '\n';
-      });
+    filteredResults.forEach(r => {
+      text += r.sku;
+      if (r.sheetName) text += ` (${r.sheetName})`;
+      if (r.status) text += ` - ${r.status}`;
       text += '\n';
-    }
-    
-    if (notFoundItems.length > 0) {
-      text += '❌ NOT FOUND:\n';
-      notFoundItems.forEach(r => {
-        text += `  ${r.sku}\n`;
-      });
-    }
-    
+    });
+
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
+  }, [results]);
+
+  const getFilteredResults = useCallback((type: FilterType) => {
+    if (type === 'found') {
+      return results.filter(r => r.exists);
+    } else if (type === 'not-found') {
+      return results.filter(r => !r.exists);
+    }
+    return results;
+  }, [results]);
+
+  const filteredResults = useMemo(() => {
+    return getFilteredResults(filterType);
+  }, [results, filterType, getFilteredResults]);
 
   const getStatusBadge = (status: string) => {
     const statusLower = status?.toLowerCase() || '';
@@ -181,6 +191,12 @@ export default function SkuTracker({ theme }: SkuTrackerProps) {
       return isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700';
     }
     return isDark ? 'bg-slate-500/20 text-slate-400' : 'bg-gray-100 text-gray-600';
+  };
+
+  const getFilterCount = (type: FilterType) => {
+    if (type === 'found') return batchResult?.found || 0;
+    if (type === 'not-found') return batchResult?.notFound || 0;
+    return batchResult?.total || 0;
   };
 
   return (
@@ -228,7 +244,7 @@ export default function SkuTracker({ theme }: SkuTrackerProps) {
                   value={skuInput}
                   onChange={(e) => setSkuInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Enter multiple SKUs (one per line)&#10;Example:&#10;ABW-102230_Chestnut_38x34-V2&#10;ABW-102230_Coal_30x30-V2&#10;ABW-102230_Coal_30x34-V2"
+                  placeholder="Enter multiple SKUs (one per line)&#10;Example:&#10;ABW-102230_Chestnut_38x34-V2&#10;ABW-102230_Coal_30x30-V2"
                   className={`min-h-[120px] w-full flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-slate-500 resize-y ${
                     isDark ? 'text-white' : 'text-gray-900'
                   }`}
@@ -250,36 +266,33 @@ export default function SkuTracker({ theme }: SkuTrackerProps) {
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={handleSubmit}
-                disabled={isLoading || !skuInput.trim()}
-                className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-6 py-2.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
-                  isLoading || !skuInput.trim()
-                    ? 'cursor-not-allowed opacity-50'
-                    : 'bg-emerald-600 text-white hover:bg-emerald-500 active:scale-[0.98]'
-                }`}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Checking SKUs...
-                  </>
-                ) : (
-                  <>
-                    <Search className="h-4 w-4" />
-                    Check {skuInput.split(/[\n,;]+/).filter(s => s.trim()).length || 0} SKUs
-                  </>
-                )}
-              </button>
-            </div>
+            <button
+              onClick={handleSubmit}
+              disabled={isLoading || !skuInput.trim()}
+              className={`flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-6 py-2.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                isLoading || !skuInput.trim()
+                  ? 'cursor-not-allowed opacity-50'
+                  : 'bg-emerald-600 text-white hover:bg-emerald-500 active:scale-[0.98]'
+              }`}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Checking SKUs...
+                </>
+              ) : (
+                <>
+                  <Search className="h-4 w-4" />
+                  Check {skuInput.split(/[\n,;]+/).filter(s => s.trim()).length || 0} SKUs
+                </>
+              )}
+            </button>
           </div>
 
           <div className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
             💡 Enter one SKU per line. Press <kbd className={`rounded px-1.5 py-0.5 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}>Shift + Enter</kbd> to submit.
           </div>
 
-          {/* Info about which sheets are searched */}
           <div className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
             <span className="flex items-center gap-1.5">
               <Building2 className="h-3 w-3" />
@@ -306,43 +319,98 @@ export default function SkuTracker({ theme }: SkuTrackerProps) {
         </motion.div>
       )}
 
-      {/* Batch Summary */}
+      {/* Batch Summary with Filter Buttons */}
       {batchResult && !error && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`grid grid-cols-1 gap-3 sm:grid-cols-3`}
+          className="grid grid-cols-1 gap-3 sm:grid-cols-4"
         >
-          <div className={`rounded-xl border p-4 text-center ${
-            isDark ? 'border-slate-700/40 bg-slate-900/50' : 'border-gray-200 bg-white'
-          }`}>
+          <button
+            onClick={() => setFilterType('all')}
+            className={`rounded-xl border p-4 text-center transition-all ${
+              filterType === 'all'
+                ? isDark
+                  ? 'border-emerald-500/50 bg-emerald-500/10 ring-2 ring-emerald-500/20'
+                  : 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-500/20'
+                : isDark
+                  ? 'border-slate-700/40 bg-slate-900/50 hover:border-slate-600'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+            }`}
+          >
             <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
               {batchResult.total}
             </p>
             <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Total SKUs</p>
-          </div>
-          <div className={`rounded-xl border p-4 text-center ${
-            isDark ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-emerald-200 bg-emerald-50'
-          }`}>
+          </button>
+
+          <button
+            onClick={() => setFilterType('found')}
+            className={`rounded-xl border p-4 text-center transition-all ${
+              filterType === 'found'
+                ? 'border-emerald-500/50 bg-emerald-500/10 ring-2 ring-emerald-500/20'
+                : isDark
+                  ? 'border-slate-700/40 bg-slate-900/50 hover:border-slate-600'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+            }`}
+          >
             <p className={`text-2xl font-bold text-emerald-400`}>
               {batchResult.found}
             </p>
-            <p className={`text-xs ${isDark ? 'text-emerald-400/70' : 'text-emerald-600'}`}>Found</p>
-          </div>
-          <div className={`rounded-xl border p-4 text-center ${
-            isDark ? 'border-red-500/30 bg-red-500/10' : 'border-red-200 bg-red-50'
-          }`}>
+            <p className={`text-xs ${isDark ? 'text-emerald-400/70' : 'text-emerald-600'}`}>
+              Found
+            </p>
+          </button>
+
+          <button
+            onClick={() => setFilterType('not-found')}
+            className={`rounded-xl border p-4 text-center transition-all ${
+              filterType === 'not-found'
+                ? 'border-red-500/50 bg-red-500/10 ring-2 ring-red-500/20'
+                : isDark
+                  ? 'border-slate-700/40 bg-slate-900/50 hover:border-slate-600'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+            }`}
+          >
             <p className={`text-2xl font-bold text-red-400`}>
               {batchResult.notFound}
             </p>
-            <p className={`text-xs ${isDark ? 'text-red-400/70' : 'text-red-600'}`}>Not Found</p>
-          </div>
+            <p className={`text-xs ${isDark ? 'text-red-400/70' : 'text-red-600'}`}>
+              Not Found
+            </p>
+          </button>
+
+          {/* Copy Not Found Button */}
+          {batchResult.notFound > 0 && (
+            <button
+              onClick={() => copyResults('not-found')}
+              className={`rounded-xl border p-4 text-center transition-all ${
+                isDark
+                  ? 'border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20'
+                  : 'border-amber-200 bg-amber-50 hover:bg-amber-100'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                {copied ? (
+                  <Check className="h-5 w-5 text-emerald-400" />
+                ) : (
+                  <Copy className="h-5 w-5 text-amber-400" />
+                )}
+                <span className={`text-sm font-medium ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
+                  {copied ? 'Copied!' : 'Copy Not Found'}
+                </span>
+              </div>
+              <p className={`text-xs ${isDark ? 'text-amber-400/70' : 'text-amber-600'}`}>
+                {batchResult.notFound} SKUs to copy
+              </p>
+            </button>
+          )}
         </motion.div>
       )}
 
       {/* Results Display */}
       <AnimatePresence mode="wait">
-        {results.length > 0 && (
+        {filteredResults.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -360,38 +428,79 @@ export default function SkuTracker({ theme }: SkuTrackerProps) {
                   <FileText className={`h-5 w-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
                   <div>
                     <h3 className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      Results ({results.length})
+                      {filterType === 'found' ? 'Found SKUs' : 
+                       filterType === 'not-found' ? 'Not Found SKUs' : 
+                       `All Results (${filteredResults.length})`}
                     </h3>
                     <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                      {results.filter(r => r.exists).length} found · {results.filter(r => !r.exists).length} not found
+                      {filterType === 'found' 
+                        ? `${filteredResults.filter(r => r.exists).length} found` 
+                        : filterType === 'not-found' 
+                        ? `${filteredResults.filter(r => !r.exists).length} not found`
+                        : `${results.filter(r => r.exists).length} found · ${results.filter(r => !r.exists).length} not found`}
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={copyResults}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                    isDark
-                      ? 'bg-slate-800/50 text-slate-300 hover:bg-slate-700'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {copied ? (
-                    <>
-                      <Check className="h-3.5 w-3.5 text-emerald-400" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-3.5 w-3.5" />
-                      Copy Results
-                    </>
+                <div className="flex items-center gap-2">
+                  {filterType === 'not-found' && (
+                    <button
+                      onClick={() => copyResults('not-found')}
+                      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                        isDark
+                          ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+                          : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                      }`}
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="h-3.5 w-3.5" />
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5" />
+                          Copy All
+                        </>
+                      )}
+                    </button>
                   )}
-                </button>
+                  <button
+                    onClick={() => copyResults(filterType)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                      isDark
+                        ? 'bg-slate-800/50 text-slate-300 hover:bg-slate-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-400" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy {filterType === 'all' ? 'All' : filterType === 'found' ? 'Found' : 'Not Found'}
+                      </>
+                    )}
+                  </button>
+                  {filterType !== 'all' && (
+                    <button
+                      onClick={() => setFilterType('all')}
+                      className={`rounded p-1 transition-colors ${
+                        isDark ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                      title="Show all results"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Results List */}
               <div className="max-h-96 overflow-y-auto divide-y divide-slate-700/30">
-                {results.map((result, idx) => (
+                {filteredResults.map((result, idx) => (
                   <div
                     key={`${result.sku}-${idx}`}
                     className={`flex items-start gap-3 px-4 py-3 transition-colors ${
@@ -427,11 +536,6 @@ export default function SkuTracker({ theme }: SkuTrackerProps) {
                                 {result.status}
                               </span>
                             )}
-                            {result.v2Sku && result.v2Sku !== result.sku && (
-                              <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                                V2: {result.v2Sku}
-                              </span>
-                            )}
                           </>
                         ) : (
                           <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
@@ -451,11 +555,6 @@ export default function SkuTracker({ theme }: SkuTrackerProps) {
                               Agent: {result.details['Agent']}
                             </span>
                           )}
-                          {result.details['Date Requested'] && (
-                            <span className={isDark ? 'text-slate-400' : 'text-gray-500'}>
-                              Date: {new Date(result.details['Date Requested']).toLocaleDateString()}
-                            </span>
-                          )}
                         </div>
                       )}
                     </div>
@@ -467,6 +566,23 @@ export default function SkuTracker({ theme }: SkuTrackerProps) {
                   </div>
                 ))}
               </div>
+
+              {/* Footer with count */}
+              <div className={`border-t px-4 py-2 text-xs ${
+                isDark ? 'border-slate-700/40 text-slate-500' : 'border-gray-200 text-gray-400'
+              }`}>
+                Showing {filteredResults.length} of {results.length} results
+                {filterType === 'not-found' && (
+                  <span className="ml-2 text-red-400">
+                    · {filteredResults.length} SKUs not found
+                  </span>
+                )}
+                {filterType === 'found' && (
+                  <span className="ml-2 text-emerald-400">
+                    · {filteredResults.length} SKUs found
+                  </span>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
@@ -477,6 +593,9 @@ export default function SkuTracker({ theme }: SkuTrackerProps) {
         <p>
           Enter V2 SKUs (one per line) to check if they exist in any of the tracking sheets. 
           The system will search the <strong>V2 SKU</strong> column across all sheets and return the row details if found.
+        </p>
+        <p className="mt-1">
+          💡 Click on <strong>Not Found</strong> to filter only the SKUs that weren't found, then click <strong>Copy Not Found</strong> to copy them all at once.
         </p>
       </div>
     </div>
