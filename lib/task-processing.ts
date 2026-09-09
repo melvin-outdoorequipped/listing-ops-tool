@@ -1,5 +1,5 @@
 // lib/task-processing.ts
-import { Task } from '../components/components/dashboard-utils'; // adjust to your actual import path
+import { Task } from '../../components/dashboard-utils'; // adjust to your actual import path
 
 export function processTasksFromSheet(sheetData: any): Task[] {
   let headers: string[];
