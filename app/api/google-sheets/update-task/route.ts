@@ -31,6 +31,7 @@ function formatDateForSheet(dateStr: string): string {
 // hand-edited.
 const EDITABLE_FIELDS: Record<string, string> = {
   dateRequested: 'Date Requested',
+  dateAssigned: 'Date Assigned',   // ← added
   type: 'Type',
   task: 'Task',
   brand: 'Brand',
@@ -103,10 +104,10 @@ export async function POST(request: NextRequest) {
       
       // Format dates if it's a date field
       let value = updates[field] ?? '';
-      if ((field === 'dateRequested' || field === 'dueDate') && value) {
-        value = formatDateForSheet(value);
-      }
-      
+        if ((field === 'dateRequested' || field === 'dateAssigned' || field === 'dueDate') && value) {
+          value = formatDateForSheet(value);
+        }
+              
       batchData.push({
         range: `'${sheetName}'!${letter}${rowIndexNum}`,
         values: [[value]],

@@ -76,12 +76,30 @@ async function getSheetValues(
           spreadsheetId,
           range: `'${sheetName}'!A:Z`,
           majorDimension: 'ROWS',
+          // ─── KEY FIX: Force dates to return exactly as the sheet displays them ───
+          valueRenderOption: 'FORMATTED_VALUE',
+          dateTimeRenderOption: 'FORMATTED_STRING',
         })
       );
 
       const values = (response.data.values || []) as string[][];
       console.log(`✅ Fetched ${values.length} rows (including header)`);
-      
+
+      // ─── DEBUG: Log a sample of the first data row's date columns ───
+      if (values.length > 1) {
+        const headers = values[0];
+        const sampleRow = values[1];
+        const dateCols = ['date requested', 'date assigned', 'due date', 'date completed'];
+        const sample: Record<string, string> = {};
+        headers.forEach((h, i) => {
+          const key = String(h || '').trim().toLowerCase();
+          if (dateCols.includes(key)) {
+            sample[key] = String(sampleRow[i] ?? '');
+          }
+        });
+        console.log('🔍 Sample row dates from API:', sample);
+      }
+
       sheetCache.set(cacheKey, { values, timestamp: Date.now() });
       return values;
     } finally {
@@ -96,9 +114,9 @@ async function getSheetValues(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log('📝 /api/google-sheets request:', { 
-      viewAll: body.viewAll, 
-      userEmail: body.userEmail?.substring(0, 10) + '...' 
+    console.log('📝 /api/google-sheets request:', {
+      viewAll: body.viewAll,
+      userEmail: body.userEmail?.substring(0, 10) + '...'
     });
 
     const { spreadsheetId, sheetName, userEmail, viewAll } = body;
@@ -136,10 +154,10 @@ export async function POST(request: NextRequest) {
 
     if (values.length < 2) {
       console.log('📊 No data rows found in sheet');
-      return NextResponse.json({ 
+      return NextResponse.json({
         headers: [],
         rows: [],
-        total: 0 
+        total: 0
       });
     }
 
@@ -149,7 +167,7 @@ export async function POST(request: NextRequest) {
     // ─── VIEW ALL MODE ──────────────────────────────────────────────────
     if (viewAll) {
       console.log('👁️ View All mode activated');
-      
+
       // Process ALL rows with their actual Google Sheet row numbers
       const allRows = values
         .slice(1) // Skip header row
@@ -182,10 +200,10 @@ export async function POST(request: NextRequest) {
 
     if (agentCol === -1) {
       console.error('⚠️ Agent column not found in headers');
-      return NextResponse.json({ 
+      return NextResponse.json({
         headers: [],
         rows: [],
-        total: 0 
+        total: 0
       });
     }
 

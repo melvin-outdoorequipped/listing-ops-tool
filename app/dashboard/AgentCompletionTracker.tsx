@@ -87,6 +87,55 @@ function getRingColor(rate: number | null): { stroke: string; bg: string } {
   return { stroke: 'stroke-rose-500', bg: 'bg-rose-500' };
 }
 
+// ─── SBS / NON-SBS DETECTION ─────────────────────────────────────────────
+type SbsTag = 'sbs' | 'non-sbs' | null;
+
+function detectSbsTag(remarks: string | null | undefined): SbsTag {
+  if (!remarks) return null;
+  const text = String(remarks).toUpperCase();
+  // Match "NON-SBS" / "NON SBS" first so it doesn't get caught by the SBS check
+  if (/\bNON[\s-]?SBS\b/.test(text)) return 'non-sbs';
+  if (/\bSBS\b/.test(text)) return 'sbs';
+  return null;
+}
+
+function SbsBadge({ tag, isDark, size = 'sm' }: { tag: SbsTag; isDark: boolean; size?: 'sm' | 'md' }) {
+  if (!tag) return null;
+
+  const padding = size === 'md' ? 'px-2.5 py-1 text-xs' : 'px-2 py-0.5 text-[10px]';
+  const iconSize = size === 'md' ? 'h-2.5 w-2.5' : 'h-2 w-2';
+
+  if (tag === 'sbs') {
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center gap-1 rounded-full font-semibold flex-shrink-0',
+          padding,
+          isDark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
+        )}
+        title="SBS - Side by Side Observing"
+      >
+        <span className={cn(iconSize, 'rounded-full bg-purple-400 flex-shrink-0')} />
+        SBS
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full font-semibold flex-shrink-0',
+        padding,
+        isDark ? 'bg-sky-500/20 text-sky-300' : 'bg-sky-100 text-sky-700'
+      )}
+      title="Non-SBS"
+    >
+      <span className={cn(iconSize, 'rounded-full bg-sky-400 flex-shrink-0')} />
+      Non-SBS
+    </span>
+  );
+}
+
 // ─── ANIMATED COUNTER ─────────────────────────────────────────────────────
 
 function AnimatedCounter({ value, duration = 800, className = '' }: { value: number; duration?: number; className?: string }) {
@@ -268,6 +317,25 @@ function AgentCard({ stats, isExpanded, onToggle, onTaskClick, isDark, delay = 0
 
   const totalTasks = stats.completed + stats.ongoingNotCompleted + stats.excludedPendingCount + stats.excludedCancelledCount;
 
+  // Count SBS / Non-SBS tasks for this agent
+  const sbsCounts = useMemo(() => {
+    const allTasks = [
+      ...stats.tasks.completedOnTime,
+      ...stats.tasks.completedLate,
+      ...stats.tasks.ongoingCounted,
+      ...stats.tasks.excludedPending,
+      ...stats.tasks.excludedCancelled,
+    ];
+    let sbs = 0;
+    let nonSbs = 0;
+    allTasks.forEach((t) => {
+      const tag = detectSbsTag(t.remarks);
+      if (tag === 'sbs') sbs++;
+      else if (tag === 'non-sbs') nonSbs++;
+    });
+    return { sbs, nonSbs };
+  }, [stats.tasks]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -334,6 +402,24 @@ function AgentCard({ stats, isExpanded, onToggle, onTaskClick, isDark, delay = 0
 
         {/* Status chips */}
         <div className="mt-3 flex flex-wrap gap-1.5">
+          {sbsCounts.sbs > 0 && (
+            <span className={cn(
+              'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs',
+              isDark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
+            )}>
+              <span className="h-2 w-2 rounded-full bg-purple-400" />
+              {sbsCounts.sbs} SBS
+            </span>
+          )}
+          {sbsCounts.nonSbs > 0 && (
+            <span className={cn(
+              'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs',
+              isDark ? 'bg-sky-500/20 text-sky-300' : 'bg-sky-100 text-sky-700'
+            )}>
+              <span className="h-2 w-2 rounded-full bg-sky-400" />
+              {sbsCounts.nonSbs} Non-SBS
+            </span>
+          )}
           {stats.tasks.completedOnTime.length > 0 && (
             <span className={cn(
               'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs',
@@ -422,6 +508,7 @@ function AgentCard({ stats, isExpanded, onToggle, onTaskClick, isDark, delay = 0
                   >
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
                     <span className="truncate flex-1">{t.task}</span>
+                    <SbsBadge tag={detectSbsTag(t.remarks)} isDark={isDark} />
                     <span className={cn('text-[10px] font-medium flex-shrink-0', isDark ? 'text-emerald-400' : 'text-emerald-600')}>
                       ✓ On time
                     </span>
@@ -443,6 +530,7 @@ function AgentCard({ stats, isExpanded, onToggle, onTaskClick, isDark, delay = 0
                   >
                     <AlertTriangle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
                     <span className="truncate flex-1">{t.task}</span>
+                    <SbsBadge tag={detectSbsTag(t.remarks)} isDark={isDark} />
                     <span className={cn('text-[10px] font-medium flex-shrink-0', isDark ? 'text-amber-400' : 'text-amber-600')}>
                       ⏱️ {t.date_completed ? Math.ceil((new Date(t.date_completed).getTime() - new Date(t.date_assigned).getTime()) / (1000 * 60 * 60 * 24)) : '?'}d late
                     </span>
@@ -464,6 +552,7 @@ function AgentCard({ stats, isExpanded, onToggle, onTaskClick, isDark, delay = 0
                   >
                     <Clock className="h-3.5 w-3.5 text-rose-500 flex-shrink-0" />
                     <span className="truncate flex-1">{t.task}</span>
+                    <SbsBadge tag={detectSbsTag(t.remarks)} isDark={isDark} />
                     <span className={cn('text-[10px] flex-shrink-0', isDark ? 'text-slate-400' : 'text-gray-400')}>
                       due {t.due_date || 'N/A'}
                     </span>
@@ -485,6 +574,7 @@ function AgentCard({ stats, isExpanded, onToggle, onTaskClick, isDark, delay = 0
                   >
                     <Ban className="h-3.5 w-3.5 flex-shrink-0" />
                     <span className="truncate flex-1">{t.task}</span>
+                    <SbsBadge tag={detectSbsTag(t.remarks)} isDark={isDark} />
                     <span className="text-[10px] flex-shrink-0">{t.status}</span>
                     <Info className="h-3 w-3 opacity-50 flex-shrink-0" />
                   </motion.button>
@@ -689,7 +779,10 @@ function TaskDetailModal({ task, isOpen, onClose, isDark }: TaskDetailModalProps
         {/* Remarks */}
         {task.remarks && (
           <div>
-            <label className={cn('text-xs font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Remarks</label>
+            <div className="flex items-center gap-2 mb-1">
+              <label className={cn('text-xs font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Remarks</label>
+              <SbsBadge tag={detectSbsTag(task.remarks)} isDark={isDark} size="md" />
+            </div>
             <p className={cn('text-sm mt-1', isDark ? 'text-slate-300' : 'text-gray-700')}>
               {task.remarks}
             </p>

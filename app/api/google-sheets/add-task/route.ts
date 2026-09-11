@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
       sheetName,
       requesterEmail,
       dateRequested,
+      dateAssigned,
       type,
       task,
       brand,
@@ -105,6 +106,7 @@ export async function POST(request: NextRequest) {
     const colType = findCol(headers, 'Type');
     const colTask = findCol(headers, 'Task');
     const colBrand = findCol(headers, 'Brand');
+    const colDateAssigned = findCol(headers, 'Date Assigned');
     const colAgent = findCol(headers, 'Agent');
     const colDueDate = findCol(headers, 'Due Date');
     const colStatus = findCol(headers, 'Status');
@@ -158,12 +160,14 @@ export async function POST(request: NextRequest) {
 
     // Format dates for the sheet
     const formattedDateRequested = formatDateForSheet(dateRequested);
+    const formattedDateAssigned = dateAssigned ? formatDateForSheet(dateAssigned) : '';
     const formattedDueDate = dueDate ? formatDateForSheet(dueDate) : '';
 
     setCell(colDateRequested, formattedDateRequested);
     setCell(colType, type || '');
     setCell(colTask, task);
     setCell(colBrand, brand);
+    setCell(colDateAssigned, formattedDateAssigned);
     setCell(colAgent, agent);
     setCell(colDueDate, formattedDueDate);
     setCell(colStatus, status || 'Pending');

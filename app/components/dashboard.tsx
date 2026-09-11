@@ -89,7 +89,7 @@ export default function DashboardClient({
   const [isRouletteOpen, setIsRouletteOpen] = useState(false);
   const [settings, setSettings] = useState<any>(null);
 
-  // Task-related state (surfaced through the Task Detail modal and quick actions below)
+  // Task-related state
   const [tasks, setTasks] = useState<Task[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [previousTaskIds, setPreviousTaskIds] = useState<Set<string>>(new Set());
@@ -123,6 +123,92 @@ export default function DashboardClient({
   // Google Sheets configuration
   const SPREADSHEET_ID = '1aBOYH2ShWyW8ASamH23WAFdoi0NR8bIebsQGuAnU67A';
   const SHEET_NAME = 'Copy of Task Masterlist - Operations';
+
+ /**
+ * Convert any date value from the API into YYYY-MM-DD for <input type="date">.
+ * NEVER uses `new Date()` on string inputs — no timezone shift possible.
+ * Handles: M/D/YYYY, MM/DD/YYYY, YYYY-MM-DD, ISO with time, Date objects,
+ * and Google Sheets serial numbers.
+ */
+function toInputDate(raw: string | null | undefined | Date | number): string {
+  if (raw === null || raw === undefined) return '';
+
+  if (raw instanceof Date) {
+    if (isNaN(raw.getTime())) return '';
+    const y = raw.getUTCFullYear();
+    const m = String(raw.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(raw.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  if (typeof raw === 'number' && raw > 20000 && raw < 60000) {
+    const ms = (raw - 25569) * 86400 * 1000;
+    const d = new Date(ms);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  const s = String(raw).trim().replace(/^["']|["']$/g, '');
+  if (!s || s === 'N/A' || s === 'undefined' || s === 'null' || s === '-') return '';
+
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // ISO with time — extract date part directly (no TZ conversion)
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+
+  // M/D/YYYY or MM/DD/YYYY — the format the API returns
+  const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slash) {
+    const [, m, d, y] = slash;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+
+  // Long form: "Sep 11, 2026"
+  const long = s.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
+  if (long) {
+    const [, monthName, day, year] = long;
+    const monthMap: Record<string, string> = {
+      jan: '01', january: '01',
+      feb: '02', february: '02',
+      mar: '03', march: '03',
+      apr: '04', april: '04',
+      may: '05',
+      jun: '06', june: '06',
+      jul: '07', july: '07',
+      aug: '08', august: '08',
+      sep: '09', sept: '09', september: '09',
+      oct: '10', october: '10',
+      nov: '11', november: '11',
+      dec: '12', december: '12',
+    };
+    const m = monthMap[monthName.toLowerCase()];
+    if (m) return `${year}-${m}-${day.padStart(2, '0')}`;
+  }
+
+  console.warn('❌ toInputDate UNPARSEABLE:', JSON.stringify(raw), 'typeof:', typeof raw);
+  return '';
+}
+
+  // Diagnostic: log raw selected task dates
+  useEffect(() => {
+    if (selectedTask) {
+      console.log('🔍 SELECTED TASK RAW:', {
+        rowIndex: selectedTask.rowIndex,
+        task: selectedTask.task,
+        date_requested_raw: JSON.stringify(selectedTask.date_requested),
+        date_assigned_raw: JSON.stringify(selectedTask.date_assigned),
+        due_date_raw: JSON.stringify(selectedTask.due_date),
+        date_completed_raw: JSON.stringify(selectedTask.date_completed),
+        date_requested_parsed: toInputDate(selectedTask.date_requested),
+        date_assigned_parsed: toInputDate(selectedTask.date_assigned),
+        due_date_parsed: toInputDate(selectedTask.due_date),
+      });
+    }
+  }, [selectedTask]);
 
   const processTasksFromSheet = useCallback((sheetData: any): Task[] => {
     let headers: string[];
@@ -189,6 +275,16 @@ export default function DashboardClient({
       const dueDate = get(row, dueDateCol);
       const dateCompleted = get(row, dateCompletedCol);
       const statusRaw = get(row, statusCol);
+
+      // 🔍 DEBUG: log raw dates for every row when in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📅 ROW', rowIndex, {
+          task: taskName,
+          'date_requested (raw)': JSON.stringify(dateRequested),
+          'date_assigned (raw)': JSON.stringify(dateAssigned),
+          'due_date (raw)': JSON.stringify(dueDate),
+        });
+      }
 
       const normalizedStatus = normalizeStatus(statusRaw, dateCompleted, dateAssigned, {
         rowIndex,
@@ -517,6 +613,7 @@ export default function DashboardClient({
             rowIndex: selectedTask.rowIndex,
             updates: {
               dateRequested: values.dateRequested,
+              ...(values.dateAssigned ? { dateAssigned: values.dateAssigned } : {}),
               type: values.type,
               task: values.task,
               brand: finalBrand,
@@ -563,6 +660,7 @@ export default function DashboardClient({
             sheetName: SHEET_NAME,
             requesterEmail: currentUserEmail,
             dateRequested: values.dateRequested,
+            dateAssigned: values.dateAssigned,
             type: values.type,
             task: values.task,
             brand: finalBrand,
@@ -753,14 +851,14 @@ export default function DashboardClient({
     if (id === 'asin') return metrics.asinRuns;
     if (id === 'basecamp') return metrics.basecampRuns;
     if (id === 'bulk-analyzer') return metrics.bulkAnalyzerRuns;
-    if (id === 'v2-sku-tracker') return 0; // ✅ Add this
+    if (id === 'v2-sku-tracker') return 0;
     return 0;
   };
 
   const getSparklineForTool = (id: string) => {
     if (id === 'bulk-analyzer') return sparklineData.bulkAnalyzer;
     if (id === 'get-brand') return [0, 0, 0, 0, 0, 0, 0];
-    if (id === 'v2-sku-tracker') return [0, 0, 0, 0, 0, 0, 0]; // ✅ Add this
+    if (id === 'v2-sku-tracker') return [0, 0, 0, 0, 0, 0, 0];
     return sparklineData[id as keyof typeof sparklineData] || [0, 0, 0, 0, 0, 0, 0];
   };
 
@@ -1377,13 +1475,14 @@ export default function DashboardClient({
         initialValues={
           selectedTask
             ? {
-                dateRequested: selectedTask.date_requested ? new Date(selectedTask.date_requested).toISOString().split('T')[0] : '',
+                dateRequested: toInputDate(selectedTask.date_requested),
+                dateAssigned: toInputDate(selectedTask.date_assigned) || toInputDate(selectedTask.date_requested),
                 type: selectedTask.type,
                 task: selectedTask.task,
                 brand: BRAND_OPTIONS.includes(selectedTask.brand) ? selectedTask.brand : '__OTHER__',
                 customBrand: BRAND_OPTIONS.includes(selectedTask.brand) ? '' : selectedTask.brand,
                 agent: selectedTask.agent,
-                dueDate: selectedTask.due_date ? new Date(selectedTask.due_date).toISOString().split('T')[0] : '',
+                dueDate: toInputDate(selectedTask.due_date),
                 status: selectedTask.status,
                 remarks: selectedTask.remarks,
                 bcLinks: selectedTask.bc_links || '',

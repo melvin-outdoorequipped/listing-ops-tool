@@ -79,6 +79,51 @@ import {
   ModalFooter,
 } from '../components/ui/dashboard-ui-kit';
 
+// ─── DATE HELPERS (US FORMAT, LOCALE-SAFE) ────────────────────────────────
+
+function sheetDateToInput(raw: string | null | undefined | Date | number): string {
+  if (raw === null || raw === undefined) return '';
+  if (raw instanceof Date) {
+    if (isNaN(raw.getTime())) return '';
+    const y = raw.getUTCFullYear();
+    const m = String(raw.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(raw.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  if (typeof raw === 'number' && raw > 20000 && raw < 60000) {
+    const ms = (raw - 25569) * 86400 * 1000;
+    const d = new Date(ms);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  }
+  const s = String(raw).trim().replace(/^["']|["']$/g, '');
+  if (!s || s === 'N/A' || s === 'undefined' || s === 'null' || s === '-') return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slash) return `${slash[3]}-${slash[1].padStart(2, '0')}-${slash[2].padStart(2, '0')}`;
+  const long = s.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
+  if (long) {
+    const months: Record<string, string> = {
+      jan: '01', january: '01', feb: '02', february: '02', mar: '03', march: '03',
+      apr: '04', april: '04', may: '05', jun: '06', june: '06', jul: '07', july: '07',
+      aug: '08', august: '08', sep: '09', sept: '09', september: '09',
+      oct: '10', october: '10', nov: '11', november: '11', dec: '12', december: '12',
+    };
+    const m = months[long[1].toLowerCase()];
+    if (m) return `${long[3]}-${m}-${long[2].padStart(2, '0')}`;
+  }
+  return '';
+}
+
+function todayAsInputValue(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // ─── TOAST SYSTEM ─────────────────────────────────────────────────────────
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -283,7 +328,6 @@ function DashboardHeader({
           : 'border-gray-200 bg-gradient-to-br from-white via-gray-50/80 to-white'
       )}
     >
-      {/* Glass overlay */}
       <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-purple-500/5 rounded-3xl" />
       
       <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -408,7 +452,6 @@ function AnalyticsCard({ title, value, icon, color, gradient, isDark, delay = 0,
           : 'border-gray-200 bg-white/80 backdrop-blur-sm hover:shadow-xl hover:shadow-gray-200/50'
       )}
     >
-      {/* Gradient accent */}
       <div className={cn('absolute top-0 left-0 right-0 h-1', gradient)} />
 
       <div className="p-5">
@@ -520,19 +563,16 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
       agent: task.agent 
     });
     
-    // Add PO# first (if provided)
     if (poNumber.trim()) {
       generated = `${generated} ${poNumber.trim()}`;
     }
     
-    // Then add Basecamp ID
     if (basecampId) {
       generated = `${generated} ${basecampId}`;
     }
 
     navigator.clipboard.writeText(generated);
 
-    navigator.clipboard.writeText(generated);
     setCopiedTemplate(template);
     setCopiedText(generated);
     setTimeout(() => {
@@ -614,12 +654,10 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
     });
     let preview = base;
     
-    // Add PO# first
     if (poNumber.trim()) {
       preview = `${preview} ${poNumber.trim()}`;
     }
     
-    // Then add Basecamp ID
     if (basecampId) {
       preview = `${preview} ${basecampId}`;
     }
@@ -1107,6 +1145,7 @@ function ReasonForPendingModal({ isOpen, onClose, onConfirm, task, theme, isSubm
 
 interface TaskFormValues {
   dateRequested: string;
+  dateAssigned: string;
   type: string;
   task: string;
   brand: string;
@@ -1119,7 +1158,8 @@ interface TaskFormValues {
 }
 
 const emptyTaskForm: TaskFormValues = {
-  dateRequested: new Date().toISOString().split('T')[0],
+  dateRequested: todayAsInputValue(),
+  dateAssigned: '',
   type: '',
   task: '',
   brand: '',
@@ -1155,7 +1195,8 @@ function TaskFormModal({
 
   useEffect(() => {
     if (isOpen) setForm({ ...emptyTaskForm, ...initialValues });
-  }, [isOpen, initialValues]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -1192,16 +1233,22 @@ function TaskFormModal({
           Segment is auto-filled by the sheet's formula and can't be set here.
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           <div>
             <FieldLabel theme={theme}>Date Requested</FieldLabel>
             <input type="date" className={inputClasses(theme)} value={form.dateRequested} onChange={(e) => setForm({ ...form, dateRequested: e.target.value })} />
           </div>
           <div>
+            <FieldLabel theme={theme}>Date Assigned</FieldLabel>
+            <input type="date" className={inputClasses(theme)} value={form.dateAssigned} onChange={(e) => setForm({ ...form, dateAssigned: e.target.value })} />
+          </div>
+          <div>
             <FieldLabel theme={theme}>Due Date</FieldLabel>
             <input type="date" className={inputClasses(theme)} value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
           </div>
+        </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div>
             <FieldLabel theme={theme}>Type</FieldLabel>
             <select className={inputClasses(theme)} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
@@ -1465,13 +1512,11 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
   const [taskFormError, setTaskFormError] = useState<string | null>(null);
   const [showDateRangePicker, setShowDateRangePicker] = useState(false);
 
-  // Reason for Pending states
   const [showPendingReasonModal, setShowPendingReasonModal] = useState(false);
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
   const [isSubmittingPending, setIsSubmittingPending] = useState(false);
   const [pendingStatusTarget, setPendingStatusTarget] = useState<string>('Pending');
 
-  // Refs
   const initialLoadDone = useRef(false);
   const isLoadingRef = useRef(false);
 
@@ -1997,6 +2042,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
             rowIndex: selectedTask.rowIndex,
             updates: {
               dateRequested: values.dateRequested,
+              dateAssigned: values.dateAssigned,
               type: values.type,
               task: values.task,
               brand: finalBrand,
@@ -2046,6 +2092,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
             sheetName: SHEET_NAME,
             requesterEmail: currentUserEmail,
             dateRequested: values.dateRequested,
+            dateAssigned: values.dateAssigned,
             type: values.type,
             task: values.task,
             brand: finalBrand,
@@ -2114,18 +2161,6 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     return { total, completed, pending, ongoing, cancelled, overdue, completionRate };
   }, [activeTasks, getUSDate]);
 
-  const uniqueBrands = useMemo(() => {
-    const brands = new Set<string>();
-    activeTasks.forEach((task) => task.brand && brands.add(task.brand));
-    return Array.from(brands).sort();
-  }, [activeTasks]);
-
-  const uniqueAgents = useMemo(() => {
-    const agents = new Set<string>();
-    activeTasks.forEach((task) => task.agent && agents.add(task.agent));
-    return Array.from(agents).sort();
-  }, [activeTasks]);
-
   const taskCounts = useMemo(() => {
     const counts: Record<string, number> = { all: activeTasks.length };
     activeTasks.forEach((task) => {
@@ -2138,223 +2173,205 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
   // ─── FILTERED AND SORTED TASKS ─────────────────────────────────────────
 
   const filteredAndSortedTasks = useMemo(() => {
-  if (activeTasks.length === 0) return [];
+    if (activeTasks.length === 0) return [];
 
-  let filtered = activeTasks;
+    let filtered = activeTasks;
 
-  // ─── 1. APPLY STATUS FILTERS FIRST ────────────────────────────────────
-  
-  if (showOnlyNew) filtered = filtered.filter((task) => newTaskIds.has(task.id));
-  
-  if (filterStatus !== 'all') {
-    filtered = filtered.filter((task) => task.status === filterStatus);
-  }
-  
-  if (filterBrand !== 'all') {
-    filtered = filtered.filter((task) => task.brand === filterBrand);
-  }
-  
-  if (filterAgent !== 'all') {
-    filtered = filtered.filter((task) => task.agent === filterAgent);
-  }
-  
-  if (filterSBS !== 'all') {
-    filtered = filtered.filter((task) => {
-      const remarks = (task.remarks || '').toLowerCase();
-      const hasSBS = remarks.includes('sbs') && !remarks.includes('non-sbs');
-      const hasNonSBS = remarks.includes('non-sbs');
+    if (showOnlyNew) filtered = filtered.filter((task) => newTaskIds.has(task.id));
+    
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter((task) => task.status === filterStatus);
+    }
+    
+    if (filterBrand !== 'all') {
+      filtered = filtered.filter((task) => task.brand === filterBrand);
+    }
+    
+    if (filterAgent !== 'all') {
+      filtered = filtered.filter((task) => task.agent === filterAgent);
+    }
+    
+    if (filterSBS !== 'all') {
+      filtered = filtered.filter((task) => {
+        const remarks = (task.remarks || '').toLowerCase();
+        const hasSBS = remarks.includes('sbs') && !remarks.includes('non-sbs');
+        const hasNonSBS = remarks.includes('non-sbs');
 
-      if (filterSBS === 'sbs') return hasSBS;
-      if (filterSBS === 'non-sbs') return hasNonSBS;
-      return true;
-    });
-  }
-
-  // ─── 2. APPLY DATE FILTERS SECOND ─────────────────────────────────────
-
-  // Use US timezone for date comparisons
-  const usToday = getUSDate();
-
-  if (filterDateRange !== 'all') {
-    filtered = filtered.filter((task) => {
-      // Handle unassigned filter separately
-      if (filterDateRange === 'unassigned') {
-        return !task.agent || task.agent.trim() === '';
-      }
-
-      // Use due_date for filtering
-      const dueDateStr = task.due_date;
-      if (!dueDateStr) return false;
-
-      const dueDate = new Date(dueDateStr);
-      if (isNaN(dueDate.getTime())) return false;
-
-      const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
-
-      // Overdue: due date is past AND not completed/cancelled
-      if (filterDateRange === 'overdue') {
-        return dueDateOnly < usToday && 
-               task.status !== 'Completed' && 
-               task.status !== 'Cancelled';
-      }
-
-      // Today: due date is today
-      if (filterDateRange === 'today') {
-        return dueDateOnly.getTime() === usToday.getTime();
-      }
-
-      // Next 7 days: from tomorrow to 7 days from now
-      if (filterDateRange === 'week') {
-        const tomorrow = new Date(usToday);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-
-        const weekEnd = new Date(usToday);
-        weekEnd.setDate(weekEnd.getDate() + 7);
-
-        return dueDateOnly >= tomorrow && dueDateOnly <= weekEnd;
-      }
-
-      // This month: from the 1st to the last day of current month
-      if (filterDateRange === 'month') {
-        const monthStart = new Date(usToday.getFullYear(), usToday.getMonth(), 1);
-        const monthEnd = new Date(usToday.getFullYear(), usToday.getMonth() + 1, 0);
-
-        return dueDateOnly >= monthStart && dueDateOnly <= monthEnd;
-      }
-
-      // Custom date range
-      if (filterDateRange === 'custom') {
-        const startDate = customDateStart ? new Date(customDateStart) : null;
-        const endDate = customDateEnd ? new Date(customDateEnd) : null;
-
-        if (startDate) {
-          const startOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-          if (dueDateOnly < startOnly) return false;
-        }
-        if (endDate) {
-          const endOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-          if (dueDateOnly > endOnly) return false;
-        }
+        if (filterSBS === 'sbs') return hasSBS;
+        if (filterSBS === 'non-sbs') return hasNonSBS;
         return true;
-      }
+      });
+    }
 
-      return true;
-    });
-  }
+    const usToday = getUSDate();
 
-  // ─── 3. APPLY SEARCH FILTER ───────────────────────────────────────────
-
-  if (debouncedSearchTerm.trim()) {
-    const term = debouncedSearchTerm.toLowerCase().trim();
-
-    filtered = filtered.filter((task) => {
-      if (task.rowIndex !== undefined && task.rowIndex !== null) {
-        const rowIndexStr = String(task.rowIndex);
-        if (rowIndexStr.includes(term) || term.includes(rowIndexStr)) return true;
-      }
-
-      if (task.task.toLowerCase().includes(term)) return true;
-      if (task.brand.toLowerCase().includes(term)) return true;
-      if (task.status.toLowerCase().includes(term)) return true;
-      if (task.type.toLowerCase().includes(term)) return true;
-      if (task.segment.toLowerCase().includes(term)) return true;
-      if (task.bc_links.toLowerCase().includes(term)) return true;
-      if (task.agent.toLowerCase().includes(term)) return true;
-      if (task.auditor.toLowerCase().includes(term)) return true;
-      if (task.remarks.toLowerCase().includes(term)) return true;
-      if (task.reason_for_pending.toLowerCase().includes(term)) return true;
-      if (task.reason_for_cancel.toLowerCase().includes(term)) return true;
-
-      if (task.due_date) {
-        try {
-          const dueDate = new Date(task.due_date);
-          if (!isNaN(dueDate.getTime())) {
-            const dateFormats = [
-              task.due_date.toLowerCase(),
-              dueDate.toLocaleDateString('en-US').toLowerCase(),
-              dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase(),
-              dueDate.toISOString().split('T')[0],
-              `${dueDate.getMonth() + 1}/${dueDate.getDate()}/${dueDate.getFullYear()}`,
-              `${dueDate.getMonth() + 1}/${dueDate.getDate()}`,
-            ];
-
-            for (const format of dateFormats) {
-              if (format.includes(term)) return true;
-            }
-          }
-        } catch (e) {
-          // Skip
+    if (filterDateRange !== 'all') {
+      filtered = filtered.filter((task) => {
+        if (filterDateRange === 'unassigned') {
+          return !task.agent || task.agent.trim() === '';
         }
-      }
 
-      return false;
-    });
-  }
+        const dueDateStr = task.due_date;
+        if (!dueDateStr) return false;
 
-  // ─── 4. APPLY SORTING ──────────────────────────────────────────────────
+        const dueDate = new Date(dueDateStr);
+        if (isNaN(dueDate.getTime())) return false;
 
-  if (filtered.length > 0) {
-    filtered = [...filtered].sort((a, b) => {
-      let aVal: string | number = '';
-      let bVal: string | number = '';
+        const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
 
-      switch (sortField) {
-        case 'rowIndex':
-          aVal = a.rowIndex || 0;
-          bVal = b.rowIndex || 0;
-          break;
-        case 'dueDate':
-          aVal = a.due_date || '';
-          bVal = b.due_date || '';
-          break;
-        case 'dateAssigned':
-          aVal = a.date_assigned || '';
-          bVal = b.date_assigned || '';
-          break;
-        case 'status':
-          aVal = a.status;
-          bVal = b.status;
-          break;
-        case 'brand':
-          aVal = a.brand;
-          bVal = b.brand;
-          break;
-        case 'agent':
-          aVal = a.agent;
-          bVal = b.agent;
-          break;
-        case 'dateRequested':
-          aVal = a.date_requested || '';
-          bVal = b.date_requested || '';
-          break;
-        default:
-          aVal = a.task;
-          bVal = b.task;
-      }
+        if (filterDateRange === 'overdue') {
+          return dueDateOnly < usToday && task.status !== 'Completed' && task.status !== 'Cancelled';
+        }
 
-      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }
+        if (filterDateRange === 'today') {
+          return dueDateOnly.getTime() === usToday.getTime();
+        }
 
-  return filtered;
-}, [
-  activeTasks,
-  debouncedSearchTerm,
-  filterStatus,
-  filterBrand,
-  filterAgent,
-  filterSBS,
-  sortField,
-  sortOrder,
-  filterDateRange,
-  customDateStart,
-  customDateEnd,
-  showOnlyNew,
-  newTaskIds,
-  getUSDate
-]);
+        if (filterDateRange === 'week') {
+          const tomorrow = new Date(usToday);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+
+          const weekEnd = new Date(usToday);
+          weekEnd.setDate(weekEnd.getDate() + 7);
+
+          return dueDateOnly >= tomorrow && dueDateOnly <= weekEnd;
+        }
+
+        if (filterDateRange === 'month') {
+          const monthStart = new Date(usToday.getFullYear(), usToday.getMonth(), 1);
+          const monthEnd = new Date(usToday.getFullYear(), usToday.getMonth() + 1, 0);
+
+          return dueDateOnly >= monthStart && dueDateOnly <= monthEnd;
+        }
+
+        if (filterDateRange === 'custom') {
+          const startDate = customDateStart ? new Date(customDateStart) : null;
+          const endDate = customDateEnd ? new Date(customDateEnd) : null;
+
+          if (startDate) {
+            const startOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+            if (dueDateOnly < startOnly) return false;
+          }
+          if (endDate) {
+            const endOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+            if (dueDateOnly > endOnly) return false;
+          }
+          return true;
+        }
+
+        return true;
+      });
+    }
+
+    if (debouncedSearchTerm.trim()) {
+      const term = debouncedSearchTerm.toLowerCase().trim();
+
+      filtered = filtered.filter((task) => {
+        if (task.rowIndex !== undefined && task.rowIndex !== null) {
+          const rowIndexStr = String(task.rowIndex);
+          if (rowIndexStr.includes(term) || term.includes(rowIndexStr)) return true;
+        }
+
+        if (task.task.toLowerCase().includes(term)) return true;
+        if (task.brand.toLowerCase().includes(term)) return true;
+        if (task.status.toLowerCase().includes(term)) return true;
+        if (task.type.toLowerCase().includes(term)) return true;
+        if (task.segment.toLowerCase().includes(term)) return true;
+        if (task.bc_links.toLowerCase().includes(term)) return true;
+        if (task.agent.toLowerCase().includes(term)) return true;
+        if (task.auditor.toLowerCase().includes(term)) return true;
+        if (task.remarks.toLowerCase().includes(term)) return true;
+        if (task.reason_for_pending.toLowerCase().includes(term)) return true;
+        if (task.reason_for_cancel.toLowerCase().includes(term)) return true;
+
+        if (task.due_date) {
+          try {
+            const dueDate = new Date(task.due_date);
+            if (!isNaN(dueDate.getTime())) {
+              const dateFormats = [
+                task.due_date.toLowerCase(),
+                dueDate.toLocaleDateString('en-US').toLowerCase(),
+                dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase(),
+                dueDate.toISOString().split('T')[0],
+                `${dueDate.getMonth() + 1}/${dueDate.getDate()}/${dueDate.getFullYear()}`,
+                `${dueDate.getMonth() + 1}/${dueDate.getDate()}`,
+              ];
+
+              for (const format of dateFormats) {
+                if (format.includes(term)) return true;
+              }
+            }
+          } catch (e) {
+            // Skip
+          }
+        }
+
+        return false;
+      });
+    }
+
+    if (filtered.length > 0) {
+      filtered = [...filtered].sort((a, b) => {
+        let aVal: string | number = '';
+        let bVal: string | number = '';
+
+        switch (sortField) {
+          case 'rowIndex':
+            aVal = a.rowIndex || 0;
+            bVal = b.rowIndex || 0;
+            break;
+          case 'dueDate':
+            aVal = a.due_date || '';
+            bVal = b.due_date || '';
+            break;
+          case 'dateAssigned':
+            aVal = a.date_assigned || '';
+            bVal = b.date_assigned || '';
+            break;
+          case 'status':
+            aVal = a.status;
+            bVal = b.status;
+            break;
+          case 'brand':
+            aVal = a.brand;
+            bVal = b.brand;
+            break;
+          case 'agent':
+            aVal = a.agent;
+            bVal = b.agent;
+            break;
+          case 'dateRequested':
+            aVal = a.date_requested || '';
+            bVal = b.date_requested || '';
+            break;
+          default:
+            aVal = a.task;
+            bVal = b.task;
+        }
+
+        if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return filtered;
+  }, [
+    activeTasks,
+    debouncedSearchTerm,
+    filterStatus,
+    filterBrand,
+    filterAgent,
+    filterSBS,
+    sortField,
+    sortOrder,
+    filterDateRange,
+    customDateStart,
+    customDateEnd,
+    showOnlyNew,
+    newTaskIds,
+    getUSDate
+  ]);
 
   // ─── PAGINATION ────────────────────────────────────────────────────────
 
@@ -2846,7 +2863,6 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     <div className="flex h-full flex-col">
       {toastContainer}
 
-      {/* New Task Notification Banner */}
       <AnimatePresence>
         {showNewTaskNotification && newTaskIds.size > 0 && (
           <motion.div
@@ -2945,7 +2961,6 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
-          {/* ─── DASHBOARD HEADER ────────────────────────────────────────── */}
           <DashboardHeader
             isDark={isDark}
             totalTasks={stats.total}
@@ -2958,7 +2973,6 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
             isLoading={isLoading}
           />
 
-          {/* ─── ANALYTICS CARDS ─────────────────────────────────────────── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             <AnalyticsCard
               title="Total Tasks"
@@ -3005,7 +3019,6 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
             />
           </div>
 
-          {/* ─── TASK LIST HEADER ─────────────────────────────────────────── */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className={cn('text-lg font-semibold', isDark ? 'text-white' : 'text-gray-900')}>
@@ -3045,7 +3058,6 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
             </div>
           </div>
 
-          {/* ─── FILTER TOOLBAR WITH STICKY CONTAINER ────────────────────── */}
           <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 sm:py-4 -mt-1" style={{ backgroundColor: isDark ? 'rgb(15 23 42 / 0.92)' : 'rgb(255 255 255 / 0.92)', backdropFilter: 'blur(12px)', borderBottom: isDark ? '1px solid rgb(51 65 85 / 0.5)' : '1px solid rgb(229 231 235 / 0.8)' }}>
             <div className="flex flex-col gap-3">
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
@@ -3166,7 +3178,6 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                     })}
                 </div>
 
-                {/* SBS/Non-SBS Filter Buttons */}
                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
                   <button
                     onClick={() => {
@@ -3365,7 +3376,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                     <FieldLabel theme={theme}>Brand</FieldLabel>
                     <select value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)} className={inputClasses(theme)}>
                       <option value="all">All Brands</option>
-                      {uniqueBrands.map((brand) => (
+                      {BRAND_OPTIONS.map((brand) => (
                         <option key={brand} value={brand}>
                           {brand}
                         </option>
@@ -3376,7 +3387,7 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
                     <FieldLabel theme={theme}>Agent</FieldLabel>
                     <select value={filterAgent} onChange={(e) => setFilterAgent(e.target.value)} className={inputClasses(theme)}>
                       <option value="all">All Agents</option>
-                      {uniqueAgents.map((agent) => (
+                      {AGENT_OPTIONS.map((agent) => (
                         <option key={agent} value={agent}>
                           {agent}
                         </option>
@@ -3393,10 +3404,8 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
             </div>
           </div>
 
-          {/* ─── TASK LIST ────────────────────────────────────────────────── */}
           {isLoading && activeTasks.length === 0 ? renderSkeleton() : renderTasks()}
 
-          {/* ─── PAGINATION ────────────────────────────────────────────────── */}
           <div className={cn('border-t pt-3 sm:pt-4 flex-shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
             <span className={cn('text-xs sm:text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
               Showing {paginatedTasks.length} of {activeCount} tasks
@@ -3670,10 +3679,8 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
         </Modal>
       )}
 
-      {/* Add Task Modal */}
       <TaskFormModal isOpen={showAddTaskModal} onClose={() => setShowAddTaskModal(false)} onSubmit={addNewTask} isSubmitting={isSavingTask} theme={theme} mode="add" error={taskFormError} />
 
-      {/* Edit Task Modal */}
       <TaskFormModal
         isOpen={showEditTaskModal}
         onClose={() => setShowEditTaskModal(false)}
@@ -3685,13 +3692,14 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
         initialValues={
           selectedTask
             ? {
-                dateRequested: selectedTask.date_requested ? new Date(selectedTask.date_requested).toISOString().split('T')[0] : '',
+                dateRequested: sheetDateToInput(selectedTask.date_requested),
+                dateAssigned: sheetDateToInput(selectedTask.date_assigned),
+                dueDate: sheetDateToInput(selectedTask.due_date),
                 type: selectedTask.type,
                 task: selectedTask.task,
                 brand: BRAND_OPTIONS.includes(selectedTask.brand) ? selectedTask.brand : '__OTHER__',
                 customBrand: BRAND_OPTIONS.includes(selectedTask.brand) ? '' : selectedTask.brand,
                 agent: selectedTask.agent,
-                dueDate: selectedTask.due_date ? new Date(selectedTask.due_date).toISOString().split('T')[0] : '',
                 status: selectedTask.status,
                 remarks: selectedTask.remarks,
                 bcLinks: selectedTask.bc_links || '',

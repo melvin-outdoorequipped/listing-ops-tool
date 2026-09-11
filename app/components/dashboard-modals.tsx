@@ -999,13 +999,23 @@ export function TaskFormModal({
             Segment is auto-filled by the sheet's formula and can't be set here.
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          {/* ─── Dates Row (Date Requested | Date Assigned | Due Date) ─── */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div>
               <label className={labelClass}>Date Requested</label>
               <input
                 type="date"
                 value={formValues.dateRequested}
                 onChange={(e) => setFormValues({ ...formValues, dateRequested: e.target.value })}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Date Assigned</label>
+              <input
+                type="date"
+                value={formValues.dateAssigned}
+                onChange={(e) => setFormValues({ ...formValues, dateAssigned: e.target.value })}
                 className={inputClass}
               />
             </div>
@@ -1018,7 +1028,10 @@ export function TaskFormModal({
                 className={inputClass}
               />
             </div>
+          </div>
 
+          {/* ─── Other Fields ─── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className={labelClass}>Type</label>
               <select

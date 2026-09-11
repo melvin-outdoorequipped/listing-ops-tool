@@ -110,17 +110,7 @@ export const OTHER_BRAND_OPTION = '__OTHER__';
 
 // Column H — Agent
 export const AGENT_OPTIONS = [
-  'Alfranz','Alvin','Aries','Christopher','Cyriel','Eman','Joshue','Jywency',
-  'Philip','Valentine','Luche','Djan','Allan','Clemente','Ruel','Chrizza Mae',
-  'Gerald','Luigi','Jerael','Joshua','Pete','Donald','Timothy','Jogie',
-  'Mikhail','Jeremy','Sherry','Jencel','Aljhon','Cary','Shiela','Ted','Thach',
-  'Ronald','Tin','Cuong','Jade','Quincy','Syrus','Mervin','Patricio','Jessan',
-  'Aila','Reymart','Gerome','Jufet','Jessa','Kayla','Jochele','Menchie',
-  'Romart','Khristine','Odith','Clef','Jhon','Jade Ducay','Christian','Marisa',
-  'Jusheen','Merry','Romar','Joren','Niel','Florante','Wyndell','Anthony',
-  'Sedney','Peter','Dannese','Jonisa','Thomas','Kate','Micaela','Rejei',
-  'Shenna','Dave Rick','Rhoda','Vincent Mathew','Juddy','Lawrence','Janroe',
-  'Melvin','Mark Vincen','Junard','Jerald',
+  'Melvin','Jogie','Jonisa','Shenna','Florante', 'Mark Vincen', 'Wyndell','Janroe','Juddy','Jack','Jonjie','Jesh','Francis Xavier'
 ];
 
 export const VALID_TASK_STATUSES = [

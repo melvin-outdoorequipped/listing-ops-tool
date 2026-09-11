@@ -57,8 +57,9 @@ export interface TeamMember {
   color: string;
 }
 
-export interface TaskFormValues {
+export type TaskFormValues = {
   dateRequested: string;
+  dateAssigned: string;
   type: string;
   task: string;
   brand: string;
@@ -68,7 +69,7 @@ export interface TaskFormValues {
   status: string;
   remarks: string;
   bcLinks: string;
-}
+};
 
 export type TaskViewMode = 'table' | 'card' | 'list';
 
@@ -192,20 +193,11 @@ export const relativeTime = (dateStr: string): string => {
 
 // ─── DATE HELPERS (US FORMAT, LOCALE-SAFE) ─────────────────────────────────
 //
-// Two problems these solve for a PH-based user working on US-facing dates:
-//
-// 1. `new Date().toISOString().split('T')[0]` converts to UTC before slicing
-//    off the date. Manila is UTC+8, so any time before 8:00 AM local gets
-//    rolled back to "yesterday" in UTC — the date picker silently shows the
-//    wrong day. `toDateInputValue` below builds the YYYY-MM-DD string from
-//    the LOCAL date components instead, so it always matches what's on the
-//    user's wall clock.
-//
-// 2. `date.toLocaleDateString()` with no locale argument uses whatever
-//    locale/region the browser or OS is set to. On a PH machine that can
-//    render dates as DD/MM/YYYY instead of the US MM/DD/YYYY the team is
-//    used to. `formatDate` / `formatDateUS` always pass `'en-US'` explicitly
-//    so the format is consistent no matter where the app is opened from.
+// CRITICAL: We NEVER use `new Date(string)` on sheet date strings. The API
+// returns M/D/YYYY or YYYY-MM-DD. Both are ambiguous and `new Date()` will
+// reinterpret them in the browser's local timezone (PH, UTC+8), shifting the
+// day backward when the time component is near midnight. All date formatting
+// below extracts parts directly from the string with regex — no Date objects.
 
 /** Build a `YYYY-MM-DD` string (for <input type="date">) from LOCAL date parts. */
 export const toDateInputValue = (d: Date): string => {
@@ -225,51 +217,85 @@ export const parseDateInput = (value: string): Date => {
 export const todayDateInputValue = (): string => toDateInputValue(new Date());
 
 /**
- * Safely convert any stored date value (Date, 'YYYY-MM-DD', ISO string, etc.)
- * into a `YYYY-MM-DD` string suitable for <input type="date">, without
- * letting a UTC round-trip shift the day.
+ * Safely convert any stored date value into a `YYYY-MM-DD` string suitable
+ * for <input type="date">, without letting a UTC round-trip shift the day.
+ * Handles: M/D/YYYY, MM/DD/YYYY, YYYY-MM-DD, ISO with time, Date objects.
  */
 export const toDateInputValueFromAny = (value: string | Date | null | undefined): string => {
   if (!value) return '';
   if (value instanceof Date) return isNaN(value.getTime()) ? '' : toDateInputValue(value);
 
-  const raw = value.toString().trim();
+  const raw = String(value).trim().replace(/^["']|["']$/g, '');
   if (!raw) return '';
 
-  // Already a plain YYYY-MM-DD (or starts with one, e.g. an ISO string) —
-  // slice it directly instead of round-tripping through Date/UTC.
+  // YYYY-MM-DD or ISO with time
   const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
 
-  const parsed = new Date(raw);
-  if (isNaN(parsed.getTime())) return '';
-  return toDateInputValue(parsed);
-};
-
-// In dashboard-utils.ts or wherever formatDate is defined
-export const formatDate = (dateString: string): string => {
-  if (!dateString) return 'N/A';
-  try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return dateString;
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  } catch {
-    return dateString;
+  // M/D/YYYY or MM/DD/YYYY
+  const slash = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slash) {
+    const [, m, d, y] = slash;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
+
+  return '';
 };
 
-/** Always-US-format date string, e.g. "8/4/2026". Use anywhere a raw
- *  `.toLocaleDateString()` (no args) would otherwise pick up the device's
- *  regional format. */
+/**
+ * Format a date string for DISPLAY without any timezone shift.
+ * Uses regex extraction, never `new Date()`.
+ */
+export const formatDate = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'N/A';
+
+  const s = String(dateString).trim().replace(/^["']|["']$/g, '');
+  if (!s) return 'N/A';
+
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  // M/D/YYYY or MM/DD/YYYY
+  const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slash) {
+    const [, m, d, y] = slash;
+    const idx = Number(m) - 1;
+    if (idx >= 0 && idx < 12) return `${MONTHS[idx]} ${Number(d)}, ${y}`;
+  }
+
+  // YYYY-MM-DD (possibly with time)
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    const [, y, m, d] = iso;
+    const idx = Number(m) - 1;
+    if (idx >= 0 && idx < 12) return `${MONTHS[idx]} ${Number(d)}, ${y}`;
+  }
+
+  // Long form already: "Sep 10, 2026"
+  const long = s.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
+  if (long) {
+    return `${long[1].slice(0, 3)} ${Number(long[2])}, ${long[3]}`;
+  }
+
+  return s;
+};
+
+/** Always-US-format date string, e.g. "8/4/2026". */
 export const formatDateUS = (date: Date | string | null | undefined): string => {
   if (!date) return 'N/A';
-  const d = date instanceof Date ? date : new Date(date);
-  if (isNaN(d.getTime())) return typeof date === 'string' ? date : 'N/A';
-  return d.toLocaleDateString('en-US');
+  if (date instanceof Date) {
+    if (isNaN(date.getTime())) return 'N/A';
+    return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+  }
+  const s = String(date).trim().replace(/^["']|["']$/g, '');
+  if (!s) return 'N/A';
+
+  const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slash) return `${Number(slash[1])}/${Number(slash[2])}/${slash[3]}`;
+
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${Number(iso[2])}/${Number(iso[3])}/${iso[1]}`;
+
+  return s;
 };
 
 export const cleanStatusString = (value: unknown): string => {
@@ -305,67 +331,24 @@ export const getStatusColor = (status: string) => {
   const statusLower = status.toLowerCase();
   
   const statusMap: Record<string, { bg: string; text: string; dot: string }> = {
-    'completed': { 
-      bg: 'bg-emerald-500/20', 
-      text: 'text-emerald-400', 
-      dot: 'bg-emerald-400' 
-    },
-    'cancelled': { 
-      bg: 'bg-red-500/20', 
-      text: 'text-red-400', 
-      dot: 'bg-red-400' 
-    },
-    'ongoing': { 
-      bg: 'bg-blue-500/20', 
-      text: 'text-blue-400', 
-      dot: 'bg-blue-400' 
-    },
-    'assigned': { 
-      bg: 'bg-cyan-500/20', 
-      text: 'text-cyan-400', 
-      dot: 'bg-cyan-400' 
-    },
-    'pending': { 
-      bg: 'bg-yellow-500/20', 
-      text: 'text-yellow-400', 
-      dot: 'bg-yellow-400' 
-    },
-    'wip': { 
-      bg: 'bg-indigo-500/20', 
-      text: 'text-indigo-400', 
-      dot: 'bg-indigo-400' 
-    },
-    'for audit': { 
-      bg: 'bg-purple-500/20', 
-      text: 'text-purple-400', 
-      dot: 'bg-purple-400' 
-    },
-    'for investigation': { 
-      bg: 'bg-orange-500/20', 
-      text: 'text-orange-400', 
-      dot: 'bg-orange-400' 
-    },
-    'hold': { 
-      bg: 'bg-amber-500/20', 
-      text: 'text-amber-400', 
-      dot: 'bg-amber-400' 
-    },
-    'for correx': { 
-      bg: 'bg-pink-500/20', 
-      text: 'text-pink-400', 
-      dot: 'bg-pink-400' 
-    }
+    'completed': { bg: 'bg-emerald-500/20', text: 'text-emerald-400', dot: 'bg-emerald-400' },
+    'cancelled': { bg: 'bg-red-500/20', text: 'text-red-400', dot: 'bg-red-400' },
+    'ongoing': { bg: 'bg-blue-500/20', text: 'text-blue-400', dot: 'bg-blue-400' },
+    'assigned': { bg: 'bg-cyan-500/20', text: 'text-cyan-400', dot: 'bg-cyan-400' },
+    'pending': { bg: 'bg-yellow-500/20', text: 'text-yellow-400', dot: 'bg-yellow-400' },
+    'wip': { bg: 'bg-indigo-500/20', text: 'text-indigo-400', dot: 'bg-indigo-400' },
+    'for audit': { bg: 'bg-purple-500/20', text: 'text-purple-400', dot: 'bg-purple-400' },
+    'for investigation': { bg: 'bg-orange-500/20', text: 'text-orange-400', dot: 'bg-orange-400' },
+    'hold': { bg: 'bg-amber-500/20', text: 'text-amber-400', dot: 'bg-amber-400' },
+    'for correx': { bg: 'bg-pink-500/20', text: 'text-pink-400', dot: 'bg-pink-400' }
   };
   
-  return statusMap[statusLower] || { 
-    bg: 'bg-slate-500/20', 
-    text: 'text-slate-400', 
-    dot: 'bg-slate-400' 
-  };
+  return statusMap[statusLower] || { bg: 'bg-slate-500/20', text: 'text-slate-400', dot: 'bg-slate-400' };
 };
 
 export const emptyTaskForm: TaskFormValues = {
   dateRequested: todayDateInputValue(),
+  dateAssigned: '',
   type: '',
   task: '',
   brand: '',
