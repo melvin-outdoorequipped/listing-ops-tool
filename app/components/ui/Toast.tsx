@@ -20,31 +20,48 @@ interface ToastProps {
   theme: 'light' | 'dark';
 }
 
+// 🎄 Per-type emoji, purely decorative
+const TOAST_EMOJI: Record<ToastType, string> = {
+  success: '🎄',
+  error: '⛄',
+  warning: '❄️',
+  info: '🎅',
+};
+
 export function ToastContainer({ messages, onRemove, theme }: ToastProps) {
   const isDark = theme === 'dark';
 
   useEffect(() => {
-    messages.forEach(msg => {
+    const timers = messages.map(msg => {
       const duration = msg.duration || 4000;
-      const timer = setTimeout(() => {
+      return setTimeout(() => {
         onRemove(msg.id);
       }, duration);
-      return () => clearTimeout(timer);
     });
+    return () => timers.forEach(clearTimeout);
   }, [messages, onRemove]);
 
   if (messages.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[200] flex flex-col gap-2 max-w-md w-full">
+    <div className="fixed bottom-4 right-4 z-[200] flex max-w-md w-full flex-col gap-2">
       {messages.map(msg => {
+        // Christmas-themed colors, per type, for each theme
         const colors = {
-          success: isDark ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-400' : 'border-emerald-500 bg-emerald-50 text-emerald-700',
-          error: isDark ? 'border-red-500/50 bg-red-500/20 text-red-400' : 'border-red-500 bg-red-50 text-red-700',
-          warning: isDark ? 'border-yellow-500/50 bg-yellow-500/20 text-yellow-400' : 'border-yellow-500 bg-yellow-50 text-yellow-700',
-          info: isDark ? 'border-blue-500/50 bg-blue-500/20 text-blue-400' : 'border-blue-500 bg-blue-50 text-blue-700',
+          success: isDark
+            ? 'border-green-500/50 bg-green-950/70 text-green-300 shadow-[0_0_20px_rgba(22,163,74,0.15)] backdrop-blur-sm'
+            : 'border-green-500 bg-green-50 text-green-800 shadow-md',
+          error: isDark
+            ? 'border-red-500/50 bg-red-950/60 text-red-300 shadow-[0_0_20px_rgba(239,68,68,0.15)] backdrop-blur-sm'
+            : 'border-red-500 bg-red-50 text-red-700 shadow-md',
+          warning: isDark
+            ? 'border-amber-500/50 bg-amber-950/60 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.15)] backdrop-blur-sm'
+            : 'border-amber-500 bg-amber-50 text-amber-800 shadow-md',
+          info: isDark
+            ? 'border-sky-500/50 bg-sky-950/60 text-sky-300 shadow-[0_0_20px_rgba(14,165,233,0.15)] backdrop-blur-sm'
+            : 'border-sky-400 bg-sky-50 text-sky-800 shadow-md',
         };
-        
+
         const icons = {
           success: <CheckCircle2 className="h-5 w-5 flex-shrink-0" />,
           error: <AlertCircle className="h-5 w-5 flex-shrink-0" />,
@@ -55,18 +72,29 @@ export function ToastContainer({ messages, onRemove, theme }: ToastProps) {
         return (
           <div
             key={msg.id}
-            className={`flex items-start gap-3 rounded-xl border p-4 shadow-lg animate-in slide-in-from-right-4 duration-300 ${colors[msg.type]}`}
+            className={`relative flex items-start gap-3 overflow-hidden rounded-xl border p-4 animate-in slide-in-from-right-4 duration-300 ${colors[msg.type]}`}
           >
+            {/* 🎄 Corner seasonal emoji — purely decorative */}
+            <span
+              className="pointer-events-none absolute right-8 top-1 select-none text-xs opacity-[0.35]"
+              aria-hidden
+            >
+              {TOAST_EMOJI[msg.type]}
+            </span>
+
             {icons[msg.type]}
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm">{msg.title}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">{msg.title}</p>
               {msg.message && (
-                <p className="text-sm opacity-90 mt-0.5">{msg.message}</p>
+                <p className="mt-0.5 text-sm opacity-90">{msg.message}</p>
               )}
             </div>
             <button
               onClick={() => onRemove(msg.id)}
-              className="flex-shrink-0 rounded-lg p-1 transition-colors hover:bg-black/10"
+              className={`flex-shrink-0 rounded-lg p-1 transition-colors ${
+                isDark ? 'hover:bg-white/10' : 'hover:bg-black/10'
+              }`}
+              aria-label="Dismiss notification"
             >
               <X className="h-4 w-4" />
             </button>

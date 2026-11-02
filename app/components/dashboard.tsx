@@ -30,7 +30,7 @@ import { NotificationBell } from './notification-bell';
 import { Task, TaskFormValues, ToolRun, TeamMember, defaultTeamMembers, getUserImage, operationTools, StatusDot, relativeTime, formatDate, normalizeStatus, useAnimatedCounter, Sparkline } from './dashboard-utils';
 import { TaskNameGeneratorModal, ReasonForPendingModal, MemberRouletteModal, TaskFormModal } from './dashboard-modals';
 
-// Valid task statuses (kept for status transition controls / filters used elsewhere)
+// Valid task statuses
 const VALID_TASK_STATUSES = [
   'Completed',
   'Cancelled',
@@ -124,76 +124,57 @@ export default function DashboardClient({
   const SPREADSHEET_ID = '1aBOYH2ShWyW8ASamH23WAFdoi0NR8bIebsQGuAnU67A';
   const SHEET_NAME = 'Copy of Task Masterlist - Operations';
 
- /**
- * Convert any date value from the API into YYYY-MM-DD for <input type="date">.
- * NEVER uses `new Date()` on string inputs — no timezone shift possible.
- * Handles: M/D/YYYY, MM/DD/YYYY, YYYY-MM-DD, ISO with time, Date objects,
- * and Google Sheets serial numbers.
- */
-function toInputDate(raw: string | null | undefined | Date | number): string {
-  if (raw === null || raw === undefined) return '';
-
-  if (raw instanceof Date) {
-    if (isNaN(raw.getTime())) return '';
-    const y = raw.getUTCFullYear();
-    const m = String(raw.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(raw.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+  function toInputDate(raw: string | null | undefined | Date | number): string {
+    if (raw === null || raw === undefined) return '';
+    if (raw instanceof Date) {
+      if (isNaN(raw.getTime())) return '';
+      const y = raw.getUTCFullYear();
+      const m = String(raw.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(raw.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    if (typeof raw === 'number' && raw > 20000 && raw < 60000) {
+      const ms = (raw - 25569) * 86400 * 1000;
+      const d = new Date(ms);
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+    const s = String(raw).trim().replace(/^["']|["']$/g, '');
+    if (!s || s === 'N/A' || s === 'undefined' || s === 'null' || s === '-') return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+    const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (slash) {
+      const [, m, d, y] = slash;
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    const long = s.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
+    if (long) {
+      const [, monthName, day, year] = long;
+      const monthMap: Record<string, string> = {
+        jan: '01', january: '01',
+        feb: '02', february: '02',
+        mar: '03', march: '03',
+        apr: '04', april: '04',
+        may: '05',
+        jun: '06', june: '06',
+        jul: '07', july: '07',
+        aug: '08', august: '08',
+        sep: '09', sept: '09', september: '09',
+        oct: '10', october: '10',
+        nov: '11', november: '11',
+        dec: '12', december: '12',
+      };
+      const m = monthMap[monthName.toLowerCase()];
+      if (m) return `${year}-${m}-${day.padStart(2, '0')}`;
+    }
+    console.warn('❌ toInputDate UNPARSEABLE:', JSON.stringify(raw), 'typeof:', typeof raw);
+    return '';
   }
 
-  if (typeof raw === 'number' && raw > 20000 && raw < 60000) {
-    const ms = (raw - 25569) * 86400 * 1000;
-    const d = new Date(ms);
-    const y = d.getUTCFullYear();
-    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(d.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  }
-
-  const s = String(raw).trim().replace(/^["']|["']$/g, '');
-  if (!s || s === 'N/A' || s === 'undefined' || s === 'null' || s === '-') return '';
-
-  // Already YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-
-  // ISO with time — extract date part directly (no TZ conversion)
-  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-
-  // M/D/YYYY or MM/DD/YYYY — the format the API returns
-  const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (slash) {
-    const [, m, d, y] = slash;
-    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-  }
-
-  // Long form: "Sep 11, 2026"
-  const long = s.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
-  if (long) {
-    const [, monthName, day, year] = long;
-    const monthMap: Record<string, string> = {
-      jan: '01', january: '01',
-      feb: '02', february: '02',
-      mar: '03', march: '03',
-      apr: '04', april: '04',
-      may: '05',
-      jun: '06', june: '06',
-      jul: '07', july: '07',
-      aug: '08', august: '08',
-      sep: '09', sept: '09', september: '09',
-      oct: '10', october: '10',
-      nov: '11', november: '11',
-      dec: '12', december: '12',
-    };
-    const m = monthMap[monthName.toLowerCase()];
-    if (m) return `${year}-${m}-${day.padStart(2, '0')}`;
-  }
-
-  console.warn('❌ toInputDate UNPARSEABLE:', JSON.stringify(raw), 'typeof:', typeof raw);
-  return '';
-}
-
-  // Diagnostic: log raw selected task dates
   useEffect(() => {
     if (selectedTask) {
       console.log('🔍 SELECTED TASK RAW:', {
@@ -226,17 +207,13 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
       return [];
     }
 
-    if (!headers || headers.length === 0 || rowData.length === 0) {
-      return [];
-    }
+    if (!headers || headers.length === 0 || rowData.length === 0) return [];
 
     const columnMap: { [key: string]: number } = {};
     headers.forEach((header: string, index: number) => {
       if (header) {
         const key = header.toString().trim().toLowerCase();
-        if (!(key in columnMap)) {
-          columnMap[key] = index;
-        }
+        if (!(key in columnMap)) columnMap[key] = index;
       }
     });
 
@@ -263,7 +240,6 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
     }
 
     const get = (row: any[], idx: number | undefined) => (idx !== undefined && idx < row.length ? row[idx] ?? '' : '');
-
     const taskList: Task[] = [];
 
     rowData.forEach(({ row, rowIndex }: { row: any[]; rowIndex: number }) => {
@@ -276,7 +252,6 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
       const dateCompleted = get(row, dateCompletedCol);
       const statusRaw = get(row, statusCol);
 
-      // 🔍 DEBUG: log raw dates for every row when in development
       if (process.env.NODE_ENV === 'development') {
         console.log('📅 ROW', rowIndex, {
           task: taskName,
@@ -286,10 +261,7 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
         });
       }
 
-      const normalizedStatus = normalizeStatus(statusRaw, dateCompleted, dateAssigned, {
-        rowIndex,
-        taskName,
-      });
+      const normalizedStatus = normalizeStatus(statusRaw, dateCompleted, dateAssigned, { rowIndex, taskName });
 
       taskList.push({
         id: `task-${rowIndex}`,
@@ -323,7 +295,7 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: '📋 New Task Added!',
+          title: '🎄 New Task Added!',
           body: `"${taskData.task}" assigned to ${taskData.agent || 'Unassigned'} (Row ${taskData.rowIndex})`,
           url: '/',
           taskId: `task-${taskData.rowIndex}`,
@@ -351,10 +323,8 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
       if (newIds.size > 0 && previousTaskIds.size > 0) {
         setNewTaskIds(newIds);
         setShowNewTaskNotification(true);
-
         setAllTasks(prev => prev.map(t => ({ ...t, isNew: newIds.has(t.id) })));
         setTasks(prev => prev.map(t => ({ ...t, isNew: newIds.has(t.id) })));
-
         setTimeout(() => setShowNewTaskNotification(false), 10000);
       }
 
@@ -369,7 +339,6 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
       setUpdateError('Please log in to view your tasks');
       return;
     }
-
     setUpdateError(null);
 
     try {
@@ -389,13 +358,9 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
       }
 
       const data = await response.json();
-
       let newTasks: Task[] = [];
-      if (data.rows && data.rows.length > 0) {
-        newTasks = processTasksFromSheet(data);
-      } else if (data.values && data.values.length > 0) {
-        newTasks = processTasksFromSheet(data.values);
-      }
+      if (data.rows && data.rows.length > 0) newTasks = processTasksFromSheet(data);
+      else if (data.values && data.values.length > 0) newTasks = processTasksFromSheet(data.values);
 
       setTasks(newTasks);
       detectNewTasks(newTasks);
@@ -408,7 +373,6 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
 
   const loadAllTasksFromSheet = useCallback(async () => {
     if (!currentUserEmail && !currentUserName) return;
-
     setUpdateError(null);
 
     try {
@@ -430,7 +394,6 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
 
       const data = await response.json();
       const newTasks: Task[] = data.rows && data.rows.length > 0 ? processTasksFromSheet(data) : [];
-
       setAllTasks(newTasks);
       detectNewTasks(newTasks);
     } catch (error) {
@@ -456,20 +419,15 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
       setPreviousTaskIds(new Set(newTasks.map(t => t.id)));
     } else {
       loadTasksFromSheet();
-      if (viewMode === 'all') {
-        loadAllTasksFromSheet();
-      }
+      if (viewMode === 'all') loadAllTasksFromSheet();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialTasks, processTasksFromSheet, loadTasksFromSheet, loadAllTasksFromSheet, viewMode]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (viewMode === 'all') {
-        loadAllTasksFromSheet();
-      } else {
-        loadTasksFromSheet();
-      }
+      if (viewMode === 'all') loadAllTasksFromSheet();
+      else loadTasksFromSheet();
     }, 90000);
     return () => clearInterval(interval);
   }, [loadTasksFromSheet, loadAllTasksFromSheet, viewMode]);
@@ -477,12 +435,8 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
   const refreshCurrentView = useCallback(() => {
     setShowNewTaskNotification(false);
     setNewTaskIds(new Set());
-
-    if (viewMode === 'all') {
-      loadAllTasksFromSheet();
-    } else {
-      loadTasksFromSheet();
-    }
+    if (viewMode === 'all') loadAllTasksFromSheet();
+    else loadTasksFromSheet();
   }, [viewMode, loadAllTasksFromSheet, loadTasksFromSheet]);
 
   const updateTaskStatus = useCallback(
@@ -564,10 +518,7 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
           data = { raw: responseText };
         }
 
-        if (!response.ok) {
-          throw new Error(data.error || data.raw || `HTTP error ${response.status}`);
-        }
-
+        if (!response.ok) throw new Error(data.error || data.raw || `HTTP error ${response.status}`);
         setTimeout(() => refreshCurrentView(), 1500);
       } catch (error) {
         console.error('❌ Failed to update task status:', error);
@@ -627,9 +578,7 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
         });
 
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data.error || `HTTP error ${response.status}`);
-        }
+        if (!response.ok) throw new Error(data.error || `HTTP error ${response.status}`);
 
         setShowEditTaskModal(false);
         setShowTaskModal(false);
@@ -648,7 +597,6 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
     async (values: TaskFormValues) => {
       setIsSavingTask(true);
       setTaskFormError(null);
-
       const finalBrand = values.brand === '__OTHER__' ? values.customBrand.trim() : values.brand;
 
       try {
@@ -673,9 +621,7 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
         });
 
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data.error || `HTTP error ${response.status}`);
-        }
+        if (!response.ok) throw new Error(data.error || `HTTP error ${response.status}`);
 
         setShowAddTaskModal(false);
         refreshCurrentView();
@@ -701,9 +647,8 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
           .eq('id', 1)
           .single();
 
-        if (!settingsError && settingsData) {
-          setSettings(settingsData);
-        } else {
+        if (!settingsError && settingsData) setSettings(settingsData);
+        else {
           const saved = localStorage.getItem('lot_admin_settings');
           if (saved) {
             try {
@@ -728,22 +673,14 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
       })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(settingsChannel);
-    };
+    return () => { supabase.removeChannel(settingsChannel); };
   }, []);
 
   const isMaintenanceMode = (): boolean => {
-    if (settings) {
-      return settings.maintenance_mode === true;
-    }
+    if (settings) return settings.maintenance_mode === true;
     const saved = localStorage.getItem('lot_admin_settings');
     if (saved) {
-      try {
-        return JSON.parse(saved).maintenanceMode || false;
-      } catch {
-        return false;
-      }
+      try { return JSON.parse(saved).maintenanceMode || false; } catch { return false; }
     }
     return false;
   };
@@ -765,9 +702,7 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
     setIsLoading(false);
   }, []);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
+  useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
   useEffect(() => {
     const interval = setInterval(fetchDashboardData, 60000);
     return () => clearInterval(interval);
@@ -779,9 +714,7 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
         setCurrentSlide(prev => (prev + 1) % defaultTeamMembers.length);
       }, 3000);
     }
-    return () => {
-      if (autoPlayRef.current) clearInterval(autoPlayRef.current);
-    };
+    return () => { if (autoPlayRef.current) clearInterval(autoPlayRef.current); };
   }, [isAutoPlaying]);
 
   const goToSlide = (index: number) => {
@@ -819,15 +752,11 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
     const map = new Map<string, { totalRuns: number; completedRuns: number; lastRun: string }>();
     runs.forEach(run => {
       const email = run.user_email || 'System';
-      if (!map.has(email)) {
-        map.set(email, { totalRuns: 0, completedRuns: 0, lastRun: run.created_at });
-      }
+      if (!map.has(email)) map.set(email, { totalRuns: 0, completedRuns: 0, lastRun: run.created_at });
       const stats = map.get(email)!;
       stats.totalRuns++;
       if (run.status === 'completed') stats.completedRuns++;
-      if (new Date(run.created_at) > new Date(stats.lastRun)) {
-        stats.lastRun = run.created_at;
-      }
+      if (new Date(run.created_at) > new Date(stats.lastRun)) stats.lastRun = run.created_at;
     });
     return map;
   }, [runs]);
@@ -907,15 +836,23 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
 
   if (isMaintenanceMode() && !isAdmin) {
     return (
-      <div className={`flex min-h-[400px] flex-col items-center justify-center rounded-2xl border p-8 text-center sm:p-12 ${isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'}`}>
-        <div className="mb-6 rounded-full bg-amber-500/20 p-4">
+      <div className={`relative flex min-h-[400px] flex-col items-center justify-center overflow-hidden rounded-2xl border p-8 text-center sm:p-12 ${isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'}`}>
+        <div className="pointer-events-none absolute inset-0 select-none overflow-hidden" aria-hidden>
+          <span className={`absolute left-[8%] top-[12%] text-5xl ${isDark ? 'opacity-[0.08]' : 'opacity-[0.06]'}`}>🎄</span>
+          <span className={`absolute right-[10%] top-[18%] text-4xl ${isDark ? 'opacity-[0.08]' : 'opacity-[0.06]'} motion-safe:animate-pulse`}>❄️</span>
+          <span className={`absolute left-[14%] bottom-[14%] text-4xl ${isDark ? 'opacity-[0.07]' : 'opacity-[0.05]'}`}>⛄</span>
+          <span className={`absolute right-[12%] bottom-[20%] text-4xl ${isDark ? 'opacity-[0.07]' : 'opacity-[0.05]'} motion-safe:animate-pulse`}>🎅</span>
+          <span className={`absolute left-[45%] top-[6%] text-3xl ${isDark ? 'opacity-[0.06]' : 'opacity-[0.04]'}`}>⭐</span>
+          <span className={`absolute right-[40%] bottom-[8%] text-3xl ${isDark ? 'opacity-[0.06]' : 'opacity-[0.04]'}`}>🎁</span>
+        </div>
+        <div className="relative mb-6 rounded-full bg-amber-500/20 p-4">
           <Wrench className="h-12 w-12 text-amber-400 sm:h-16 sm:w-16" />
         </div>
-        <h2 className={`mb-2 text-2xl font-bold sm:text-3xl ${isDark ? 'text-white' : 'text-gray-900'}`}>Under Maintenance</h2>
-        <p className={`mb-6 max-w-md text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+        <h2 className={`relative mb-2 text-2xl font-bold sm:text-3xl ${isDark ? 'text-white' : 'text-gray-900'}`}>Under Maintenance</h2>
+        <p className={`relative mb-6 max-w-md text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
           We're currently performing scheduled maintenance to improve your experience. The tools will be back online shortly.
         </p>
-        <div className="flex items-center gap-2 text-sm text-amber-400">
+        <div className="relative flex items-center gap-2 text-sm text-amber-400">
           <Clock className="h-4 w-4" />
           <span>Please check back later</span>
         </div>
@@ -925,6 +862,41 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
 
   return (
     <>
+      {/* ─── 🎄 Christmas decorations (purely visual, pointer-events-none) ─── */}
+      <>
+        {/* Red/green/gold haze — dark: stronger · light: subtle */}
+        <div
+          className={`pointer-events-none fixed inset-0 z-0 ${
+            isDark
+              ? 'bg-[radial-gradient(ellipse_at_top,_rgba(220,38,38,0.12),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(22,163,74,0.10),_transparent_50%),radial-gradient(ellipse_at_bottom_left,_rgba(202,138,4,0.10),_transparent_45%)]'
+              : 'bg-[radial-gradient(ellipse_at_top,_rgba(220,38,38,0.06),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(22,163,74,0.05),_transparent_50%)]'
+          }`}
+          aria-hidden
+        />
+
+        {/* Floating Christmas emojis */}
+        <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden>
+          <span className={`absolute left-[6%] top-[18%] select-none text-4xl motion-safe:animate-pulse ${isDark ? 'opacity-[0.06]' : 'opacity-[0.05]'}`}>🎄</span>
+          <span className={`absolute right-[10%] top-[10%] select-none text-3xl motion-safe:animate-pulse ${isDark ? 'opacity-[0.06]' : 'opacity-[0.05]'}`}>❄️</span>
+          <span className={`absolute left-[18%] bottom-[20%] select-none text-3xl ${isDark ? 'opacity-[0.05]' : 'opacity-[0.04]'}`}>⛄</span>
+          <span className={`absolute right-[16%] bottom-[14%] select-none text-4xl motion-safe:animate-pulse ${isDark ? 'opacity-[0.06]' : 'opacity-[0.05]'}`}>🎅</span>
+          <span className={`absolute left-[45%] top-[6%] select-none text-3xl ${isDark ? 'opacity-[0.05]' : 'opacity-[0.04]'}`}>⭐</span>
+          <span className={`absolute right-[40%] bottom-[8%] select-none text-3xl ${isDark ? 'opacity-[0.05]' : 'opacity-[0.04]'}`}>🎁</span>
+          <span className={`absolute left-[72%] top-[32%] select-none text-2xl motion-safe:animate-pulse ${isDark ? 'opacity-[0.05]' : 'opacity-[0.04]'}`}>🦌</span>
+          <span className={`absolute left-[30%] top-[52%] select-none text-2xl ${isDark ? 'opacity-[0.05]' : 'opacity-[0.04]'}`}>🍪</span>
+          <span className={`absolute right-[30%] top-[60%] select-none text-3xl ${isDark ? 'opacity-[0.04]' : 'opacity-[0.03]'}`}>🔔</span>
+          <span className={`absolute left-[52%] bottom-[26%] select-none text-2xl motion-safe:animate-pulse ${isDark ? 'opacity-[0.05]' : 'opacity-[0.04]'}`}>🌟</span>
+        </div>
+
+        {/* Corner snowflakes */}
+        <div className={`pointer-events-none fixed left-0 top-0 z-0 select-none text-7xl ${isDark ? 'opacity-[0.07]' : 'opacity-[0.05]'}`} aria-hidden>❄️</div>
+        <div className={`pointer-events-none fixed right-0 top-0 z-0 -scale-x-100 select-none text-7xl ${isDark ? 'opacity-[0.07]' : 'opacity-[0.05]'}`} aria-hidden>❄️</div>
+
+        {/* Bottom-right gift + bottom-left snowman */}
+        <div className={`pointer-events-none fixed bottom-0 right-0 z-0 select-none text-6xl ${isDark ? 'opacity-[0.05]' : 'opacity-[0.04]'}`} aria-hidden>🎁</div>
+        <div className={`pointer-events-none fixed bottom-[10%] left-[8%] z-0 select-none text-4xl motion-safe:animate-pulse ${isDark ? 'opacity-[0.05]' : 'opacity-[0.04]'}`} aria-hidden>⛄</div>
+      </>
+
       {/* New Task Notification Banner */}
       {showNewTaskNotification && newTaskCount > 0 && (
         <div
@@ -938,7 +910,7 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
             </div>
             <div className="flex-1">
               <p className={`text-sm font-semibold ${pageText}`}>
-                {newTaskCount} New Task{newTaskCount > 1 ? 's' : ''} Added!
+                {newTaskCount} New Task{newTaskCount > 1 ? 's' : ''} Added! 🎄
               </p>
               <p className={`text-xs ${mutedText}`}>Click refresh to see them in your list</p>
             </div>
@@ -963,18 +935,69 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
         </div>
       )}
 
-      <div className="flex h-[calc(100vh-2rem)] min-h-0 w-full max-w-full flex-col overflow-y-auto overflow-x-hidden">
+      <div className="relative z-10 flex h-[calc(100vh-2rem)] min-h-0 w-full max-w-full flex-col overflow-y-auto overflow-x-hidden">
         <div className="w-full max-w-full space-y-5 pb-6 sm:space-y-6">
+
+          {/* ═══════════════════════════════════════════════════════════
+              🎄 MERRY CHRISTMAS DECORATIVE BANNER
+              ═══════════════════════════════════════════════════════════ */}
+          <div
+            className={`relative overflow-hidden rounded-2xl border px-6 py-5 ${
+              isDark
+                ? 'border-red-500/20 bg-gradient-to-r from-red-950/40 via-slate-900/60 to-green-950/40'
+                : 'border-red-200 bg-gradient-to-r from-red-50 via-white to-green-50'
+            }`}
+          >
+            <div className="pointer-events-none absolute inset-0 select-none overflow-hidden" aria-hidden>
+              <span className={`absolute left-6 top-2 text-2xl ${isDark ? 'opacity-[0.08]' : 'opacity-[0.12]'}`}>❄️</span>
+              <span className={`absolute right-8 top-3 text-xl ${isDark ? 'opacity-[0.08]' : 'opacity-[0.12]'} motion-safe:animate-pulse`}>⭐</span>
+              <span className={`absolute left-1/3 bottom-1 text-xl ${isDark ? 'opacity-[0.07]' : 'opacity-[0.10]'}`}>🎁</span>
+              <span className={`absolute right-1/3 bottom-2 text-xl ${isDark ? 'opacity-[0.07]' : 'opacity-[0.10]'} motion-safe:animate-pulse`}>🔔</span>
+              <span className={`absolute right-16 top-1 text-2xl ${isDark ? 'opacity-[0.08]' : 'opacity-[0.12]'}`}>🎄</span>
+              <span className={`absolute left-20 bottom-1 text-xl ${isDark ? 'opacity-[0.07]' : 'opacity-[0.10]'}`}>🎅</span>
+            </div>
+
+            <div className="relative flex flex-col items-center justify-center gap-2 text-center sm:flex-row sm:gap-4">
+              <span className="text-3xl sm:text-4xl" aria-hidden>🎄</span>
+              <div>
+                <h2
+                  className={`text-xl font-bold tracking-tight sm:text-2xl ${
+                    isDark
+                      ? 'bg-gradient-to-r from-red-300 via-white to-green-300 bg-clip-text text-transparent'
+                      : 'bg-gradient-to-r from-red-700 via-green-700 to-red-700 bg-clip-text text-transparent'
+                  }`}
+                >
+                  Merry Christmas!
+                </h2>
+                <p className={`text-xs sm:text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
+                  Wishing you and your team a joyful holiday season 🎁
+                </p>
+              </div>
+              <span className="text-3xl sm:text-4xl" aria-hidden>🎅</span>
+            </div>
+
+            <div
+              className={`pointer-events-none absolute inset-x-0 bottom-0 h-px ${
+                isDark
+                  ? 'bg-gradient-to-r from-transparent via-red-400/40 to-transparent'
+                  : 'bg-gradient-to-r from-transparent via-red-300/60 to-transparent'
+              }`}
+              aria-hidden
+            />
+          </div>
+          {/* ═══════════════ END MERRY CHRISTMAS BANNER ═══════════════ */}
+
           <section className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <div className="rounded-xl bg-emerald-500/10 p-2">
+                <div className="relative rounded-xl bg-emerald-500/10 p-2">
                   <TrendingUp className="h-5 w-5 text-emerald-400" />
+                  <span className="pointer-events-none absolute -right-1.5 -top-1.5 select-none text-sm" aria-hidden>🎄</span>
                 </div>
-                <h1 className={`break-words text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl ${pageText}`}>Dashboard</h1>
+                <h1 className={`break-words text-xl font-bold tracking-tight sm:text-2xl lg:text-3xl ${pageText}`}>Dashboard 🎄</h1>
                 <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400 motion-reduce:animate-none" />
-                  LIVE
+                  LIVE ❄️
                 </span>
                 {isAdmin && (
                   <span className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-400">
@@ -989,7 +1012,23 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
                   </span>
                 )}
               </div>
-              <p className={`mt-1.5 text-sm ${mutedText}`}>Listing Operations · Real-time overview</p>
+              <p className={`mt-1.5 text-sm ${mutedText}`}>Listing Operations · Merry Christmas edition 🎄</p>
+
+              {/* 🎄 Merry Christmas ribbon */}
+              <div
+                className={`mt-2 inline-flex flex-wrap items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium ${
+                  isDark
+                    ? 'border-red-500/20 bg-red-500/5 text-red-300/80'
+                    : 'border-red-300/50 bg-red-50 text-red-700/80'
+                }`}
+              >
+                <span aria-hidden>🎄</span>
+                <span>Merry Christmas · Holiday Season</span>
+                <span aria-hidden>🎅</span>
+                <span className={isDark ? 'text-green-400/70' : 'text-green-600/80'}>·</span>
+                <span className={isDark ? 'text-green-400/70' : 'text-green-600/80'}>stay jolly</span>
+                <span aria-hidden>❄️</span>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <NotificationBell
@@ -1025,12 +1064,13 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
 
           <section className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 p-2 shadow-lg">
+              <div className="relative rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 p-2 shadow-lg">
                 <Wrench className="h-5 w-5 text-white" />
+                <span className="pointer-events-none absolute -right-1.5 -top-1.5 select-none text-sm" aria-hidden>🎄</span>
               </div>
               <div>
-                <h2 className={`text-lg font-bold ${pageText}`}>Operation Tools</h2>
-                <p className={`text-xs ${mutedText}`}>Streamline your workflow with these tools</p>
+                <h2 className={`text-lg font-bold ${pageText}`}>🎄 Operation Tools</h2>
+                <p className={`text-xs ${mutedText}`}>Streamline your workflow · Wrapped with care 🎁</p>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
@@ -1047,8 +1087,22 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
             </div>
           </section>
 
+          {/* ❄️🎄❄️ Divider ornament */}
+          <div
+            className={`flex select-none items-center justify-center gap-3 py-1 ${isDark ? 'opacity-[0.25]' : 'opacity-30'}`}
+            aria-hidden
+          >
+            <span className={`h-px w-16 bg-gradient-to-r from-transparent ${isDark ? 'to-red-500/60' : 'to-red-400/70'}`} />
+            <span className="text-sm">❄️</span>
+            <span className="text-base">🎄</span>
+            <span className="text-sm">❄️</span>
+            <span className={`h-px w-16 bg-gradient-to-l from-transparent ${isDark ? 'to-red-500/60' : 'to-red-400/70'}`} />
+          </div>
+
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-            <section className={`flex flex-col overflow-hidden rounded-2xl border shadow-sm ${panelClass}`}>
+            {/* ── Top Users ── */}
+            <section className={`relative flex flex-col overflow-hidden rounded-2xl border shadow-sm ${panelClass}`}>
+              <span className="pointer-events-none absolute right-2 top-1 select-none text-sm opacity-[0.15]" aria-hidden>🎁</span>
               <div className={`flex-shrink-0 border-b px-5 py-3 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1056,7 +1110,7 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
                       <Trophy className="h-4 w-4 text-yellow-500" />
                     </div>
                     <div>
-                      <h2 className={`text-sm font-semibold ${pageText}`}>Top Users</h2>
+                      <h2 className={`text-sm font-semibold ${pageText}`}>🏆 Top Users</h2>
                       <p className={`text-xs ${mutedText}`}>Ranked by runs · Most active first</p>
                     </div>
                   </div>
@@ -1084,7 +1138,12 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-7 flex-shrink-0">
-                              {index === 0 && <Crown className="h-4 w-4 text-yellow-500" />}
+                              {index === 0 && (
+                                <span className="flex items-center gap-1">
+                                  <Crown className="h-4 w-4 text-yellow-500" />
+                                  <span className="select-none text-xs" aria-hidden>⭐</span>
+                                </span>
+                              )}
                               {index === 1 && <Medal className="h-4 w-4 text-gray-400" />}
                               {index === 2 && <Medal className="h-4 w-4 text-amber-600" />}
                               {index >= 3 && <span className={`text-xs font-bold ${mutedText}`}>{index + 1}</span>}
@@ -1155,7 +1214,9 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
               </div>
             </section>
 
-            <section className={`flex flex-col overflow-hidden rounded-2xl border shadow-sm ${panelClass}`}>
+            {/* ── Recent Activity ── */}
+            <section className={`relative flex flex-col overflow-hidden rounded-2xl border shadow-sm ${panelClass}`}>
+              <span className="pointer-events-none absolute right-2 top-1 select-none text-sm opacity-[0.15]" aria-hidden>❄️</span>
               <div className={`flex-shrink-0 border-b px-5 py-3 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1163,7 +1224,7 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
                       <Flame className="h-4 w-4 text-orange-400" />
                     </div>
                     <div>
-                      <h2 className={`text-sm font-semibold ${pageText}`}>Recent Activity</h2>
+                      <h2 className={`text-sm font-semibold ${pageText}`}>❄️ Recent Activity</h2>
                       <p className={`text-xs ${mutedText}`}>Latest tool runs</p>
                     </div>
                   </div>
@@ -1197,7 +1258,9 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
               </div>
             </section>
 
-            <section className={`flex flex-col overflow-hidden rounded-2xl border shadow-sm md:col-span-2 xl:col-span-1 ${panelClass}`}>
+            {/* ── Team Gallery ── */}
+            <section className={`relative flex flex-col overflow-hidden rounded-2xl border shadow-sm md:col-span-2 xl:col-span-1 ${panelClass}`}>
+              <span className="pointer-events-none absolute right-2 top-1 select-none text-sm opacity-[0.15]" aria-hidden>🎄</span>
               <div className={`flex-shrink-0 border-b px-5 py-3 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -1205,8 +1268,8 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
                       <Users className="h-4 w-4 text-emerald-400" />
                     </div>
                     <div>
-                      <h2 className={`text-sm font-semibold ${pageText}`}>Team Gallery</h2>
-                      <p className={`text-xs ${mutedText}`}>Meet the team</p>
+                      <h2 className={`text-sm font-semibold ${pageText}`}>🎄 Team Gallery</h2>
+                      <p className={`text-xs ${mutedText}`}>Meet the team · All on the nice list 🎄</p>
                     </div>
                   </div>
                   <button
@@ -1223,6 +1286,7 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
                 </div>
               </div>
               <div className="relative overflow-hidden">
+                <span className={`pointer-events-none absolute left-3 top-2 select-none text-sm ${isDark ? 'opacity-[0.15]' : 'opacity-20'}`} aria-hidden>❄️</span>
                 <div className="flex transition-transform duration-500 ease-out motion-reduce:transition-none" style={{ transform: `translateX(-${currentSlide * 100}%)` }}>
                   {defaultTeamMembers.map((member, idx) => (
                     <div key={idx} className="w-full flex-shrink-0 px-6 py-6">
@@ -1275,6 +1339,8 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
               isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-white'
             }`}
           >
+            <span className="pointer-events-none absolute right-14 top-3 select-none text-sm opacity-[0.2]" aria-hidden>🎄</span>
+
             <div className={`sticky top-0 z-10 flex items-center justify-between border-b p-3 backdrop-blur-md sm:p-4 ${isDark ? 'border-slate-700 bg-slate-900/95' : 'border-gray-200 bg-white/95'}`}>
               <div className="flex min-w-0 items-center gap-2">
                 <div className="flex-shrink-0 rounded-lg bg-emerald-500/20 p-1.5">
@@ -1463,7 +1529,7 @@ function toInputDate(raw: string | null | undefined | Date | number): string {
       {/* ─── ADD TASK MODAL ─────────────────────────────────────────────────── */}
       <TaskFormModal isOpen={showAddTaskModal} onClose={() => setShowAddTaskModal(false)} onSubmit={addNewTask} isSubmitting={isSavingTask} theme={theme} mode="add" error={taskFormError} />
 
-      {/* ─── EDIT TASK MODAL (admins only) ─────────────────────────────────── */}
+      {/* ─── EDIT TASK MODAL ─────────────────────────────────────────────────── */}
       <TaskFormModal
         isOpen={showEditTaskModal}
         onClose={() => setShowEditTaskModal(false)}
@@ -1521,6 +1587,7 @@ function EmptyState({ isDark, icon, message }: { isDark: boolean; icon: React.Re
     <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-2 px-4 text-center">
       <div className={isDark ? 'text-slate-700' : 'text-gray-300'}>{icon}</div>
       <div className={`text-sm ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>{message}</div>
+      <div className={`select-none text-lg ${isDark ? 'opacity-20' : 'opacity-30'}`} aria-hidden>🎄</div>
     </div>
   );
 }
@@ -1541,7 +1608,7 @@ function PanelSkeleton({ isDark, rows = 4 }: { isDark: boolean; rows?: number })
   );
 }
 
-// ─── ToolCard Component (defined OUTSIDE DashboardClient) ─────────────────────
+// ─── ToolCard Component ─────────────────────────────────────────────────────
 
 function ToolCard({ tool, theme, runCount, sparkline, onOpen }: any) {
   const isDark = theme === 'dark';
@@ -1583,6 +1650,12 @@ function ToolCard({ tool, theme, runCount, sparkline, onOpen }: any) {
       onClick={onOpen}
       className={`group relative flex min-h-[170px] w-full flex-col rounded-xl border p-3 text-left shadow-sm transition-all duration-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 active:scale-[0.98] sm:min-h-[180px] ${accentConfig.card}`}
     >
+      <span
+        className="pointer-events-none absolute right-2 top-2 select-none text-xs opacity-0 transition-opacity duration-300 group-hover:opacity-[0.35]"
+        aria-hidden
+      >
+        🎄
+      </span>
       <div className="flex items-start justify-between gap-2">
         <div className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold ${isDark ? 'bg-slate-900/50 text-slate-300' : 'bg-white/70 text-gray-600'}`}>
           <span className="flex-shrink-0">{tool.icon}</span>

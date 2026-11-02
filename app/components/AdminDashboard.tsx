@@ -136,16 +136,15 @@ const ADMIN_EMAILS = ['melvin@outdoorequipped.com', 'jonisa@outdoorequipped.com'
 const ALL_KNOWN_USERS = [
   { email: 'arlie@outdoorequipped.com', name: 'Arlie' },
   { email: 'melvin@outdoorequipped.com', name: 'Melvin' },
-  { email: 'jbermoy@outdoorequipped.com', name: 'Janroe' },
   { email: 'florante@outdoorequipped.com', name: 'Florante' },
-  { email: 'jerald@outdoorequipped.com', name: 'Jerald' },
   { email: 'jonisa@outdoorequipped.com', name: 'Jonisa' },
-  { email: 'juddy@outdoorequipped.com', name: 'Juddy' },
-  { email: 'lawrencelaudeza@outdoorequipped.com', name: 'Lawrence' },
   { email: 'mpasturan@outdoorequipped.com', name: 'Mark' },
   { email: 'spuebla@outdoorequipped.com', name: 'Shenna' },
   { email: 'wjdelcorro@outdoorequipped.com', name: 'Wyndell' },
   { email: 'jogie@outdoorequipped.com', name: 'Jogie' },
+  { email: 'jtribunalo@outdoorequipped.com', name: 'Jonjie' },
+  { email: 'jtaganile@outdoorequipped.com', name: 'Jesh' },
+  { email: 'jack@outdoorequipped.com', name: 'jack' },
 ];
 
 const TEAM_MEMBERS = ALL_KNOWN_USERS.map(u => u.email);

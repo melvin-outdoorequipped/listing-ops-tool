@@ -196,6 +196,17 @@ function KPICard({ title, value, icon, subtitle, trend, isDark, delay = 0, gradi
           : 'border-gray-200 bg-white/80 backdrop-blur-sm hover:shadow-xl hover:shadow-gray-200/50'
       )}
     >
+      {/* 🎃 Corner seasonal emoji */}
+      <span
+        className={cn(
+          'pointer-events-none absolute right-2 top-2 select-none text-sm',
+          isDark ? 'opacity-[0.18]' : 'opacity-[0.22]'
+        )}
+        aria-hidden
+      >
+        🎃
+      </span>
+
       <div className="p-5">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
@@ -349,6 +360,17 @@ function AgentCard({ stats, isExpanded, onToggle, onTaskClick, isDark, delay = 0
           : 'border-gray-200 bg-white/80 backdrop-blur-sm hover:shadow-xl hover:shadow-gray-200/50'
       )}
     >
+      {/* 👻 Corner seasonal emoji */}
+      <span
+        className={cn(
+          'pointer-events-none absolute right-2 top-2 select-none text-sm',
+          isDark ? 'opacity-[0.15]' : 'opacity-[0.2]'
+        )}
+        aria-hidden
+      >
+        👻
+      </span>
+
       {/* Glow effect on hover */}
       <div className="absolute inset-0 rounded-2xl pointer-events-none opacity-0 transition-opacity duration-300 hover:opacity-100">
         <div className="absolute -inset-px rounded-2xl bg-gradient-to-r from-emerald-500/10 to-purple-500/10 blur-sm" />
@@ -651,6 +673,7 @@ function TaskDetailModal({ task, isOpen, onClose, isDark }: TaskDetailModalProps
         title={task.task}
         subtitle={
           <span className="flex items-center gap-2">
+            <span className="select-none" aria-hidden>🎃</span>
             #{task.rowIndex} · {task.brand}
             {isLate && (
               <span className={cn(
@@ -980,6 +1003,7 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
   const clearSearch = () => {
     setSearchTerm('');
     setFilterStatus('all');
+    setSelectedAgent('all');
   };
 
   const hasActiveFilters = searchTerm.trim() !== '' || filterStatus !== 'all' || selectedAgent !== 'all';
@@ -987,307 +1011,366 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
   // ─── RENDER ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-full flex-col bg-gradient-to-b from-transparent to-transparent">
-      {/* ─── HEADER ────────────────────────────────────────────────────────── */}
-      <div className={cn(
-        'border-b flex-shrink-0 p-4 sm:p-6',
-        isDark ? 'border-slate-700/50 bg-slate-900/30' : 'border-gray-200 bg-white/50 backdrop-blur-sm'
-      )}>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-            <div>
-              <motion.h1
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={cn(
-                  'text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2',
-                  isDark ? 'text-white' : 'text-gray-900'
-                )}
-              >
-                <Zap className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
-                Daily Completion
-                <span className="text-sm font-normal text-emerald-500 ml-2">Tracker</span>
-              </motion.h1>
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.1 }}
-                className={cn('text-sm mt-1', isDark ? 'text-slate-400' : 'text-gray-500')}
-              >
-                Monitor daily productivity, completion rate, and team performance
-              </motion.p>
+    <>
+      {/* ─── 🎃 Halloween decorations (purely visual, pointer-events-none) ─── */}
+      <>
+        {/* Purple/orange haze — dark: stronger · light: subtle */}
+        <div
+          className={cn(
+            'pointer-events-none fixed inset-0 z-0',
+            isDark
+              ? 'bg-[radial-gradient(ellipse_at_top,_rgba(168,85,247,0.10),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(249,115,22,0.08),_transparent_50%)]'
+              : 'bg-[radial-gradient(ellipse_at_top,_rgba(249,115,22,0.05),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(168,85,247,0.04),_transparent_50%)]'
+          )}
+          aria-hidden
+        />
+
+        {/* Floating spooky emojis — very subtle, non-interactive */}
+        <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden>
+          <span className={cn('absolute left-[6%] top-[18%] select-none text-4xl motion-safe:animate-pulse', isDark ? 'opacity-[0.06]' : 'opacity-[0.05]')}>🎃</span>
+          <span className={cn('absolute right-[10%] top-[10%] select-none text-3xl motion-safe:animate-pulse', isDark ? 'opacity-[0.06]' : 'opacity-[0.05]')}>🦇</span>
+          <span className={cn('absolute left-[18%] bottom-[20%] select-none text-3xl', isDark ? 'opacity-[0.05]' : 'opacity-[0.04]')}>👻</span>
+          <span className={cn('absolute right-[16%] bottom-[14%] select-none text-4xl motion-safe:animate-pulse', isDark ? 'opacity-[0.06]' : 'opacity-[0.05]')}>🕷️</span>
+          <span className={cn('absolute left-[45%] top-[6%] select-none text-3xl', isDark ? 'opacity-[0.05]' : 'opacity-[0.04]')}>🕸️</span>
+          <span className={cn('absolute right-[40%] bottom-[8%] select-none text-3xl', isDark ? 'opacity-[0.05]' : 'opacity-[0.04]')}>💀</span>
+          <span className={cn('absolute left-[72%] top-[32%] select-none text-2xl motion-safe:animate-pulse', isDark ? 'opacity-[0.05]' : 'opacity-[0.04]')}>🧙</span>
+          <span className={cn('absolute left-[30%] top-[52%] select-none text-2xl', isDark ? 'opacity-[0.05]' : 'opacity-[0.04]')}>🍬</span>
+        </div>
+
+        {/* Corner cobwebs — top-left / top-right (flipped) */}
+        <div className={cn('pointer-events-none fixed left-0 top-0 z-0 select-none text-7xl', isDark ? 'opacity-[0.07]' : 'opacity-[0.05]')} aria-hidden>🕸️</div>
+        <div className={cn('pointer-events-none fixed right-0 top-0 z-0 -scale-x-100 select-none text-7xl', isDark ? 'opacity-[0.07]' : 'opacity-[0.05]')} aria-hidden>🕸️</div>
+
+        {/* Bottom graveyard + bat */}
+        <div className={cn('pointer-events-none fixed bottom-0 right-0 z-0 select-none text-6xl', isDark ? 'opacity-[0.05]' : 'opacity-[0.04]')} aria-hidden>🪦</div>
+        <div className={cn('pointer-events-none fixed bottom-[10%] left-[8%] z-0 select-none text-4xl motion-safe:animate-pulse', isDark ? 'opacity-[0.05]' : 'opacity-[0.04]')} aria-hidden>🦇</div>
+      </>
+
+      <div className="relative z-10 flex h-full flex-col bg-gradient-to-b from-transparent to-transparent">
+        {/* ─── HEADER ────────────────────────────────────────────────────────── */}
+        <div className={cn(
+          'border-b flex-shrink-0 p-4 sm:p-6',
+          isDark ? 'border-slate-700/50 bg-slate-900/30' : 'border-gray-200 bg-white/50 backdrop-blur-sm'
+        )}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+              <div>
+                <motion.h1
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={cn(
+                    'text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2',
+                    isDark ? 'text-white' : 'text-gray-900'
+                  )}
+                >
+                  <span className="relative inline-flex">
+                    <Zap className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
+                    <span className="pointer-events-none absolute -right-2 -top-2 select-none text-xs" aria-hidden>🎃</span>
+                  </span>
+                  Daily Completion
+                  <span className="text-sm font-normal text-emerald-500 ml-2">Tracker 🦇</span>
+                </motion.h1>
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.1 }}
+                  className={cn('text-sm mt-1', isDark ? 'text-slate-400' : 'text-gray-500')}
+                >
+                  Monitor daily productivity, completion rate, and team performance · Spooky season edition 🎃
+                </motion.p>
+
+                {/* 🎃 Happy Halloween ribbon */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.15 }}
+                  className={cn(
+                    'mt-2 inline-flex flex-wrap items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium',
+                    isDark
+                      ? 'border-purple-500/20 bg-purple-500/5 text-purple-300/80'
+                      : 'border-purple-300/50 bg-purple-50 text-purple-700/80'
+                  )}
+                >
+                  <span aria-hidden>🎃</span>
+                  <span>Happy Halloween · Spooky Season</span>
+                  <span aria-hidden>🦇</span>
+                  <span className={isDark ? 'text-orange-400/70' : 'text-orange-500/80'}>·</span>
+                  <span className={isDark ? 'text-orange-400/70' : 'text-orange-500/80'}>stay spooky</span>
+                  <span aria-hidden>👻</span>
+                </motion.div>
+              </div>
+
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <div className={cn(
+                  'flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm',
+                  isDark ? 'bg-slate-800/50 text-slate-300' : 'bg-gray-100 text-gray-600'
+                )}>
+                  <Calendar className="h-4 w-4" />
+                  {formatDateShort(targetDate)}
+                </div>
+                <div className={cn(
+                  'flex items-center gap-1 rounded-xl px-3 py-1.5 text-sm',
+                  isDark ? 'bg-slate-800/50 text-slate-300' : 'bg-gray-100 text-gray-600'
+                )}>
+                  <Users className="h-4 w-4" />
+                  {kpis.totalAgents} agents
+                </div>
+                <Button
+                  theme={theme}
+                  variant="outline"
+                  icon={RefreshCw}
+                  isLoading={isLoading}
+                  onClick={loadTasks}
+                  className="flex-shrink-0"
+                />
+              </div>
             </div>
 
-            <div className="flex items-center gap-3 flex-shrink-0">
-              <div className={cn(
-                'flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm',
-                isDark ? 'bg-slate-800/50 text-slate-300' : 'bg-gray-100 text-gray-600'
-              )}>
-                <Calendar className="h-4 w-4" />
-                {formatDateShort(targetDate)}
-              </div>
-              <div className={cn(
-                'flex items-center gap-1 rounded-xl px-3 py-1.5 text-sm',
-                isDark ? 'bg-slate-800/50 text-slate-300' : 'bg-gray-100 text-gray-600'
-              )}>
-                <Users className="h-4 w-4" />
-                {kpis.totalAgents} agents
-              </div>
-              <Button
-                theme={theme}
-                variant="outline"
-                icon={RefreshCw}
-                isLoading={isLoading}
-                onClick={loadTasks}
-                className="flex-shrink-0"
-              />
-            </div>
-          </div>
-
-          {/* ─── FILTER TOOLBAR ───────────────────────────────────────────── */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-            {/* Date Navigation */}
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  shiftDate(-1);
-                }}
-                aria-label="Previous day"
-                className={cn(
-                  'rounded-xl p-2 border transition-all duration-200 hover:scale-105',
-                  focusRing,
-                  isDark ? 'border-slate-700 hover:border-slate-600 hover:bg-slate-800' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                )}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-
-              <div className="relative">
-                <Calendar className={cn(
-                  'absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none',
-                  isDark ? 'text-slate-400' : 'text-gray-400'
-                )} />
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => {
+            {/* ─── FILTER TOOLBAR ───────────────────────────────────────────── */}
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+              {/* Date Navigation */}
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                <button
+                  onClick={(e) => {
                     e.preventDefault();
-                    setSelectedDate(e.target.value);
+                    e.stopPropagation();
+                    shiftDate(-1);
                   }}
-                  aria-label="Selected date"
+                  aria-label="Previous day"
                   className={cn(
-                    'rounded-xl border pl-9 pr-3 py-2 text-sm w-[140px] sm:w-[160px] transition-all duration-200',
+                    'rounded-xl p-2 border transition-all duration-200 hover:scale-105',
                     focusRing,
-                    isDark ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                    isDark ? 'border-slate-700 hover:border-slate-600 hover:bg-slate-800' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                   )}
-                />
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+
+                <div className="relative">
+                  <Calendar className={cn(
+                    'absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none',
+                    isDark ? 'text-slate-400' : 'text-gray-400'
+                  )} />
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => {
+                      e.preventDefault();
+                      setSelectedDate(e.target.value);
+                    }}
+                    aria-label="Selected date"
+                    className={cn(
+                      'rounded-xl border pl-9 pr-3 py-2 text-sm w-[140px] sm:w-[160px] transition-all duration-200',
+                      focusRing,
+                      isDark ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                    )}
+                  />
+                </div>
+
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    shiftDate(1);
+                  }}
+                  aria-label="Next day"
+                  className={cn(
+                    'rounded-xl p-2 border transition-all duration-200 hover:scale-105',
+                    focusRing,
+                    isDark ? 'border-slate-700 hover:border-slate-600 hover:bg-slate-800' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  )}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+
+                <Button
+                  theme={theme}
+                  variant="secondary"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    goToToday();
+                  }}
+                  className="font-medium"
+                >
+                  Today
+                </Button>
               </div>
 
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  shiftDate(1);
-                }}
-                aria-label="Next day"
-                className={cn(
-                  'rounded-xl p-2 border transition-all duration-200 hover:scale-105',
-                  focusRing,
-                  isDark ? 'border-slate-700 hover:border-slate-600 hover:bg-slate-800' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                )}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-
-              <Button
-                theme={theme}
-                variant="secondary"
-                size="sm"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  goToToday();
-                }}
-                className="font-medium"
-              >
-                Today
-              </Button>
-            </div>
-
-            {/* Search and Filters */}
-            <div className="flex-1 flex items-center gap-2 min-w-0">
-              <div className="relative flex-1 min-w-[120px]">
-                <Search className={cn(
-                  'absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none',
-                  isDark ? 'text-slate-400' : 'text-gray-400'
-                )} />
-                <input
-                  type="text"
-                  placeholder="Search agents..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  aria-label="Search agents"
-                  className={cn(
-                    'w-full rounded-xl border pl-9 pr-8 py-2 text-sm transition-all duration-200',
-                    focusRing,
-                    isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                  )}
-                />
-                {searchTerm && (
-                  <button
-                    onClick={() => setSearchTerm('')}
+              {/* Search and Filters */}
+              <div className="flex-1 flex items-center gap-2 min-w-0">
+                <div className="relative flex-1 min-w-[120px]">
+                  <Search className={cn(
+                    'absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none',
+                    isDark ? 'text-slate-400' : 'text-gray-400'
+                  )} />
+                  <input
+                    type="text"
+                    placeholder="Search agents..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    aria-label="Search agents"
                     className={cn(
-                      'absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 transition-colors',
-                      isDark ? 'text-slate-400 hover:text-white' : 'text-gray-400 hover:text-gray-900'
+                      'w-full rounded-xl border pl-9 pr-8 py-2 text-sm transition-all duration-200',
+                      focusRing,
+                      isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                    )}
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className={cn(
+                        'absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 transition-colors',
+                        isDark ? 'text-slate-400 hover:text-white' : 'text-gray-400 hover:text-gray-900'
+                      )}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Agent Dropdown */}
+                <div className="relative flex-shrink-0 w-32 sm:w-40">
+                  <User className={cn(
+                    'absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none',
+                    isDark ? 'text-slate-400' : 'text-gray-400'
+                  )} />
+                  <select
+                    value={selectedAgent}
+                    onChange={(e) => setSelectedAgent(e.target.value)}
+                    aria-label="Filter by agent"
+                    className={cn(
+                      'w-full rounded-xl border pl-9 pr-3 py-2 text-sm transition-all duration-200',
+                      focusRing,
+                      isDark ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                     )}
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <option value="all">All Agents</option>
+                    {allAgentNames.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearSearch}
+                    className={cn(
+                      'rounded-xl px-3 py-2 text-xs font-medium transition-all duration-200 flex-shrink-0',
+                      focusRing,
+                      isDark ? 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700' : 'bg-gray-100 text-gray-500 hover:text-gray-900 hover:bg-gray-200'
+                    )}
+                  >
+                    Clear
                   </button>
                 )}
               </div>
-
-              {/* Agent Dropdown */}
-              <div className="relative flex-shrink-0 w-32 sm:w-40">
-                <User className={cn(
-                  'absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none',
-                  isDark ? 'text-slate-400' : 'text-gray-400'
-                )} />
-                <select
-                  value={selectedAgent}
-                  onChange={(e) => setSelectedAgent(e.target.value)}
-                  aria-label="Filter by agent"
-                  className={cn(
-                    'w-full rounded-xl border pl-9 pr-3 py-2 text-sm transition-all duration-200',
-                    focusRing,
-                    isDark ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                  )}
-                >
-                  <option value="all">All Agents</option>
-                  {allAgentNames.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {hasActiveFilters && (
-                <button
-                  onClick={clearSearch}
-                  className={cn(
-                    'rounded-xl px-3 py-2 text-xs font-medium transition-all duration-200 flex-shrink-0',
-                    focusRing,
-                    isDark ? 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700' : 'bg-gray-100 text-gray-500 hover:text-gray-900 hover:bg-gray-200'
-                  )}
-                >
-                  Clear
-                </button>
-              )}
             </div>
           </div>
         </div>
-      </div>
 
-      {/* ─── CONTENT ──────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-        {loadError ? (
-          <LoadErrorState theme={theme} message={loadError} onRetry={loadTasks} />
-        ) : isLoading && tasks.length === 0 ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className={cn('h-8 w-8 animate-spin', isDark ? 'text-slate-400' : 'text-gray-400')} />
-          </div>
-        ) : allStats.length === 0 ? (
-          <EmptyState
-            theme={theme}
-            icon={Calendar}
-            title="No tasks assigned on this date"
-            description={selectedAgent !== 'all' ? `for ${selectedAgent}` : 'Try selecting a different day.'}
-          />
-        ) : (
-          <>
-            {/* ─── KPI CARDS ───────────────────────────────────────────────── */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
-              <KPICard
-                title="Total Agents"
-                value={kpis.totalAgents}
-                icon={<Users className="h-5 w-5" />}
-                subtitle="Active agents"
-                isDark={isDark}
-                delay={0}
-                gradientFrom="emerald"
-                gradientTo="teal"
-              />
-              <KPICard
-                title="Completed Today"
-                value={kpis.totalCompleted}
-                icon={<CheckCircle2 className="h-5 w-5" />}
-                subtitle="Tasks completed"
-                trend={5}
-                isDark={isDark}
-                delay={1}
-                gradientFrom="blue"
-                gradientTo="indigo"
-              />
-              <KPICard
-                title="Ongoing"
-                value={kpis.totalOngoing}
-                icon={<ClockIcon className="h-5 w-5" />}
-                subtitle="In progress"
-                trend={-2}
-                isDark={isDark}
-                delay={2}
-                gradientFrom="amber"
-                gradientTo="orange"
-              />
-              <KPICard
-                title="Late Tasks"
-                value={kpis.totalLate}
-                icon={<AlertTriangle className="h-5 w-5" />}
-                subtitle="Completed late"
-                trend={3}
-                isDark={isDark}
-                delay={3}
-                gradientFrom="rose"
-                gradientTo="red"
-              />
+        {/* ─── CONTENT ──────────────────────────────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          {loadError ? (
+            <LoadErrorState theme={theme} message={loadError} onRetry={loadTasks} />
+          ) : isLoading && tasks.length === 0 ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className={cn('h-8 w-8 animate-spin', isDark ? 'text-slate-400' : 'text-gray-400')} />
             </div>
-
-            {/* ─── AGENT CARDS ────────────────────────────────────────────── */}
-            {filteredStats.length === 0 ? (
-              <EmptyState
-                theme={theme}
-                icon={Search}
-                title="No agents found"
-                description="Try adjusting your search or filters."
-              />
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filteredStats.map((stats, idx) => (
-                  <AgentCard
-                    key={stats.agent}
-                    stats={stats}
-                    isExpanded={expandedAgent === stats.agent}
-                    onToggle={() => setExpandedAgent(expandedAgent === stats.agent ? null : stats.agent)}
-                    onTaskClick={handleTaskClick}
-                    isDark={isDark}
-                    delay={idx}
-                  />
-                ))}
+          ) : allStats.length === 0 ? (
+            <EmptyState
+              theme={theme}
+              icon={Calendar}
+              title="No tasks assigned on this date"
+              description={selectedAgent !== 'all' ? `for ${selectedAgent} · even ghosts took the day off 👻` : 'Try selecting a different day 🎃'}
+            />
+          ) : (
+            <>
+              {/* ─── KPI CARDS ───────────────────────────────────────────────── */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
+                <KPICard
+                  title="Total Agents"
+                  value={kpis.totalAgents}
+                  icon={<Users className="h-5 w-5" />}
+                  subtitle="Active agents"
+                  isDark={isDark}
+                  delay={0}
+                  gradientFrom="emerald"
+                  gradientTo="teal"
+                />
+                <KPICard
+                  title="Completed Today"
+                  value={kpis.totalCompleted}
+                  icon={<CheckCircle2 className="h-5 w-5" />}
+                  subtitle="Tasks completed"
+                  trend={5}
+                  isDark={isDark}
+                  delay={1}
+                  gradientFrom="blue"
+                  gradientTo="indigo"
+                />
+                <KPICard
+                  title="Ongoing"
+                  value={kpis.totalOngoing}
+                  icon={<ClockIcon className="h-5 w-5" />}
+                  subtitle="In progress"
+                  trend={-2}
+                  isDark={isDark}
+                  delay={2}
+                  gradientFrom="amber"
+                  gradientTo="orange"
+                />
+                <KPICard
+                  title="Late Tasks"
+                  value={kpis.totalLate}
+                  icon={<AlertTriangle className="h-5 w-5" />}
+                  subtitle="Completed late"
+                  trend={3}
+                  isDark={isDark}
+                  delay={3}
+                  gradientFrom="rose"
+                  gradientTo="red"
+                />
               </div>
-            )}
-          </>
-        )}
-      </div>
 
-      {/* ─── TASK DETAIL MODAL ───────────────────────────────────────────── */}
-      <TaskDetailModal
-        task={selectedTask}
-        isOpen={showTaskDetailModal}
-        onClose={() => setShowTaskDetailModal(false)}
-        isDark={isDark}
-      />
-    </div>
+              {/* ─── AGENT CARDS ────────────────────────────────────────────── */}
+              {filteredStats.length === 0 ? (
+                <EmptyState
+                  theme={theme}
+                  icon={Search}
+                  title="No agents found"
+                  description="Try adjusting your search or filters 🕸️"
+                />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {filteredStats.map((stats, idx) => (
+                    <AgentCard
+                      key={stats.agent}
+                      stats={stats}
+                      isExpanded={expandedAgent === stats.agent}
+                      onToggle={() => setExpandedAgent(expandedAgent === stats.agent ? null : stats.agent)}
+                      onTaskClick={handleTaskClick}
+                      isDark={isDark}
+                      delay={idx}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* ─── TASK DETAIL MODAL ───────────────────────────────────────────── */}
+        <TaskDetailModal
+          task={selectedTask}
+          isOpen={showTaskDetailModal}
+          onClose={() => setShowTaskDetailModal(false)}
+          isDark={isDark}
+        />
+      </div>
+    </>
   );
 }

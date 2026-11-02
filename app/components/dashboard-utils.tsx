@@ -74,17 +74,17 @@ export type TaskFormValues = {
 export type TaskViewMode = 'table' | 'card' | 'list';
 
 export const defaultTeamMembers: TeamMember[] = [
-  { name: 'Arlie', role: 'Team Manager', image: '/images/arlie.png', email: 'arlie@outdoorequipped.com', includeInRoulette: false, color: '#6366f1' },
+  { name: 'Jogs', role: 'Team Manager', image: '/images/images.jpg', email: 'jogie@outdoorequipped.com', includeInRoulette: false, color: '#6366f1' },
   { name: 'Melvin', role: 'Data Analyst', image: '/images/Melvin.png', email: 'melvin@outdoorequipped.com', includeInRoulette: true, color: '#378ADD' },
-  { name: 'Janroe', role: 'Data Analyst', image: '/images/janroe.png', email: 'jbermoy@outdoorequipped.com', includeInRoulette: true, color: '#1D9E75' },
   { name: 'Florante', role: 'Data Analyst', image: '/images/florante.png', email: 'florante@outdoorequipped.com', includeInRoulette: true, color: '#7F77DD' },
-  { name: 'Jerald', role: 'Data Analyst', image: '/images/jerald.png', email: 'jerald@outdoorequipped.com', includeInRoulette: true, color: '#BA7517' },
-  { name: 'Juddy', role: 'Data Analyst', image: '/images/juddy.png', email: 'juddy@outdoorequipped.com', includeInRoulette: true, color: '#06b6d4' },
   { name: 'Shenna', role: 'Data Analyst', image: '/images/shenna.png', email: 'spuebla@outdoorequipped.com', includeInRoulette: true, color: '#10b981' },
   { name: 'Wyndell', role: 'Data Analyst', image: '/images/wyndell.png', email: 'wjdelcorro@outdoorequipped.com', includeInRoulette: true, color: '#f59e0b' },
   { name: 'Jonisa', role: 'Data Analyst', image: '/images/jonisa.png', email: 'jonisa@outdoorequipped.com', includeInRoulette: true, color: '#ef4444' },
-  { name: 'Lawrence', role: 'Data Analyst', image: '/images/lawrence.png', email: 'lawrencelaudeza@outdoorequipped.com', includeInRoulette: true, color: '#8b5cf6' },
   { name: 'Mark', role: 'Data Analyst', image: '/images/mark.png', email: 'mpasturan@outdoorequipped.com', includeInRoulette: true, color: '#ec4899' },
+  { name: 'Jonjie', role: 'Spring Role', image: '/images/images.jpg', email: 'jtribunalo@outdoorequipped.com', includeInRoulette: true, color: '#56ec48' },
+  { name: 'Jesh', role: 'Dempsy Role', image: '/images/jesh.png', email: 'jtaganile@outdoorequipped.com', includeInRoulette: true, color: '#56ec48' },
+  { name: 'Jack', role: 'Spring Role', image: '/images/images.jpg', email: 'jack@outdoorequipped.com', includeInRoulette: true, color: '#48d9ec94' },
+  { name: 'Francis', role: 'Spring Role', image: '/images/images.jpg', email: 'fsagarino@outdoorequipped.com', includeInRoulette: true, color: '#ff009d' },
 ];
 
 export const operationTools = [
@@ -146,18 +146,19 @@ export const operationTools = [
 
 export const getUserImage = (email: string): string | null => {
   const teamImages: Record<string, string> = {
-    'arlie': '/images/arlie.png',
+    'jogie': '/images/images.jpg',
     'melvin@outdoorequipped.com': '/images/Melvin.png',
     'melvin': '/images/Melvin.png',
-    'jbermoy': '/images/janroe.png',
-    'jerald': '/images/jerald.png',
-    'juddy': '/images/juddy.png',
     'spuebla': '/images/shenna.png',
     'wjdelcorro': '/images/wyndell.png',
     'jonisa': '/images/jonisa.png',
-    'lawrencelaudeza': '/images/lawrence.png',
     'mpasturan': '/images/mark.png',
-    'florante': '/images/florante.png'
+    'florante': '/images/florante.png',
+    'jtribunalo@outdoorequipped.com': '/images/images.jpg',
+    'jtaganile@outdoorequipped.com': '/images/jesh.png',
+    'jack': '/images/images.jpg',
+    'jack@outdoorequipped.com': '/images/images.jpg',
+    'fsagarino@outdoorequipped.com': '/images/images.jpg',
   };
   
   if (!email) return null;
