@@ -329,16 +329,20 @@ function DashboardHeader({
       )}
     >
       <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-purple-500/5 rounded-3xl" />
+
+      {/* 🎄 Corner decoration */}
+      <span className="pointer-events-none absolute right-4 top-3 select-none text-lg opacity-[0.2]" aria-hidden>🎄</span>
       
       <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 p-2.5 shadow-lg shadow-emerald-500/20">
+            <div className="relative rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 p-2.5 shadow-lg shadow-emerald-500/20">
               <Zap className="h-6 w-6 text-white" />
+              <span className="pointer-events-none absolute -right-1.5 -top-1.5 select-none text-xs" aria-hidden>🎄</span>
             </div>
             <div>
               <h1 className={cn('text-2xl sm:text-3xl font-bold tracking-tight', isDark ? 'text-white' : 'text-gray-900')}>
-                Task Management
+                Task Management 🎄
               </h1>
               <p className={cn('text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
                 {greeting}{userName ? `, ${userName}` : ''} · {
@@ -453,6 +457,17 @@ function AnalyticsCard({ title, value, icon, color, gradient, isDark, delay = 0,
       )}
     >
       <div className={cn('absolute top-0 left-0 right-0 h-1', gradient)} />
+
+      {/* 🎄 Corner decoration */}
+      <span
+        className={cn(
+          'pointer-events-none absolute right-2 top-2 select-none text-xs',
+          isDark ? 'opacity-[0.18]' : 'opacity-[0.22]'
+        )}
+        aria-hidden
+      >
+        🎄
+      </span>
 
       <div className="p-5">
         <div className="flex items-start justify-between">
@@ -670,7 +685,7 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
       <ModalHeader
         icon={Sparkles}
         iconClassName="bg-gradient-to-r from-blue-500 to-purple-500"
-        title="Task Name Generator"
+        title="Task Name Generator 🎄"
         subtitle={`Generate task names for ${brandToUse} · ${category?.category || task.task}`}
         onClose={onClose}
         theme={theme}
@@ -954,6 +969,7 @@ function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNameGenera
             <p className={cn('text-xs mt-1', mutedText)}>
               {searchQuery ? 'Try adjusting your search terms' : 'Try selecting a different category'}
             </p>
+            <div className={`mt-3 select-none text-lg ${isDark ? 'opacity-20' : 'opacity-25'}`} aria-hidden>🎄</div>
           </div>
         ) : (
           <div className="space-y-2">
@@ -1098,7 +1114,7 @@ function ReasonForPendingModal({ isOpen, onClose, onConfirm, task, theme, isSubm
       <ModalHeader
         icon={Clock}
         iconClassName={theme === 'dark' ? 'bg-amber-500/20' : 'bg-amber-100'}
-        title="Reason for pending"
+        title="Reason for pending ❄️"
         subtitle={`${task.task} · ${task.brand}`}
         onClose={onClose}
         theme={theme}
@@ -1207,7 +1223,7 @@ function TaskFormModal({
     <Modal isOpen={isOpen} onClose={onClose} theme={theme} maxWidth="max-w-2xl" labelledBy="task-form-title">
       <ModalHeader
         icon={mode === 'add' ? Plus : Edit2}
-        title={mode === 'add' ? 'Add new task' : 'Edit task'}
+        title={mode === 'add' ? 'Add new task 🎄' : 'Edit task 🎄'}
         subtitle={mode === 'add' ? 'This will be added as a new row in the tracker' : 'Only admins can edit tasks assigned to others'}
         onClose={onClose}
         theme={theme}
@@ -1346,7 +1362,7 @@ function TaskFormModal({
           Cancel
         </Button>
         <Button theme={theme} variant="primary" icon={Check} isLoading={isSubmitting} disabled={!canSubmit} onClick={() => onSubmit(form)}>
-          {mode === 'add' ? 'Add Task' : 'Save Changes'}
+          {mode === 'add' ? 'Add Task 🎄' : 'Save Changes 🎄'}
         </Button>
       </ModalFooter>
     </Modal>
@@ -1383,14 +1399,11 @@ const STORAGE_KEYS = {
 };
 
 export default function TaskManagement({ theme, currentUserEmail, currentUserName = '' }: TaskManagementProps) {
-  // ─── TOAST SYSTEM ────────────────────────────────────────────────────────
   const { messages, showToast, removeToast, toastContainer } = useToast(theme);
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  // ─── STATE WITH LOCAL STORAGE PERSISTENCE ──────────────────────────────
 
   const [activeTab, setActiveTab] = useState<'tasks' | 'completion'>(() => {
     if (typeof window !== 'undefined') {
@@ -1493,8 +1506,6 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
     return 25;
   });
 
-  // ─── OTHER STATE ──────────────────────────────────────────────────────
-
   const [showFilters, setShowFilters] = useState(false);
   const [showGenerator, setShowGenerator] = useState(false);
   const [selectedTaskForGenerator, setSelectedTaskForGenerator] = useState<Task | null>(null);
@@ -1522,6 +1533,13 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
 
   const isDark = theme === 'dark';
   const isTaskAdmin = isTaskAdminEmail(currentUserEmail);
+
+  // 🎄 Christmas decoration opacity (tuned per theme)
+  const deco = {
+    emoji: isDark ? 'opacity-[0.05]' : 'opacity-[0.04]',
+    emojiSoft: isDark ? 'opacity-[0.04]' : 'opacity-[0.03]',
+    corner: isDark ? 'opacity-[0.06]' : 'opacity-[0.04]',
+  };
 
   // ─── SAVE TO LOCAL STORAGE ────────────────────────────────────────────
 
@@ -2821,12 +2839,12 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
   const renderTasks = () => {
     if (paginatedTasks.length === 0) {
       if (showOnlyNew && newTaskIds.size === 0) {
-        return <EmptyState theme={theme} icon={CheckCircle2} title="All caught up!" description="You've viewed all new tasks." />;
+        return <EmptyState theme={theme} icon={CheckCircle2} title="All caught up!" description="You've viewed all new tasks. 🎄" />;
       }
       if (hasActiveFilters) {
         return <NoResultsState theme={theme} onClear={clearFilters} />;
       }
-      return <EmptyState theme={theme} icon={CheckCircle2} title="No tasks found" description="You have no tasks assigned yet." />;
+      return <EmptyState theme={theme} icon={CheckCircle2} title="No tasks found" description="You have no tasks assigned yet. 🎄" />;
     }
 
     switch (layoutMode) {
@@ -2860,853 +2878,891 @@ export default function TaskManagement({ theme, currentUserEmail, currentUserNam
   // ─── MAIN RENDER ───────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-full flex-col">
-      {toastContainer}
+    <div className="relative flex h-full flex-col">
+      {/* ─── 🎄 Christmas decorations (purely visual, pointer-events-none) ─── */}
+      <>
+        {/* Red/green haze */}
+        <div
+          className={cn(
+            'pointer-events-none fixed inset-0 z-0',
+            isDark
+              ? 'bg-[radial-gradient(ellipse_at_top,_rgba(220,38,38,0.10),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(22,163,74,0.08),_transparent_50%)]'
+              : 'bg-[radial-gradient(ellipse_at_top,_rgba(220,38,38,0.05),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(22,163,74,0.04),_transparent_50%)]'
+          )}
+          aria-hidden
+        />
 
-      <AnimatePresence>
-        {showNewTaskNotification && newTaskIds.size > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className={cn(
-              'fixed top-4 right-4 z-50 rounded-2xl border shadow-2xl p-4 sm:p-5 max-w-[calc(100vw-2rem)] sm:max-w-md',
-              isDark ? 'bg-slate-800 border-emerald-500/30' : 'bg-white border-emerald-300'
-            )}
-            role="alert"
-          >
-            <div className="flex items-start gap-3 sm:gap-4">
-              <div className="rounded-full bg-emerald-500/20 p-2 sm:p-2.5 flex-shrink-0">
-                <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={cn('text-base sm:text-lg font-semibold', isDark ? 'text-white' : 'text-gray-900')}>
-                  {newTaskIds.size} New Task{newTaskIds.size > 1 ? 's' : ''} Added!
-                </p>
-                <p className={cn('text-xs sm:text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>Click refresh to see them in your list</p>
-              </div>
-              <button
-                onClick={() => setShowNewTaskNotification(false)}
-                aria-label="Dismiss"
-                className={cn('rounded p-1.5 sm:p-2 transition-colors flex-shrink-0', focusRing, isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-100')}
-              >
-                <X className="h-4 w-4 sm:h-5 sm:w-5" />
-              </button>
-            </div>
-            <div className="mt-3">
-              <Button theme={theme} variant="primary" size="sm" icon={RefreshCw} onClick={onRefresh}>
-                Refresh Now
-              </Button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        {/* Floating Christmas emojis */}
+        <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden>
+          <span className={cn('absolute left-[4%] top-[20%] select-none text-4xl motion-safe:animate-pulse', deco.emoji)}>🎄</span>
+          <span className={cn('absolute right-[6%] top-[12%] select-none text-3xl motion-safe:animate-pulse', deco.emoji)}>❄️</span>
+          <span className={cn('absolute left-[10%] bottom-[18%] select-none text-3xl', deco.emojiSoft)}>⛄</span>
+          <span className={cn('absolute right-[8%] bottom-[12%] select-none text-4xl motion-safe:animate-pulse', deco.emoji)}>🎅</span>
+          <span className={cn('absolute left-[45%] top-[4%] select-none text-3xl', deco.emojiSoft)}>⭐</span>
+          <span className={cn('absolute right-[40%] bottom-[6%] select-none text-3xl', deco.emojiSoft)}>🎁</span>
+          <span className={cn('absolute left-[75%] top-[35%] select-none text-2xl motion-safe:animate-pulse', deco.emojiSoft)}>🦌</span>
+          <span className={cn('absolute left-[25%] top-[55%] select-none text-2xl', deco.emojiSoft)}>🍪</span>
+          <span className={cn('absolute right-[25%] top-[65%] select-none text-3xl', deco.emojiSoft)}>🔔</span>
+          <span className={cn('absolute left-[50%] bottom-[25%] select-none text-2xl motion-safe:animate-pulse', deco.emojiSoft)}>🌟</span>
+        </div>
 
-      {/* ─── TAB NAVIGATION ────────────────────────────────────────────────── */}
-      <div className={cn('border-b flex-shrink-0', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
-        <div className="flex p-2 sm:p-3 gap-2" role="tablist">
-          <button
-            role="tab"
-            aria-selected={activeTab === 'tasks'}
-            onClick={() => setActiveTab('tasks')}
-            className={cn(
-              'inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all',
-              focusRing,
-              activeTab === 'tasks'
-                ? isDark
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                : isDark
-                ? 'text-slate-400 hover:text-white hover:bg-slate-800'
-                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
-            )}
-          >
-            <List className="h-4 w-4" />
-            Task List
-            <span
+        {/* Corner snowflakes */}
+        <div className={cn('pointer-events-none fixed left-0 top-0 z-0 select-none text-7xl', deco.corner)} aria-hidden>❄️</div>
+        <div className={cn('pointer-events-none fixed right-0 top-0 z-0 -scale-x-100 select-none text-7xl', deco.corner)} aria-hidden>❄️</div>
+
+        {/* Bottom-right gift + bottom-left snowman */}
+        <div className={cn('pointer-events-none fixed bottom-0 right-0 z-0 select-none text-6xl', deco.emojiSoft)} aria-hidden>🎁</div>
+        <div className={cn('pointer-events-none fixed bottom-[8%] left-[5%] z-0 select-none text-4xl motion-safe:animate-pulse', deco.emojiSoft)} aria-hidden>⛄</div>
+      </>
+
+      <div className="relative z-10 flex h-full flex-col">
+        {toastContainer}
+
+        <AnimatePresence>
+          {showNewTaskNotification && newTaskIds.size > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
               className={cn(
-                'ml-1 rounded-full px-2 py-0.5 text-xs',
-                activeTab === 'tasks' ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
+                'fixed top-4 right-4 z-50 rounded-2xl border shadow-2xl p-4 sm:p-5 max-w-[calc(100vw-2rem)] sm:max-w-md',
+                isDark ? 'bg-slate-800 border-emerald-500/30' : 'bg-white border-emerald-300'
+              )}
+              role="alert"
+            >
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div className="rounded-full bg-emerald-500/20 p-2 sm:p-2.5 flex-shrink-0">
+                  <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={cn('text-base sm:text-lg font-semibold', isDark ? 'text-white' : 'text-gray-900')}>
+                    {newTaskIds.size} New Task{newTaskIds.size > 1 ? 's' : ''} Added! 🎄
+                  </p>
+                  <p className={cn('text-xs sm:text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>Click refresh to see them in your list</p>
+                </div>
+                <button
+                  onClick={() => setShowNewTaskNotification(false)}
+                  aria-label="Dismiss"
+                  className={cn('rounded p-1.5 sm:p-2 transition-colors flex-shrink-0', focusRing, isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-100')}
+                >
+                  <X className="h-4 w-4 sm:h-5 sm:w-5" />
+                </button>
+              </div>
+              <div className="mt-3">
+                <Button theme={theme} variant="primary" size="sm" icon={RefreshCw} onClick={onRefresh}>
+                  Refresh Now
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ─── TAB NAVIGATION ────────────────────────────────────────────────── */}
+        <div className={cn('border-b flex-shrink-0', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
+          <div className="flex p-2 sm:p-3 gap-2" role="tablist">
+            <button
+              role="tab"
+              aria-selected={activeTab === 'tasks'}
+              onClick={() => setActiveTab('tasks')}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all',
+                focusRing,
+                activeTab === 'tasks'
+                  ? isDark
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                  : isDark
+                  ? 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
               )}
             >
-              {viewMode === 'all' ? allTasks.length : tasks.length}
-            </span>
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'completion'}
-            onClick={() => setActiveTab('completion')}
-            className={cn(
-              'inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all',
-              focusRing,
-              activeTab === 'completion'
-                ? isDark
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                : isDark
-                ? 'text-slate-400 hover:text-white hover:bg-slate-800'
-                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
-            )}
-          >
-            <BarChart3 className="h-4 w-4" />
-            Completion Tracker
-          </button>
-        </div>
-      </div>
-
-      {/* ─── CONDITIONAL CONTENT ────────────────────────────────────────── */}
-      {activeTab === 'completion' ? (
-        <div className="flex-1 overflow-hidden">
-          <AgentCompletionTracker theme={theme} currentUserEmail={currentUserEmail} />
-        </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
-          <DashboardHeader
-            isDark={isDark}
-            totalTasks={stats.total}
-            completedToday={stats.completed}
-            pendingCount={stats.pending}
-            overdueCount={stats.overdue}
-            completionRate={stats.completionRate}
-            userName={currentUserName}
-            onRefresh={onRefresh}
-            isLoading={isLoading}
-          />
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-            <AnalyticsCard
-              title="Total Tasks"
-              value={stats.total}
-              icon={<List className="h-5 w-5" />}
-              color="text-blue-500"
-              gradient="bg-gradient-to-r from-blue-500 to-blue-400"
-              isDark={isDark}
-              delay={0}
-              subtitle={`${viewMode === 'all' ? 'All' : 'Your'} tasks`}
-            />
-            <AnalyticsCard
-              title="Completed"
-              value={stats.completed}
-              icon={<CheckCircle2 className="h-5 w-5" />}
-              color="text-emerald-500"
-              gradient="bg-gradient-to-r from-emerald-500 to-emerald-400"
-              isDark={isDark}
-              delay={1}
-              subtitle={`${stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}% of total`}
-              trend={5}
-            />
-            <AnalyticsCard
-              title="Pending"
-              value={stats.pending}
-              icon={<Clock className="h-5 w-5" />}
-              color="text-amber-500"
-              gradient="bg-gradient-to-r from-amber-500 to-amber-400"
-              isDark={isDark}
-              delay={2}
-              subtitle="Awaiting action"
-              trend={-2}
-            />
-            <AnalyticsCard
-              title="Overdue"
-              value={stats.overdue}
-              icon={<AlertTriangle className="h-5 w-5" />}
-              color="text-rose-500"
-              gradient="bg-gradient-to-r from-rose-500 to-rose-400"
-              isDark={isDark}
-              delay={3}
-              subtitle="Past due date"
-              trend={3}
-            />
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h2 className={cn('text-lg font-semibold', isDark ? 'text-white' : 'text-gray-900')}>
-                {viewMode === 'all' ? 'All Tasks' : 'My Tasks'}
-                {newTaskIds.size > 0 && viewMode === 'all' && (
-                  <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-sm font-semibold text-emerald-500 align-middle">
-                    <Bell className="h-3 w-3 sm:h-4 sm:w-4" />
-                    {newTaskIds.size} new
-                  </span>
+              <List className="h-4 w-4" />
+              Task List 🎄
+              <span
+                className={cn(
+                  'ml-1 rounded-full px-2 py-0.5 text-xs',
+                  activeTab === 'tasks' ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
                 )}
-              </h2>
-              <p className={cn('text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
-                {viewMode === 'all' ? `All ${totalCount} tasks in tracker` : currentUserName || currentUserEmail ? `Tasks assigned to ${currentUserName || currentUserEmail}` : 'No user logged in'}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
-              <Button theme={theme} variant="outline" isLoading={isLoading} icon={RefreshCw} onClick={onRefresh}>
-                <span className="hidden xs:inline">Refresh</span>
-              </Button>
-
-              <Button
-                theme={theme}
-                variant={viewMode === 'all' ? 'primary' : 'outline'}
-                icon={viewMode === 'all' ? Eye : EyeOff}
-                onClick={() => onViewModeChange(viewMode === 'all' ? 'mine' : 'all')}
-                className={viewMode === 'all' ? (isDark ? '!bg-emerald-500/10 !text-emerald-400 !shadow-none border !border-emerald-500/40' : '!bg-emerald-50 !text-emerald-700 !shadow-none border !border-emerald-300') : ''}
               >
-                <span className="hidden xs:inline">{viewMode === 'all' ? 'Viewing All' : 'View All'}</span>
-              </Button>
-
-              {isTaskAdmin && (
-                <Button theme={theme} variant="primary" icon={Plus} onClick={onAddTask}>
-                  <span className="hidden xs:inline">Add Task</span>
-                </Button>
+                {viewMode === 'all' ? allTasks.length : tasks.length}
+              </span>
+            </button>
+            <button
+              role="tab"
+              aria-selected={activeTab === 'completion'}
+              onClick={() => setActiveTab('completion')}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all',
+                focusRing,
+                activeTab === 'completion'
+                  ? isDark
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                  : isDark
+                  ? 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
               )}
-            </div>
+            >
+              <BarChart3 className="h-4 w-4" />
+              Completion Tracker ❄️
+            </button>
           </div>
+        </div>
 
-          <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 sm:py-4 -mt-1" style={{ backgroundColor: isDark ? 'rgb(15 23 42 / 0.92)' : 'rgb(255 255 255 / 0.92)', backdropFilter: 'blur(12px)', borderBottom: isDark ? '1px solid rgb(51 65 85 / 0.5)' : '1px solid rgb(229 231 235 / 0.8)' }}>
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                <div className="relative flex-1">
-                  <Search className={cn('absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5', isDark ? 'text-slate-400' : 'text-gray-400')} />
-                  <input
-                    type="text"
-                    placeholder="Search by row#, task, brand, agent, due date..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    aria-label="Search tasks"
-                    className={cn('w-full rounded-xl border pl-9 sm:pl-12 pr-3 sm:pr-4 py-2 sm:py-3 text-sm sm:text-base transition-all duration-200', focusRing, isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400')}
-                  />
-                  <span className={cn('absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-[10px] sm:text-xs hidden md:block', isDark ? 'text-slate-500' : 'text-gray-400')}>
-                    💡 Try: Dec 25, 12/25, 2024-12-25
-                  </span>
-                </div>
+        {/* ─── CONDITIONAL CONTENT ────────────────────────────────────────── */}
+        {activeTab === 'completion' ? (
+          <div className="flex-1 overflow-hidden">
+            <AgentCompletionTracker theme={theme} currentUserEmail={currentUserEmail} />
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
+            <DashboardHeader
+              isDark={isDark}
+              totalTasks={stats.total}
+              completedToday={stats.completed}
+              pendingCount={stats.pending}
+              overdueCount={stats.overdue}
+              completionRate={stats.completionRate}
+              userName={currentUserName}
+              onRefresh={onRefresh}
+              isLoading={isLoading}
+            />
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+              <AnalyticsCard
+                title="Total Tasks"
+                value={stats.total}
+                icon={<List className="h-5 w-5" />}
+                color="text-blue-500"
+                gradient="bg-gradient-to-r from-blue-500 to-blue-400"
+                isDark={isDark}
+                delay={0}
+                subtitle={`${viewMode === 'all' ? 'All' : 'Your'} tasks`}
+              />
+              <AnalyticsCard
+                title="Completed"
+                value={stats.completed}
+                icon={<CheckCircle2 className="h-5 w-5" />}
+                color="text-emerald-500"
+                gradient="bg-gradient-to-r from-emerald-500 to-emerald-400"
+                isDark={isDark}
+                delay={1}
+                subtitle={`${stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}% of total`}
+                trend={5}
+              />
+              <AnalyticsCard
+                title="Pending"
+                value={stats.pending}
+                icon={<Clock className="h-5 w-5" />}
+                color="text-amber-500"
+                gradient="bg-gradient-to-r from-amber-500 to-amber-400"
+                isDark={isDark}
+                delay={2}
+                subtitle="Awaiting action"
+                trend={-2}
+              />
+              <AnalyticsCard
+                title="Overdue"
+                value={stats.overdue}
+                icon={<AlertTriangle className="h-5 w-5" />}
+                color="text-rose-500"
+                gradient="bg-gradient-to-r from-rose-500 to-rose-400"
+                isDark={isDark}
+                delay={3}
+                subtitle="Past due date"
+                trend={3}
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className={cn('text-lg font-semibold', isDark ? 'text-white' : 'text-gray-900')}>
+                  {viewMode === 'all' ? 'All Tasks' : 'My Tasks'}
+                  {newTaskIds.size > 0 && viewMode === 'all' && (
+                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-sm font-semibold text-emerald-500 align-middle">
+                      <Bell className="h-3 w-3 sm:h-4 sm:w-4" />
+                      {newTaskIds.size} new
+                    </span>
+                  )}
+                </h2>
+                <p className={cn('text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
+                  {viewMode === 'all' ? `All ${totalCount} tasks in tracker` : currentUserName || currentUserEmail ? `Tasks assigned to ${currentUserName || currentUserEmail}` : 'No user logged in'}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+                <Button theme={theme} variant="outline" isLoading={isLoading} icon={RefreshCw} onClick={onRefresh}>
+                  <span className="hidden xs:inline">Refresh</span>
+                </Button>
 
                 <Button
                   theme={theme}
-                  variant={showFilters || hasActiveFilters ? 'primary' : 'outline'}
-                  icon={Filter}
-                  onClick={() => setShowFilters(!showFilters)}
-                  className={cn('flex-shrink-0', showFilters || hasActiveFilters ? (isDark ? '!bg-emerald-500/10 !text-emerald-400 !shadow-none border !border-emerald-500/40' : '!bg-emerald-50 !text-emerald-700 !shadow-none border !border-emerald-300') : '')}
+                  variant={viewMode === 'all' ? 'primary' : 'outline'}
+                  icon={viewMode === 'all' ? Eye : EyeOff}
+                  onClick={() => onViewModeChange(viewMode === 'all' ? 'mine' : 'all')}
+                  className={viewMode === 'all' ? (isDark ? '!bg-emerald-500/10 !text-emerald-400 !shadow-none border !border-emerald-500/40' : '!bg-emerald-50 !text-emerald-700 !shadow-none border !border-emerald-300') : ''}
                 >
-                  <span className="hidden xs:inline">Filters</span>
-                  {(filterStatus !== 'all' || filterBrand !== 'all' || filterAgent !== 'all' || filterSBS !== 'all') && (
-                    <span className="ml-1 rounded-full bg-emerald-500 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs text-white">
-                      {[filterStatus, filterBrand, filterAgent, filterSBS].filter((f) => f !== 'all').length}
-                    </span>
-                  )}
+                  <span className="hidden xs:inline">{viewMode === 'all' ? 'Viewing All' : 'View All'}</span>
                 </Button>
 
-                <div className={cn('flex rounded-xl border overflow-hidden flex-shrink-0', isDark ? 'border-slate-700' : 'border-gray-200')}>
-                  {[
-                    { mode: 'table' as const, Icon: Table, label: 'Table View' },
-                    { mode: 'card' as const, Icon: LayoutGrid, label: 'Card View' },
-                    { mode: 'list' as const, Icon: List, label: 'List View' },
-                  ].map(({ mode, Icon, label }, i) => (
-                    <button
-                      key={mode}
-                      onClick={() => setLayoutMode(mode)}
-                      title={label}
-                      aria-label={label}
-                      aria-pressed={layoutMode === mode}
-                      className={cn(
-                        'px-2.5 sm:px-4 py-2 sm:py-3 text-sm transition-all',
-                        focusRing,
-                        i > 0 && (isDark ? 'border-l border-slate-700' : 'border-l border-gray-200'),
-                        layoutMode === mode ? (isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700') : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-white text-gray-500 hover:bg-gray-100'
-                      )}
-                    >
-                      <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
-                    </button>
-                  ))}
-                </div>
+                {isTaskAdmin && (
+                  <Button theme={theme} variant="primary" icon={Plus} onClick={onAddTask}>
+                    <span className="hidden xs:inline">Add Task</span>
+                  </Button>
+                )}
               </div>
+            </div>
 
-              <div className="flex flex-col gap-2">
-                <div className="flex gap-1 sm:gap-2 overflow-x-auto pb-1">
-                  <button
-                    onClick={() => {
-                      setFilterStatus('all');
-                      setCurrentPage(1);
-                    }}
-                    className={cn(
-                      'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                      focusRing,
-                      filterStatus === 'all'
-                        ? isDark
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                        : isDark
-                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    All ({taskCounts.all || 0})
-                  </button>
-
-                  {Object.keys(taskCounts)
-                    .filter((k) => k !== 'all')
-                    .sort()
-                    .map((status) => {
-                      const count = taskCounts[status] || 0;
-                      const isActive = filterStatus === status;
-
-                      return (
-                        <button
-                          key={status}
-                          onClick={() => {
-                            setFilterStatus(status);
-                            setCurrentPage(1);
-                          }}
-                          className={cn(
-                            'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                            focusRing,
-                            isActive
-                              ? isDark
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                              : isDark
-                              ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          )}
-                        >
-                          <span>{status}</span>
-                          <span
-                            className={cn(
-                              'ml-1 sm:ml-2 rounded-full px-1 sm:px-2 py-0.5 text-[8px] sm:text-xs',
-                              isActive ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
-                            )}
-                          >
-                            {count}
-                          </span>
-                        </button>
-                      );
-                    })}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
-                  <button
-                    onClick={() => {
-                      setFilterSBS('all');
-                      setCurrentPage(1);
-                    }}
-                    className={cn(
-                      'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                      focusRing,
-                      filterSBS === 'all'
-                        ? isDark
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                        : isDark
-                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    All Tasks
-                  </button>
-                  
-                  <button
-                    onClick={() => {
-                      setFilterSBS('sbs');
-                      setCurrentPage(1);
-                    }}
-                    className={cn(
-                      'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                      focusRing,
-                      filterSBS === 'sbs'
-                        ? isDark
-                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                          : 'bg-amber-100 text-amber-700 border border-amber-300'
-                        : isDark
-                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
-                    SBS
-                    <span className={cn(
-                      'ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs',
-                      filterSBS === 'sbs' ? (isDark ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-200 text-amber-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
-                    )}>
-                      {activeTasks.filter(t => {
-                        const remarks = (t.remarks || '').toLowerCase();
-                        return remarks.includes('sbs') && !remarks.includes('non-sbs');
-                      }).length}
+            <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 sm:py-4 -mt-1" style={{ backgroundColor: isDark ? 'rgb(15 23 42 / 0.92)' : 'rgb(255 255 255 / 0.92)', backdropFilter: 'blur(12px)', borderBottom: isDark ? '1px solid rgb(51 65 85 / 0.5)' : '1px solid rgb(229 231 235 / 0.8)' }}>
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                  <div className="relative flex-1">
+                    <Search className={cn('absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5', isDark ? 'text-slate-400' : 'text-gray-400')} />
+                    <input
+                      type="text"
+                      placeholder="Search by row#, task, brand, agent, due date..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      aria-label="Search tasks"
+                      className={cn('w-full rounded-xl border pl-9 sm:pl-12 pr-3 sm:pr-4 py-2 sm:py-3 text-sm sm:text-base transition-all duration-200', focusRing, isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400')}
+                    />
+                    <span className={cn('absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-[10px] sm:text-xs hidden md:block', isDark ? 'text-slate-500' : 'text-gray-400')}>
+                      💡 Try: Dec 25, 12/25, 2024-12-25
                     </span>
-                  </button>
-                  
-                  <button
-                    onClick={() => {
-                      setFilterSBS('non-sbs');
-                      setCurrentPage(1);
-                    }}
-                    className={cn(
-                      'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                      focusRing,
-                      filterSBS === 'non-sbs'
-                        ? isDark
-                          ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                          : 'bg-blue-100 text-blue-700 border border-blue-300'
-                        : isDark
-                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    <EyeOff className="h-3 w-3 sm:h-4 sm:w-4" />
-                    Non-SBS
-                    <span className={cn(
-                      'ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs',
-                      filterSBS === 'non-sbs' ? (isDark ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-200 text-blue-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
-                    )}>
-                      {activeTasks.filter(t => (t.remarks || '').toLowerCase().includes('non-sbs')).length}
-                    </span>
-                  </button>
-                </div>
+                  </div>
 
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
-                  <button
-                    onClick={() => setShowOnlyNew(!showOnlyNew)}
-                    className={cn(
-                      'inline-flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                      focusRing,
-                      showOnlyNew
-                        ? isDark
-                          ? 'bg-emerald-500/30 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                        : isDark
-                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
+                  <Button
+                    theme={theme}
+                    variant={showFilters || hasActiveFilters ? 'primary' : 'outline'}
+                    icon={Filter}
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={cn('flex-shrink-0', showFilters || hasActiveFilters ? (isDark ? '!bg-emerald-500/10 !text-emerald-400 !shadow-none border !border-emerald-500/40' : '!bg-emerald-50 !text-emerald-700 !shadow-none border !border-emerald-300') : '')}
                   >
-                    <Bell className="h-3 w-3 sm:h-4 sm:w-4" />
-                    <span className="hidden xs:inline">{showOnlyNew ? 'Showing New Tasks' : 'Show New Tasks'}</span>
-                    {newTaskIds.size > 0 && (
-                      <span className={cn('ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs', showOnlyNew ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}>
-                        {newTaskIds.size}
+                    <span className="hidden xs:inline">Filters</span>
+                    {(filterStatus !== 'all' || filterBrand !== 'all' || filterAgent !== 'all' || filterSBS !== 'all') && (
+                      <span className="ml-1 rounded-full bg-emerald-500 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs text-white">
+                        {[filterStatus, filterBrand, filterAgent, filterSBS].filter((f) => f !== 'all').length}
                       </span>
                     )}
-                  </button>
+                  </Button>
 
-                  {newTaskIds.size > 0 && (
-                    <button
-                      onClick={onMarkAllViewed}
-                      className={cn(
-                        'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
-                        focusRing,
-                        isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                      )}
-                    >
-                      <Check className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span className="hidden xs:inline">Mark All Viewed</span>
-                    </button>
-                  )}
+                  <div className={cn('flex rounded-xl border overflow-hidden flex-shrink-0', isDark ? 'border-slate-700' : 'border-gray-200')}>
+                    {[
+                      { mode: 'table' as const, Icon: Table, label: 'Table View' },
+                      { mode: 'card' as const, Icon: LayoutGrid, label: 'Card View' },
+                      { mode: 'list' as const, Icon: List, label: 'List View' },
+                    ].map(({ mode, Icon, label }, i) => (
+                      <button
+                        key={mode}
+                        onClick={() => setLayoutMode(mode)}
+                        title={label}
+                        aria-label={label}
+                        aria-pressed={layoutMode === mode}
+                        className={cn(
+                          'px-2.5 sm:px-4 py-2 sm:py-3 text-sm transition-all',
+                          focusRing,
+                          i > 0 && (isDark ? 'border-l border-slate-700' : 'border-l border-gray-200'),
+                          layoutMode === mode ? (isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700') : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-white text-gray-500 hover:bg-gray-100'
+                        )}
+                      >
+                        <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-                  {dateChips.map((chip) => (
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-1 sm:gap-2 overflow-x-auto pb-1">
                     <button
-                      key={chip.key}
                       onClick={() => {
-                        setFilterDateRange(chip.key);
+                        setFilterStatus('all');
                         setCurrentPage(1);
                       }}
                       className={cn(
-                        'px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                        'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
                         focusRing,
-                        filterDateRange === chip.key ? chip.activeClass : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        filterStatus === 'all'
+                          ? isDark
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                          : isDark
+                          ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       )}
                     >
-                      {chip.emoji && <span className="mr-1">{chip.emoji}</span>}
-                      {chip.label}
+                      All ({taskCounts.all || 0})
                     </button>
-                  ))}
 
-                  <button
-                    onClick={() => setShowDateRangePicker(!showDateRangePicker)}
-                    className={cn(
-                      'px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap inline-flex items-center gap-1',
-                      focusRing,
-                      filterDateRange === 'custom'
-                        ? isDark
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                        : isDark
-                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
-                    <span className="hidden xs:inline">Custom Range</span>
-                    {filterDateRange === 'custom' && (
-                      <span className="ml-1 text-[10px] opacity-70 hidden lg:inline">
-                        ({customDateStart ? new Date(customDateStart).toLocaleDateString('en-US') : '...'} - {customDateEnd ? new Date(customDateEnd).toLocaleDateString('en-US') : '...'})
-                      </span>
-                    )}
-                  </button>
+                    {Object.keys(taskCounts)
+                      .filter((k) => k !== 'all')
+                      .sort()
+                      .map((status) => {
+                        const count = taskCounts[status] || 0;
+                        const isActive = filterStatus === status;
 
-                  {filterDateRange !== 'all' && (
+                        return (
+                          <button
+                            key={status}
+                            onClick={() => {
+                              setFilterStatus(status);
+                              setCurrentPage(1);
+                            }}
+                            className={cn(
+                              'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                              focusRing,
+                              isActive
+                                ? isDark
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                                : isDark
+                                ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            )}
+                          >
+                            <span>{status}</span>
+                            <span
+                              className={cn(
+                                'ml-1 sm:ml-2 rounded-full px-1 sm:px-2 py-0.5 text-[8px] sm:text-xs',
+                                isActive ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
+                              )}
+                            >
+                              {count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
                     <button
-                      onClick={clearCustomDateRange}
-                      className={cn('px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap', focusRing, isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300')}
+                      onClick={() => {
+                        setFilterSBS('all');
+                        setCurrentPage(1);
+                      }}
+                      className={cn(
+                        'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                        focusRing,
+                        filterSBS === 'all'
+                          ? isDark
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                          : isDark
+                          ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
                     >
-                      <X className="h-3 w-3 sm:h-4 sm:w-4 inline" /> Clear
+                      All Tasks
                     </button>
-                  )}
+                    
+                    <button
+                      onClick={() => {
+                        setFilterSBS('sbs');
+                        setCurrentPage(1);
+                      }}
+                      className={cn(
+                        'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                        focusRing,
+                        filterSBS === 'sbs'
+                          ? isDark
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            : 'bg-amber-100 text-amber-700 border border-amber-300'
+                          : isDark
+                          ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                    >
+                      <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
+                      SBS
+                      <span className={cn(
+                        'ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs',
+                        filterSBS === 'sbs' ? (isDark ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-200 text-amber-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
+                      )}>
+                        {activeTasks.filter(t => {
+                          const remarks = (t.remarks || '').toLowerCase();
+                          return remarks.includes('sbs') && !remarks.includes('non-sbs');
+                        }).length}
+                      </span>
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setFilterSBS('non-sbs');
+                        setCurrentPage(1);
+                      }}
+                      className={cn(
+                        'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                        focusRing,
+                        filterSBS === 'non-sbs'
+                          ? isDark
+                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                            : 'bg-blue-100 text-blue-700 border border-blue-300'
+                          : isDark
+                          ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                    >
+                      <EyeOff className="h-3 w-3 sm:h-4 sm:w-4" />
+                      Non-SBS
+                      <span className={cn(
+                        'ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs',
+                        filterSBS === 'non-sbs' ? (isDark ? 'bg-blue-500/30 text-blue-300' : 'bg-blue-200 text-blue-800') : isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-200 text-gray-600'
+                      )}>
+                        {activeTasks.filter(t => (t.remarks || '').toLowerCase().includes('non-sbs')).length}
+                      </span>
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
+                    <button
+                      onClick={() => setShowOnlyNew(!showOnlyNew)}
+                      className={cn(
+                        'inline-flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                        focusRing,
+                        showOnlyNew
+                          ? isDark
+                            ? 'bg-emerald-500/30 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                          : isDark
+                          ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                    >
+                      <Bell className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden xs:inline">{showOnlyNew ? 'Showing New Tasks' : 'Show New Tasks'}</span>
+                      {newTaskIds.size > 0 && (
+                        <span className={cn('ml-1 rounded-full px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-xs', showOnlyNew ? (isDark ? 'bg-emerald-500/30 text-emerald-300' : 'bg-emerald-200 text-emerald-800') : isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}>
+                          {newTaskIds.size}
+                        </span>
+                      )}
+                    </button>
+
+                    {newTaskIds.size > 0 && (
+                      <button
+                        onClick={onMarkAllViewed}
+                        className={cn(
+                          'inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                          focusRing,
+                          isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                        )}
+                      >
+                        <Check className="h-3 w-3 sm:h-4 sm:w-4" />
+                        <span className="hidden xs:inline">Mark All Viewed</span>
+                      </button>
+                    )}
+
+                    {dateChips.map((chip) => (
+                      <button
+                        key={chip.key}
+                        onClick={() => {
+                          setFilterDateRange(chip.key);
+                          setCurrentPage(1);
+                        }}
+                        className={cn(
+                          'px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap',
+                          focusRing,
+                          filterDateRange === chip.key ? chip.activeClass : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        )}
+                      >
+                        {chip.emoji && <span className="mr-1">{chip.emoji}</span>}
+                        {chip.label}
+                      </button>
+                    ))}
+
+                    <button
+                      onClick={() => setShowDateRangePicker(!showDateRangePicker)}
+                      className={cn(
+                        'px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap inline-flex items-center gap-1',
+                        focusRing,
+                        filterDateRange === 'custom'
+                          ? isDark
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                          : isDark
+                          ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                    >
+                      <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden xs:inline">Custom Range</span>
+                      {filterDateRange === 'custom' && (
+                        <span className="ml-1 text-[10px] opacity-70 hidden lg:inline">
+                          ({customDateStart ? new Date(customDateStart).toLocaleDateString('en-US') : '...'} - {customDateEnd ? new Date(customDateEnd).toLocaleDateString('en-US') : '...'})
+                        </span>
+                      )}
+                    </button>
+
+                    {filterDateRange !== 'all' && (
+                      <button
+                        onClick={clearCustomDateRange}
+                        className={cn('px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-sm font-medium transition-all whitespace-nowrap', focusRing, isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300')}
+                      >
+                        <X className="h-3 w-3 sm:h-4 sm:w-4 inline" /> Clear
+                      </button>
+                    )}
+                  </div>
+
+                  {showDateRangePicker && (
+                  <Card theme={theme} className="mt-1 sm:mt-2 p-3 sm:p-4 shadow-lg">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+                      <div className="flex-1 w-full sm:w-auto">
+                        <FieldLabel theme={theme}>Due Date From</FieldLabel>
+                        <input type="date" value={customDateStart} onChange={(e) => setCustomDateStart(e.target.value)} className={inputClasses(theme)} />
+                      </div>
+                      <div className="flex-1 w-full sm:w-auto">
+                        <FieldLabel theme={theme}>Due Date To</FieldLabel>
+                        <input type="date" value={customDateEnd} onChange={(e) => setCustomDateEnd(e.target.value)} className={inputClasses(theme)} />
+                      </div>
+                      <div className="flex gap-2 sm:gap-3 w-full sm:w-auto mt-2 sm:mt-6">
+                        <Button theme={theme} variant="primary" icon={Check} disabled={!customDateStart || !customDateEnd} onClick={applyCustomDateRange} className="flex-1 sm:flex-none">
+                          Apply
+                        </Button>
+                        <Button theme={theme} variant="secondary" onClick={() => setShowDateRangePicker(false)} className="flex-1 sm:flex-none">
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                )}
                 </div>
 
-                {showDateRangePicker && (
-                <Card theme={theme} className="mt-1 sm:mt-2 p-3 sm:p-4 shadow-lg">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-                    <div className="flex-1 w-full sm:w-auto">
-                      <FieldLabel theme={theme}>Due Date From</FieldLabel>
-                      <input type="date" value={customDateStart} onChange={(e) => setCustomDateStart(e.target.value)} className={inputClasses(theme)} />
+                {showFilters && (
+                  <Card theme={theme} className={cn('grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-4', isDark ? 'bg-slate-800/50' : 'bg-gray-50')}>
+                    <div>
+                      <FieldLabel theme={theme}>Brand</FieldLabel>
+                      <select value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)} className={inputClasses(theme)}>
+                        <option value="all">All Brands</option>
+                        {BRAND_OPTIONS.map((brand) => (
+                          <option key={brand} value={brand}>
+                            {brand}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    <div className="flex-1 w-full sm:w-auto">
-                      <FieldLabel theme={theme}>Due Date To</FieldLabel>
-                      <input type="date" value={customDateEnd} onChange={(e) => setCustomDateEnd(e.target.value)} className={inputClasses(theme)} />
+                    <div>
+                      <FieldLabel theme={theme}>Agent</FieldLabel>
+                      <select value={filterAgent} onChange={(e) => setFilterAgent(e.target.value)} className={inputClasses(theme)}>
+                        <option value="all">All Agents</option>
+                        {AGENT_OPTIONS.map((agent) => (
+                          <option key={agent} value={agent}>
+                            {agent}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    <div className="flex gap-2 sm:gap-3 w-full sm:w-auto mt-2 sm:mt-6">
-                      <Button theme={theme} variant="primary" icon={Check} disabled={!customDateStart || !customDateEnd} onClick={applyCustomDateRange} className="flex-1 sm:flex-none">
-                        Apply
+                    <div className="flex items-end">
+                      <Button theme={theme} variant="secondary" onClick={clearFilters} className="w-full">
+                        Clear All Filters
                       </Button>
-                      <Button theme={theme} variant="secondary" onClick={() => setShowDateRangePicker(false)} className="flex-1 sm:flex-none">
-                        Cancel
-                      </Button>
                     </div>
-                  </div>
-                </Card>
-              )}
+                  </Card>
+                )}
               </div>
-
-              {showFilters && (
-                <Card theme={theme} className={cn('grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-4', isDark ? 'bg-slate-800/50' : 'bg-gray-50')}>
-                  <div>
-                    <FieldLabel theme={theme}>Brand</FieldLabel>
-                    <select value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)} className={inputClasses(theme)}>
-                      <option value="all">All Brands</option>
-                      {BRAND_OPTIONS.map((brand) => (
-                        <option key={brand} value={brand}>
-                          {brand}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <FieldLabel theme={theme}>Agent</FieldLabel>
-                    <select value={filterAgent} onChange={(e) => setFilterAgent(e.target.value)} className={inputClasses(theme)}>
-                      <option value="all">All Agents</option>
-                      {AGENT_OPTIONS.map((agent) => (
-                        <option key={agent} value={agent}>
-                          {agent}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex items-end">
-                    <Button theme={theme} variant="secondary" onClick={clearFilters} className="w-full">
-                      Clear All Filters
-                    </Button>
-                  </div>
-                </Card>
-              )}
             </div>
-          </div>
 
-          {isLoading && activeTasks.length === 0 ? renderSkeleton() : renderTasks()}
+            {isLoading && activeTasks.length === 0 ? renderSkeleton() : renderTasks()}
 
-          <div className={cn('border-t pt-3 sm:pt-4 flex-shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
-            <span className={cn('text-xs sm:text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
-              Showing {paginatedTasks.length} of {activeCount} tasks
-              {filteredAndSortedTasks.length !== activeTasks.length && ` (filtered from ${activeTasks.length})`}
-              {showOnlyNew && (
-                <span className={cn('ml-2 px-1.5 sm:px-2 py-0.5 rounded text-[8px] sm:text-xs', isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}>🆕 New Tasks</span>
-              )}
-              {filterSBS !== 'all' && (
-                <span className={cn(
-                  'ml-2 px-1.5 sm:px-2 py-0.5 rounded text-[8px] sm:text-xs',
-                  filterSBS === 'sbs' 
-                    ? isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'
-                    : isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'
-                )}>
-                  {filterSBS === 'sbs' ? '👁️ SBS' : '🚫 Non-SBS'}
+            <div className={cn('border-t pt-3 sm:pt-4 flex-shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3', isDark ? 'border-slate-700/50' : 'border-gray-200')}>
+              <span className={cn('text-xs sm:text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
+                Showing {paginatedTasks.length} of {activeCount} tasks
+                {filteredAndSortedTasks.length !== activeTasks.length && ` (filtered from ${activeTasks.length})`}
+                {showOnlyNew && (
+                  <span className={cn('ml-2 px-1.5 sm:px-2 py-0.5 rounded text-[8px] sm:text-xs', isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700')}>🆕 New Tasks</span>
+                )}
+                {filterSBS !== 'all' && (
+                  <span className={cn(
+                    'ml-2 px-1.5 sm:px-2 py-0.5 rounded text-[8px] sm:text-xs',
+                    filterSBS === 'sbs' 
+                      ? isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'
+                      : isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'
+                  )}>
+                    {filterSBS === 'sbs' ? '👁️ SBS' : '🚫 Non-SBS'}
+                  </span>
+                )}
+                {filterDateRange !== 'all' && (
+                <span
+                  className={cn(
+                    'ml-2 px-1.5 sm:px-2 py-0.5 rounded text-[8px] sm:text-xs',
+                    filterDateRange === 'unassigned'
+                      ? isDark ? 'bg-violet-500/20 text-violet-400' : 'bg-violet-100 text-violet-700'
+                      : filterDateRange === 'overdue'
+                      ? isDark ? 'bg-rose-500/20 text-rose-400' : 'bg-rose-100 text-rose-700'
+                      : filterDateRange === 'custom'
+                      ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                      : isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'
+                  )}
+                >
+                  {filterDateRange === 'unassigned'
+                    ? '👤 Unassigned'
+                    : filterDateRange === 'overdue'
+                    ? '🔴 Overdue'
+                    : filterDateRange === 'today'
+                    ? '📅 Due Today'
+                    : filterDateRange === 'week'
+                    ? '📅 Next 7 Days'
+                    : filterDateRange === 'month'
+                    ? '📅 This Month'
+                    : filterDateRange === 'custom'
+                    ? `📅 ${customDateStart ? new Date(customDateStart).toLocaleDateString('en-US') : '...'} - ${customDateEnd ? new Date(customDateEnd).toLocaleDateString('en-US') : '...'}`
+                    : ''}
                 </span>
               )}
-              {filterDateRange !== 'all' && (
-              <span
-                className={cn(
-                  'ml-2 px-1.5 sm:px-2 py-0.5 rounded text-[8px] sm:text-xs',
-                  filterDateRange === 'unassigned'
-                    ? isDark ? 'bg-violet-500/20 text-violet-400' : 'bg-violet-100 text-violet-700'
-                    : filterDateRange === 'overdue'
-                    ? isDark ? 'bg-rose-500/20 text-rose-400' : 'bg-rose-100 text-rose-700'
-                    : filterDateRange === 'custom'
-                    ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
-                    : isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'
-                )}
-              >
-                {filterDateRange === 'unassigned'
-                  ? '👤 Unassigned'
-                  : filterDateRange === 'overdue'
-                  ? '🔴 Overdue'
-                  : filterDateRange === 'today'
-                  ? '📅 Due Today'
-                  : filterDateRange === 'week'
-                  ? '📅 Next 7 Days'
-                  : filterDateRange === 'month'
-                  ? '📅 This Month'
-                  : filterDateRange === 'custom'
-                  ? `📅 ${customDateStart ? new Date(customDateStart).toLocaleDateString('en-US') : '...'} - ${customDateEnd ? new Date(customDateEnd).toLocaleDateString('en-US') : '...'}`
-                  : ''}
               </span>
-            )}
-            </span>
 
-            <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-between sm:justify-end">
-              {newTaskIds.size > 0 && (
-                <button onClick={onMarkAllViewed} className={cn('text-xs sm:text-sm font-medium transition-colors', focusRing, isDark ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-600 hover:text-emerald-700')}>
-                  Mark all viewed
-                </button>
-              )}
-
-              {totalPages > 1 && (
-                <div className="flex items-center gap-1 sm:gap-2">
-                  <button
-                    onClick={() => goToPage(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    aria-label="Previous page"
-                    className={cn('p-1 sm:p-2 rounded transition-colors', focusRing, currentPage === 1 ? 'opacity-30 cursor-not-allowed' : isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-200')}
-                  >
-                    <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+              <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                {newTaskIds.size > 0 && (
+                  <button onClick={onMarkAllViewed} className={cn('text-xs sm:text-sm font-medium transition-colors', focusRing, isDark ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-600 hover:text-emerald-700')}>
+                    Mark all viewed
                   </button>
+                )}
 
-                  <span className={cn('text-xs sm:text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
-                    {currentPage} / {totalPages}
-                  </span>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <button
+                      onClick={() => goToPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      aria-label="Previous page"
+                      className={cn('p-1 sm:p-2 rounded transition-colors', focusRing, currentPage === 1 ? 'opacity-30 cursor-not-allowed' : isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-200')}
+                    >
+                      <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+                    </button>
 
-                  <button
-                    onClick={() => goToPage(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    aria-label="Next page"
-                    className={cn('p-1 sm:p-2 rounded transition-colors', focusRing, currentPage === totalPages ? 'opacity-30 cursor-not-allowed' : isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-200')}
-                  >
-                    <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
-                  </button>
-                </div>
-              )}
+                    <span className={cn('text-xs sm:text-sm', isDark ? 'text-slate-400' : 'text-gray-500')}>
+                      {currentPage} / {totalPages}
+                    </span>
 
-              <span className={cn('text-[10px] sm:text-sm', isDark ? 'text-slate-500' : 'text-gray-400')}>{isLoading ? 'Refreshing...' : `Updated: ${new Date().toLocaleTimeString('en-US')}`}</span>
+                    <button
+                      onClick={() => goToPage(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      aria-label="Next page"
+                      className={cn('p-1 sm:p-2 rounded transition-colors', focusRing, currentPage === totalPages ? 'opacity-30 cursor-not-allowed' : isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-200')}
+                    >
+                      <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+                    </button>
+                  </div>
+                )}
+
+                <span className={cn('text-[10px] sm:text-sm', isDark ? 'text-slate-500' : 'text-gray-400')}>{isLoading ? 'Refreshing...' : `Updated: ${new Date().toLocaleTimeString('en-US')}`}</span>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ─── MODALS ────────────────────────────────────────────────────────── */}
+        {/* ─── MODALS ────────────────────────────────────────────────────────── */}
 
-      {showGenerator && selectedTaskForGenerator && (
-        <TaskNameGeneratorModal isOpen={showGenerator} onClose={() => setShowGenerator(false)} task={selectedTaskForGenerator} theme={theme} />
-      )}
+        {showGenerator && selectedTaskForGenerator && (
+          <TaskNameGeneratorModal isOpen={showGenerator} onClose={() => setShowGenerator(false)} task={selectedTaskForGenerator} theme={theme} />
+        )}
 
-      {showPendingReasonModal && pendingTaskId && (
-        <ReasonForPendingModal
-          isOpen={showPendingReasonModal}
-          onClose={() => {
-            setShowPendingReasonModal(false);
-            setPendingTaskId(null);
-            setPendingStatusTarget('Pending');
-          }}
-          onConfirm={handlePendingConfirm}
-          task={tasks.find((t) => t.id === pendingTaskId) || allTasks.find((t) => t.id === pendingTaskId) || null}
-          theme={theme}
-          isSubmitting={isSubmittingPending}
-        />
-      )}
-
-      {/* Task Detail Modal */}
-      {showTaskModal && selectedTask && (
-        <Modal isOpen={showTaskModal} onClose={() => setShowTaskModal(false)} theme={theme} maxWidth="max-w-3xl" labelledBy="task-detail-title">
-          <ModalHeader
-            icon={CheckCircle2}
-            title="Task Details"
-            subtitle={`#${selectedTask.rowIndex} · ${selectedTask.task}`}
-            onClose={() => setShowTaskModal(false)}
+        {showPendingReasonModal && pendingTaskId && (
+          <ReasonForPendingModal
+            isOpen={showPendingReasonModal}
+            onClose={() => {
+              setShowPendingReasonModal(false);
+              setPendingTaskId(null);
+              setPendingStatusTarget('Pending');
+            }}
+            onConfirm={handlePendingConfirm}
+            task={tasks.find((t) => t.id === pendingTaskId) || allTasks.find((t) => t.id === pendingTaskId) || null}
             theme={theme}
-            titleId="task-detail-title"
+            isSubmitting={isSubmittingPending}
           />
+        )}
 
-          <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
-            {isTaskAdmin && (
-              <div className="flex justify-end">
-                <Button
-                  theme={theme}
-                  variant="secondary"
-                  size="sm"
-                  icon={Edit2}
-                  onClick={() => {
-                    setTaskFormError(null);
-                    setShowEditTaskModal(true);
-                  }}
-                >
-                  Edit
-                </Button>
-              </div>
-            )}
+        {/* Task Detail Modal */}
+        {showTaskModal && selectedTask && (
+          <Modal isOpen={showTaskModal} onClose={() => setShowTaskModal(false)} theme={theme} maxWidth="max-w-3xl" labelledBy="task-detail-title">
+            <ModalHeader
+              icon={CheckCircle2}
+              title="Task Details 🎄"
+              subtitle={`#${selectedTask.rowIndex} · ${selectedTask.task}`}
+              onClose={() => setShowTaskModal(false)}
+              theme={theme}
+              titleId="task-detail-title"
+            />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              <div>
-                <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Brand</label>
-                <p className={cn('text-base sm:text-lg font-semibold', isDark ? 'text-white' : 'text-gray-900')}>{selectedTask.brand}</p>
-              </div>
-              <div>
-                <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Type</label>
-                <p className={cn('text-base sm:text-lg', isDark ? 'text-white' : 'text-gray-900')}>{selectedTask.type}</p>
-              </div>
-              <div>
-                <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Agent</label>
-                <p className={cn('text-base sm:text-lg', isDark ? 'text-white' : 'text-gray-900')}>{selectedTask.agent || 'N/A'}</p>
-              </div>
-              <div>
-                <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Date Requested</label>
-                <p className={cn('text-base sm:text-lg', isDark ? 'text-white' : 'text-gray-900')}>{formatDate(selectedTask.date_requested)}</p>
-              </div>
-              <div>
-                <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Date Assigned</label>
-                <p className={cn('text-base sm:text-lg', isDark ? 'text-white' : 'text-gray-900')}>{formatDate(selectedTask.date_assigned)}</p>
-              </div>
-              <div>
-                <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Due Date</label>
-                <p className={cn('text-base sm:text-lg', isDark ? 'text-white' : 'text-gray-900')}>{formatDate(selectedTask.due_date)}</p>
-              </div>
-              <div>
-                <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Status</label>
-                <div className="mt-1">
-                  <StatusBadge status={selectedTask.status} theme={theme} size="lg" />
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+              {isTaskAdmin && (
+                <div className="flex justify-end">
+                  <Button
+                    theme={theme}
+                    variant="secondary"
+                    size="sm"
+                    icon={Edit2}
+                    onClick={() => {
+                      setTaskFormError(null);
+                      setShowEditTaskModal(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
                 </div>
-              </div>
-            </div>
+              )}
 
-            {selectedTask.remarks && (
-              <div>
-                <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Remarks</label>
-                <p className={cn('text-sm sm:text-base mt-1', isDark ? 'text-white' : 'text-gray-900')}>{selectedTask.remarks}</p>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {selectedTask.remarks.toLowerCase().includes('sbs') && !selectedTask.remarks.toLowerCase().includes('non-sbs') && (
-                    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
-                      <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                      SBS - Side by Side Observing
-                    </span>
-                  )}
-                  {selectedTask.remarks.toLowerCase().includes('non-sbs') && (
-                    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold', isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700')}>
-                      <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                      Non-SBS
-                    </span>
-                  )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Brand</label>
+                  <p className={cn('text-base sm:text-lg font-semibold', isDark ? 'text-white' : 'text-gray-900')}>{selectedTask.brand}</p>
                 </div>
-              </div>
-            )}
-
-            {selectedTask.reason_for_pending && (
-              <div>
-                <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Reason for Pending</label>
-                <div className={cn('mt-1 sm:mt-2 rounded-lg border p-3 sm:p-4', isDark ? 'border-amber-500/30 bg-amber-500/10' : 'border-amber-300 bg-amber-50')}>
-                  <div className="flex items-start gap-2 sm:gap-3">
-                    <Clock className={cn('h-4 w-4 sm:h-5 sm:w-5 mt-0.5', isDark ? 'text-amber-400' : 'text-amber-600')} />
-                    <p className={cn('text-sm sm:text-base', isDark ? 'text-white' : 'text-gray-900')}>{selectedTask.reason_for_pending}</p>
+                <div>
+                  <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Type</label>
+                  <p className={cn('text-base sm:text-lg', isDark ? 'text-white' : 'text-gray-900')}>{selectedTask.type}</p>
+                </div>
+                <div>
+                  <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Agent</label>
+                  <p className={cn('text-base sm:text-lg', isDark ? 'text-white' : 'text-gray-900')}>{selectedTask.agent || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Date Requested</label>
+                  <p className={cn('text-base sm:text-lg', isDark ? 'text-white' : 'text-gray-900')}>{formatDate(selectedTask.date_requested)}</p>
+                </div>
+                <div>
+                  <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Date Assigned</label>
+                  <p className={cn('text-base sm:text-lg', isDark ? 'text-white' : 'text-gray-900')}>{formatDate(selectedTask.date_assigned)}</p>
+                </div>
+                <div>
+                  <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Due Date</label>
+                  <p className={cn('text-base sm:text-lg', isDark ? 'text-white' : 'text-gray-900')}>{formatDate(selectedTask.due_date)}</p>
+                </div>
+                <div>
+                  <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Status</label>
+                  <div className="mt-1">
+                    <StatusBadge status={selectedTask.status} theme={theme} size="lg" />
                   </div>
                 </div>
               </div>
-            )}
 
-            {selectedTask.bc_links && (
-              <div>
-                <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>BC Links</label>
-                <div className="mt-1 sm:mt-2 flex flex-wrap gap-2">
-                  {selectedTask.bc_links.split(',').map((link, index) => {
-                    const trimmedLink = link.trim();
-                    if (trimmedLink.startsWith('http://') || trimmedLink.startsWith('https://')) {
+              {selectedTask.remarks && (
+                <div>
+                  <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Remarks</label>
+                  <p className={cn('text-sm sm:text-base mt-1', isDark ? 'text-white' : 'text-gray-900')}>{selectedTask.remarks}</p>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {selectedTask.remarks.toLowerCase().includes('sbs') && !selectedTask.remarks.toLowerCase().includes('non-sbs') && (
+                      <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold', isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700')}>
+                        <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        SBS - Side by Side Observing
+                      </span>
+                    )}
+                    {selectedTask.remarks.toLowerCase().includes('non-sbs') && (
+                      <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold', isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700')}>
+                        <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        Non-SBS
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {selectedTask.reason_for_pending && (
+                <div>
+                  <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Reason for Pending</label>
+                  <div className={cn('mt-1 sm:mt-2 rounded-lg border p-3 sm:p-4', isDark ? 'border-amber-500/30 bg-amber-500/10' : 'border-amber-300 bg-amber-50')}>
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <Clock className={cn('h-4 w-4 sm:h-5 sm:w-5 mt-0.5', isDark ? 'text-amber-400' : 'text-amber-600')} />
+                      <p className={cn('text-sm sm:text-base', isDark ? 'text-white' : 'text-gray-900')}>{selectedTask.reason_for_pending}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedTask.bc_links && (
+                <div>
+                  <label className={cn('text-xs sm:text-sm font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>BC Links</label>
+                  <div className="mt-1 sm:mt-2 flex flex-wrap gap-2">
+                    {selectedTask.bc_links.split(',').map((link, index) => {
+                      const trimmedLink = link.trim();
+                      if (trimmedLink.startsWith('http://') || trimmedLink.startsWith('https://')) {
+                        return (
+                          <a
+                            key={index}
+                            href={trimmedLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={cn('inline-flex items-center gap-1.5 text-sm sm:text-base underline-offset-2 hover:underline transition-colors rounded', focusRing, isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700')}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            Basecamp Link {index + 1}
+                            <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          </a>
+                        );
+                      }
                       return (
-                        <a
-                          key={index}
-                          href={trimmedLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={cn('inline-flex items-center gap-1.5 text-sm sm:text-base underline-offset-2 hover:underline transition-colors rounded', focusRing, isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700')}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                          Basecamp Link {index + 1}
-                          <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        </a>
+                        <span key={index} className={cn('text-sm sm:text-base', isDark ? 'text-slate-400' : 'text-gray-500')}>
+                          {trimmedLink}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <ModalFooter theme={theme} align="between">
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                <span className={cn('text-xs sm:text-sm font-medium w-full sm:w-auto', isDark ? 'text-slate-400' : 'text-gray-500')}>Change Status:</span>
+                <div className="flex flex-wrap gap-1.5 sm:gap-2 w-full sm:w-auto">
+                  {VALID_TASK_STATUSES.map((statusOption) => {
+                    const isCurrent = statusOption === selectedTask.status;
+
+                    if (isCurrent) {
+                      return (
+                        <span key={statusOption} className={cn('border-2 rounded-full', isDark ? 'border-emerald-500/50' : 'border-emerald-400')}>
+                          <StatusBadge status={statusOption} theme={theme} />
+                        </span>
                       );
                     }
+
                     return (
-                      <span key={index} className={cn('text-sm sm:text-base', isDark ? 'text-slate-400' : 'text-gray-500')}>
-                        {trimmedLink}
-                      </span>
+                      <Button
+                        key={statusOption}
+                        theme={theme}
+                        variant="secondary"
+                        size="sm"
+                        isLoading={updatingTaskId === selectedTask.id}
+                        onClick={() => onUpdateStatus(selectedTask.id, statusOption)}
+                      >
+                        {statusOption}
+                      </Button>
                     );
                   })}
                 </div>
               </div>
-            )}
-          </div>
+              <Button theme={theme} variant="secondary" onClick={() => setShowTaskModal(false)} className="w-full sm:w-auto">
+                Close
+              </Button>
+            </ModalFooter>
+          </Modal>
+        )}
 
-          <ModalFooter theme={theme} align="between">
-            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-              <span className={cn('text-xs sm:text-sm font-medium w-full sm:w-auto', isDark ? 'text-slate-400' : 'text-gray-500')}>Change Status:</span>
-              <div className="flex flex-wrap gap-1.5 sm:gap-2 w-full sm:w-auto">
-                {VALID_TASK_STATUSES.map((statusOption) => {
-                  const isCurrent = statusOption === selectedTask.status;
+        <TaskFormModal isOpen={showAddTaskModal} onClose={() => setShowAddTaskModal(false)} onSubmit={addNewTask} isSubmitting={isSavingTask} theme={theme} mode="add" error={taskFormError} />
 
-                  if (isCurrent) {
-                    return (
-                      <span key={statusOption} className={cn('border-2 rounded-full', isDark ? 'border-emerald-500/50' : 'border-emerald-400')}>
-                        <StatusBadge status={statusOption} theme={theme} />
-                      </span>
-                    );
-                  }
-
-                  return (
-                    <Button
-                      key={statusOption}
-                      theme={theme}
-                      variant="secondary"
-                      size="sm"
-                      isLoading={updatingTaskId === selectedTask.id}
-                      onClick={() => onUpdateStatus(selectedTask.id, statusOption)}
-                    >
-                      {statusOption}
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-            <Button theme={theme} variant="secondary" onClick={() => setShowTaskModal(false)} className="w-full sm:w-auto">
-              Close
-            </Button>
-          </ModalFooter>
-        </Modal>
-      )}
-
-      <TaskFormModal isOpen={showAddTaskModal} onClose={() => setShowAddTaskModal(false)} onSubmit={addNewTask} isSubmitting={isSavingTask} theme={theme} mode="add" error={taskFormError} />
-
-      <TaskFormModal
-        isOpen={showEditTaskModal}
-        onClose={() => setShowEditTaskModal(false)}
-        onSubmit={saveTaskEdits}
-        isSubmitting={isSavingTask}
-        theme={theme}
-        mode="edit"
-        error={taskFormError}
-        initialValues={
-          selectedTask
-            ? {
-                dateRequested: sheetDateToInput(selectedTask.date_requested),
-                dateAssigned: sheetDateToInput(selectedTask.date_assigned),
-                dueDate: sheetDateToInput(selectedTask.due_date),
-                type: selectedTask.type,
-                task: selectedTask.task,
-                brand: BRAND_OPTIONS.includes(selectedTask.brand) ? selectedTask.brand : '__OTHER__',
-                customBrand: BRAND_OPTIONS.includes(selectedTask.brand) ? '' : selectedTask.brand,
-                agent: selectedTask.agent,
-                status: selectedTask.status,
-                remarks: selectedTask.remarks,
-                bcLinks: selectedTask.bc_links || '',
-              }
-            : undefined
-        }
-      />
+        <TaskFormModal
+          isOpen={showEditTaskModal}
+          onClose={() => setShowEditTaskModal(false)}
+          onSubmit={saveTaskEdits}
+          isSubmitting={isSavingTask}
+          theme={theme}
+          mode="edit"
+          error={taskFormError}
+          initialValues={
+            selectedTask
+              ? {
+                  dateRequested: sheetDateToInput(selectedTask.date_requested),
+                  dateAssigned: sheetDateToInput(selectedTask.date_assigned),
+                  dueDate: sheetDateToInput(selectedTask.due_date),
+                  type: selectedTask.type,
+                  task: selectedTask.task,
+                  brand: BRAND_OPTIONS.includes(selectedTask.brand) ? selectedTask.brand : '__OTHER__',
+                  customBrand: BRAND_OPTIONS.includes(selectedTask.brand) ? '' : selectedTask.brand,
+                  agent: selectedTask.agent,
+                  status: selectedTask.status,
+                  remarks: selectedTask.remarks,
+                  bcLinks: selectedTask.bc_links || '',
+                }
+              : undefined
+          }
+        />
+      </div>
     </div>
   );
 }

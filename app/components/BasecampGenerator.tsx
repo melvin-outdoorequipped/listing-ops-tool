@@ -170,6 +170,13 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
   const isDark = theme === 'dark';
   const typeConfig = TYPE_CONFIG[analysisType];
 
+  // 🎄 Christmas decoration opacity (tuned per theme)
+  const deco = {
+    emoji: isDark ? 'opacity-[0.05]' : 'opacity-[0.04]',
+    emojiSoft: isDark ? 'opacity-[0.04]' : 'opacity-[0.03]',
+    corner: isDark ? 'opacity-[0.06]' : 'opacity-[0.04]',
+  };
+
   // Get current user on mount
   useEffect(() => {
     const getUser = async () => {
@@ -666,444 +673,505 @@ export default function BasecampGenerator({ theme = 'dark' }: BasecampGeneratorP
   const messageLineCount = generatedMessage ? generatedMessage.split('\n').filter(Boolean).length : 0;
 
   return (
-    <div className={`w-full max-w-full space-y-6 overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 p-4 bg-slate-950' : ''}`}>
-      {/* Toast Feedback */}
-      {feedback && (
-        <div className={`fixed top-4 right-4 z-50 max-w-sm rounded-xl border p-4 shadow-2xl animate-slide-in ${
-          feedback.type === 'success'
-            ? isDark ? 'border-emerald-500/30 bg-emerald-900/90 text-emerald-100' : 'border-emerald-300 bg-emerald-100 text-emerald-800'
-            : feedback.type === 'error'
-              ? isDark ? 'border-red-500/30 bg-red-900/90 text-red-100' : 'border-red-300 bg-red-100 text-red-800'
-              : feedback.type === 'warning'
-                ? isDark ? 'border-yellow-500/30 bg-yellow-900/90 text-yellow-100' : 'border-yellow-300 bg-yellow-100 text-yellow-800'
-                : isDark ? 'border-blue-500/30 bg-blue-900/90 text-blue-100' : 'border-blue-300 bg-blue-100 text-blue-800'
-        }`}>
-          <div className="flex items-start gap-3">
-            {feedback.type === 'success' && <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-400" />}
-            {feedback.type === 'error' && <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-400" />}
-            {feedback.type === 'warning' && <AlertTriangle className="h-5 w-5 flex-shrink-0 text-yellow-400" />}
-            {feedback.type === 'info' && <Info className="h-5 w-5 flex-shrink-0 text-blue-400" />}
-            <p className="text-sm font-medium">{feedback.message}</p>
+    <>
+      {/* ─── 🎄 Christmas decorations (purely visual, pointer-events-none) ─── */}
+      {!isFullscreen && (
+        <>
+          {/* Red/green haze */}
+          <div
+            className={`pointer-events-none fixed inset-0 z-0 ${
+              isDark
+                ? 'bg-[radial-gradient(ellipse_at_top,_rgba(220,38,38,0.10),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(22,163,74,0.08),_transparent_50%)]'
+                : 'bg-[radial-gradient(ellipse_at_top,_rgba(220,38,38,0.05),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(22,163,74,0.04),_transparent_50%)]'
+            }`}
+            aria-hidden
+          />
+
+          {/* Floating Christmas emojis */}
+          <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden>
+            <span className={`absolute left-[4%] top-[20%] select-none text-4xl motion-safe:animate-pulse ${deco.emoji}`}>🎄</span>
+            <span className={`absolute right-[6%] top-[12%] select-none text-3xl motion-safe:animate-pulse ${deco.emoji}`}>❄️</span>
+            <span className={`absolute left-[10%] bottom-[18%] select-none text-3xl ${deco.emojiSoft}`}>⛄</span>
+            <span className={`absolute right-[8%] bottom-[12%] select-none text-4xl motion-safe:animate-pulse ${deco.emoji}`}>🎅</span>
+            <span className={`absolute left-[45%] top-[4%] select-none text-3xl ${deco.emojiSoft}`}>⭐</span>
+            <span className={`absolute right-[40%] bottom-[6%] select-none text-3xl ${deco.emojiSoft}`}>🎁</span>
+            <span className={`absolute left-[75%] top-[35%] select-none text-2xl motion-safe:animate-pulse ${deco.emojiSoft}`}>🦌</span>
+            <span className={`absolute left-[25%] top-[55%] select-none text-2xl ${deco.emojiSoft}`}>🍪</span>
+            <span className={`absolute right-[25%] top-[65%] select-none text-3xl ${deco.emojiSoft}`}>🔔</span>
+            <span className={`absolute left-[50%] bottom-[25%] select-none text-2xl motion-safe:animate-pulse ${deco.emojiSoft}`}>🌟</span>
           </div>
-        </div>
+
+          {/* Corner snowflakes */}
+          <div className={`pointer-events-none fixed left-0 top-0 z-0 select-none text-7xl ${deco.corner}`} aria-hidden>❄️</div>
+          <div className={`pointer-events-none fixed right-0 top-0 z-0 -scale-x-100 select-none text-7xl ${deco.corner}`} aria-hidden>❄️</div>
+
+          {/* Bottom-right gift + bottom-left snowman */}
+          <div className={`pointer-events-none fixed bottom-0 right-0 z-0 select-none text-6xl ${deco.emojiSoft}`} aria-hidden>🎁</div>
+          <div className={`pointer-events-none fixed bottom-[8%] left-[5%] z-0 select-none text-4xl motion-safe:animate-pulse ${deco.emojiSoft}`} aria-hidden>⛄</div>
+        </>
       )}
 
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-3">
-              <h1 className={`text-xl font-bold sm:text-2xl ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                Basecamp Response Generator
-              </h1>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
-                v2.0
-              </span>
-            </div>
-            <p className={`mt-1 max-w-2xl text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-              Generate formatted Basecamp messages from PO data files with tracking and exclusions.
-            </p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <div className={`hidden items-center gap-1.5 rounded-lg border px-3 py-2 text-xs sm:flex ${
-              isDark ? 'border-slate-700 bg-slate-800/50 text-slate-500' : 'border-gray-200 bg-gray-50 text-gray-400'
-            }`}>
-              <Sparkles className="h-3.5 w-3.5" />
-              <span>AI powered</span>
-            </div>
-            <button
-              type="button"
-              onClick={toggleFullscreen}
-              className={`rounded-lg border p-2 transition-colors ${
-                isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-gray-200 text-gray-500 hover:bg-gray-100'
-              }`}
-              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-            >
-              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowHelp(!showHelp)}
-              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                isDark ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-700/60' : 'border-gray-200 bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              <HelpCircle className="h-4 w-4" />
-              {showHelp ? 'Hide Help' : 'Help'}
-            </button>
-          </div>
-        </div>
-
-        {showHelp && (
-          <div className={`mt-4 rounded-xl border p-4 animate-slide-in ${
-            isDark ? 'border-emerald-500/20 bg-emerald-600/10' : 'border-emerald-300/60 bg-emerald-100/60'
+      <div className={`relative z-10 w-full max-w-full space-y-6 overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 p-4 bg-slate-950' : ''}`}>
+        {/* Toast Feedback */}
+        {feedback && (
+          <div className={`fixed top-4 right-4 z-50 max-w-sm rounded-xl border p-4 shadow-2xl animate-slide-in ${
+            feedback.type === 'success'
+              ? isDark ? 'border-emerald-500/30 bg-emerald-900/90 text-emerald-100' : 'border-emerald-300 bg-emerald-100 text-emerald-800'
+              : feedback.type === 'error'
+                ? isDark ? 'border-red-500/30 bg-red-900/90 text-red-100' : 'border-red-300 bg-red-100 text-red-800'
+                : feedback.type === 'warning'
+                  ? isDark ? 'border-yellow-500/30 bg-yellow-900/90 text-yellow-100' : 'border-yellow-300 bg-yellow-100 text-yellow-800'
+                  : isDark ? 'border-blue-500/30 bg-blue-900/90 text-blue-100' : 'border-blue-300 bg-blue-100 text-blue-800'
           }`}>
-            <h3 className={`mb-3 flex items-center gap-2 font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
-              <HelpCircle className="h-4 w-4" />
-              Quick Guide
-            </h3>
-            <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
-              {[
-                'Select message type (Initial/Final/Pre-Approval/For Fixing)',
-                'Enter PO number (optional but recommended)',
-                'Upload the required file(s) based on message type',
-                'Configure optional settings (shipping plan, 3PL, checklists)',
-                'Click Generate or press ⌘↵ to create the message',
-                'Copy the generated message directly to Basecamp',
-              ].map((tip, i) => (
-                <div key={tip} className={`flex items-start gap-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                  <span className="font-bold text-emerald-500">{i + 1}.</span>
-                  <span>{tip}</span>
-                </div>
-              ))}
+            <div className="flex items-start gap-3">
+              {feedback.type === 'success' && <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-400" />}
+              {feedback.type === 'error' && <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-400" />}
+              {feedback.type === 'warning' && <AlertTriangle className="h-5 w-5 flex-shrink-0 text-yellow-400" />}
+              {feedback.type === 'info' && <Info className="h-5 w-5 flex-shrink-0 text-blue-400" />}
+              <p className="text-sm font-medium">
+                {feedback.message}
+                <span className="ml-1.5 select-none" aria-hidden>
+                  {feedback.type === 'success' ? '🎄' : feedback.type === 'error' ? '⛄' : feedback.type === 'warning' ? '❄️' : '🎅'}
+                </span>
+              </p>
             </div>
           </div>
         )}
-      </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        {/* Configuration Panel */}
-        <div className={`min-w-0 rounded-2xl border p-4 shadow-lg sm:p-6 ${
-          isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'
-        }`}>
-          <div className="mb-5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Settings className={`h-5 w-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
-              <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Configuration</h2>
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-3">
+                <h1 className={`text-xl font-bold sm:text-2xl ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  Basecamp Response Generator 🎄
+                </h1>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+                  v2.0
+                </span>
+              </div>
+              <p className={`mt-1 max-w-2xl text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                Generate formatted Basecamp messages from PO data files with tracking and exclusions · Merry Christmas edition
+              </p>
+              <div
+                className={`mt-2 inline-flex flex-wrap items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium ${
+                  isDark
+                    ? 'border-red-500/20 bg-red-500/5 text-red-300/80'
+                    : 'border-red-300/50 bg-red-50 text-red-700/80'
+                }`}
+              >
+                <span aria-hidden>🎄</span>
+                <span>Merry Christmas · Holiday Season</span>
+                <span aria-hidden>🎅</span>
+                <span className={isDark ? 'text-green-400/70' : 'text-green-600/80'}>·</span>
+                <span className={isDark ? 'text-green-400/70' : 'text-green-600/80'}>stay jolly</span>
+                <span aria-hidden>❄️</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className={`rounded-full border px-3 py-1 text-xs font-bold ${
-                isDark ? `border ${typeConfig.darkBg.split(' ')[1]} bg-transparent ${typeConfig.darkText}` : `border ${typeConfig.lightBg.split(' ')[1]} bg-transparent ${typeConfig.lightText}`
+            <div className="flex gap-2 flex-wrap">
+              <div className={`hidden items-center gap-1.5 rounded-lg border px-3 py-2 text-xs sm:flex ${
+                isDark ? 'border-slate-700 bg-slate-800/50 text-slate-500' : 'border-gray-200 bg-gray-50 text-gray-400'
               }`}>
-                {typeConfig.icon} {typeConfig.label}
-              </span>
-            </div>
-          </div>
-
-          {/* Message Type Selection */}
-          <div className="mb-5">
-            <label className={`mb-2 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-              Message Type
-            </label>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              {(['initial', 'final', 'pre-approval', 'for-fixing'] as const).map(type => {
-                const cfg = TYPE_CONFIG[type];
-                const active = analysisType === type;
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => {
-                      setAnalysisType(type);
-                      if (type !== 'final') setEnableExcluded(false);
-                    }}
-                    className={`min-h-[44px] rounded-lg px-2 py-2 text-xs font-semibold capitalize transition-all sm:text-sm ${
-                      active
-                        ? `bg-gradient-to-r ${cfg.gradient} text-white shadow-lg`
-                        : isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-center gap-1.5">
-                      {cfg.icon}
-                      {type.replace('-', ' ')}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <p className={`mt-1.5 text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-              {typeConfig.description}
-            </p>
-          </div>
-
-          {/* PO Number */}
-          <div className="mb-4">
-            <label className={`mb-2 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-              PO Number <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>(optional)</span>
-            </label>
-            <input
-              type="text"
-              value={poNumber}
-              onChange={e => setPoNumber(e.target.value)}
-              placeholder="e.g. FDANN010726PBB"
-              className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                isDark ? 'border-slate-700 bg-slate-900 text-slate-100 placeholder-slate-500' : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
-              }`}
-            />
-          </div>
-
-          {/* Advanced Options */}
-          <div className={`mb-5 space-y-4 rounded-xl border p-4 ${
-            isDark ? 'border-slate-700/40 bg-slate-800/30' : 'border-gray-100 bg-gray-50'
-          }`}>
-            <div className="flex items-center justify-between">
-              <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                Advanced Options
-              </span>
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>AI powered 🎄</span>
+              </div>
               <button
                 type="button"
-                onClick={() => setShowConfig(!showConfig)}
-                className={`rounded-lg p-1 transition-colors ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                onClick={toggleFullscreen}
+                className={`rounded-lg border p-2 transition-colors ${
+                  isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-800' : 'border-gray-200 text-gray-500 hover:bg-gray-100'
+                }`}
+                title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
               >
-                {showConfig ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowHelp(!showHelp)}
+                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  isDark ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-700/60' : 'border-gray-200 bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <HelpCircle className="h-4 w-4" />
+                {showHelp ? 'Hide Help' : 'Help'}
               </button>
             </div>
-
-            {showConfig && (
-              <div className="space-y-4">
-                {(analysisType === 'initial' || analysisType === 'final') && (
-                  <div>
-                    <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                      Shipping Plan
-                    </label>
-                    <select
-                      value={shippingPlanError}
-                      onChange={e => setShippingPlanError(e.target.value as 'no' | 'yes')}
-                      className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${
-                        isDark ? 'border-slate-700 bg-slate-900 text-slate-100' : 'border-gray-300 bg-white text-gray-900'
-                      }`}
-                    >
-                      <option value="no">✅ No error in shipping plan creation</option>
-                      <option value="yes">❌ Shipping Plan Error</option>
-                    </select>
-                  </div>
-                )}
-                {analysisType === 'final' && (
-                  <div>
-                    <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                      3PL Suggestion
-                    </label>
-                    <select
-                      value={suggest3PL}
-                      onChange={e => setSuggest3PL(e.target.value as 'yes' | 'no')}
-                      className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${
-                        isDark ? 'border-slate-700 bg-slate-900 text-slate-100' : 'border-gray-300 bg-white text-gray-900'
-                      }`}
-                    >
-                      <option value="no">🚫 Do not suggest items to 3PL</option>
-                      <option value="yes">📦 Suggest to 3PL</option>
-                    </select>
-                  </div>
-                )}
-                
-                <div>
-                  <label className={`mb-2 block text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                    <ListChecks className="inline h-3.5 w-3.5 mr-1" />
-                    Checklist
-                  </label>
-                  <div className={`space-y-2 text-sm ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-                    {(analysisType === 'initial' || analysisType === 'for-fixing') && (
-                      <CheckboxRow label="Done updating the tracker" checked={doneTracker} onChange={() => setDoneTracker(c => !c)} isDark={isDark} />
-                    )}
-                    {analysisType === 'final' && (
-                      <>
-                        <CheckboxRow label="Done updating the tracker" checked={doneTracker} onChange={() => setDoneTracker(c => !c)} isDark={isDark} />
-                        <CheckboxRow label="Done adding to FBA ASIN Errors Encountered tracker" checked={doneFbaErrorTracker} onChange={() => setDoneFbaErrorTracker(c => !c)} isDark={isDark} />
-                        <CheckboxRow label="Added to Thorogood - Amazon Deliverables Tracker & Form Submission" checked={doneTrackerSubmission} onChange={() => setDoneTrackerSubmission(c => !c)} isDark={isDark} />
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* File Uploads */}
-          <div className="space-y-4">
-            {analysisType === 'pre-approval' && (
-              <FileUploadArea theme={theme} label="Pre-Approval PO File" description="Upload the pre-approval PO file for review" accept=".csv,.xlsx,.xls"
-                onUpload={f => handleFileUpload('preApproval', f)} filename={uploadedFiles.preApproval?.filename} rowCount={uploadedFiles.preApproval?.rows?.length} />
-            )}
-            
-            {(analysisType === 'initial' || analysisType === 'final' || analysisType === 'for-fixing') && (
-              <>
-                <FileUploadArea theme={theme} label="Listing Data PO File" description="Upload the main listing data PO file" accept=".csv,.xlsx,.xls" required
-                  onUpload={f => handleFileUpload('listingData', f)} filename={uploadedFiles.listingData?.filename} rowCount={uploadedFiles.listingData?.rows?.length} />
-                
-                {analysisType === 'final' && (
-                  <div className={`mt-3 rounded-lg border p-3 ${isDark ? 'border-slate-700 bg-slate-800/30' : 'border-gray-200 bg-gray-50'}`}>
-                    <CheckboxRow 
-                      label="Enable Excluded File" 
-                      checked={enableExcluded} 
-                      onChange={() => {
-                        setEnableExcluded(!enableExcluded);
-                        if (enableExcluded) {
-                          setUploadedFiles(prev => {
-                            const newFiles = { ...prev };
-                            delete newFiles.excluded;
-                            return newFiles;
-                          });
-                        }
-                      }} 
-                      isDark={isDark} 
-                    />
-                    <p className={`text-xs mt-1 ml-6 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                      {enableExcluded 
-                        ? "✓ Excluded file upload is enabled. Drop your file below." 
-                        : "Enable this to upload and include excluded items in the message"}
-                    </p>
-                  </div>
-                )}
-                
-                {analysisType === 'final' && enableExcluded && (
-                  <div className="mt-2">
-                    <FileUploadArea theme={theme} label="Excluded Items File" description="Upload the excluded items file" accept=".csv,.xlsx,.xls"
-                      onUpload={f => handleFileUpload('excluded', f)} filename={uploadedFiles.excluded?.filename} rowCount={uploadedFiles.excluded?.rows?.length} />
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          {error && (
-            <div className={`mt-4 flex items-start gap-2 rounded-lg border p-3 text-sm ${
-              isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'
+          {showHelp && (
+            <div className={`mt-4 rounded-xl border p-4 animate-slide-in ${
+              isDark ? 'border-emerald-500/20 bg-emerald-600/10' : 'border-emerald-300/60 bg-emerald-100/60'
             }`}>
-              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-              <span className="break-words">{error}</span>
+              <h3 className={`mb-3 flex items-center gap-2 font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
+                <HelpCircle className="h-4 w-4" />
+                Quick Guide 🎄
+              </h3>
+              <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
+                {[
+                  'Select message type (Initial/Final/Pre-Approval/For Fixing)',
+                  'Enter PO number (optional but recommended)',
+                  'Upload the required file(s) based on message type',
+                  'Configure optional settings (shipping plan, 3PL, checklists)',
+                  'Click Generate or press ⌘↵ to create the message',
+                  'Copy the generated message directly to Basecamp',
+                ].map((tip, i) => (
+                  <div key={tip} className={`flex items-start gap-2 ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                    <span className="font-bold text-emerald-500">{i + 1}.</span>
+                    <span>{tip}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={generateMessage}
-              disabled={!hasRequiredFiles() || isGenerating}
-              className={`flex w-full flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 font-semibold transition-all ${
-                hasRequiredFiles() && !isGenerating
-                  ? `bg-gradient-to-r ${typeConfig.gradient} text-white shadow-lg hover:shadow-xl hover:scale-[1.02]`
-                  : 'cursor-not-allowed opacity-50 bg-slate-600 text-white'
-              }`}
-            >
-              {isGenerating ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />Generating...</>
-              ) : (
-                <><Sparkles className="h-4 w-4" />Generate Message</>
-              )}
-            </button>
-            <button
-              type="button" onClick={clearAll}
-              className={`w-full rounded-xl px-4 py-3 font-semibold transition-colors sm:w-auto ${
-                isDark ? 'border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <X className="h-4 w-4 inline mr-1" />
-              Clear
-            </button>
-          </div>
         </div>
 
-        {/* Generated Message Panel */}
-        <div className={`min-w-0 rounded-2xl border p-4 shadow-lg sm:p-6 ${
-          isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'
-        }`}>
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <MessageSquare className={`h-5 w-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
-              <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Generated Message</h2>
-              {generatedMessage && (
-                <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                  isDark ? `${typeConfig.darkBg} ${typeConfig.darkText}` : `${typeConfig.lightBg} ${typeConfig.lightText}`
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          {/* Configuration Panel */}
+          <div className={`relative min-w-0 rounded-2xl border p-4 shadow-lg sm:p-6 ${
+            isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'
+          }`}>
+            <span className="pointer-events-none absolute right-3 top-2 select-none text-sm opacity-[0.18]" aria-hidden>🎄</span>
+            <div className="mb-5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Settings className={`h-5 w-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
+                <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Configuration</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`rounded-full border px-3 py-1 text-xs font-bold ${
+                  isDark ? `border ${typeConfig.darkBg.split(' ')[1]} bg-transparent ${typeConfig.darkText}` : `border ${typeConfig.lightBg.split(' ')[1]} bg-transparent ${typeConfig.lightText}`
                 }`}>
                   {typeConfig.icon} {typeConfig.label}
                 </span>
+              </div>
+            </div>
+
+            {/* Message Type Selection */}
+            <div className="mb-5">
+              <label className={`mb-2 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                Message Type
+              </label>
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                {(['initial', 'final', 'pre-approval', 'for-fixing'] as const).map(type => {
+                  const cfg = TYPE_CONFIG[type];
+                  const active = analysisType === type;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => {
+                        setAnalysisType(type);
+                        if (type !== 'final') setEnableExcluded(false);
+                      }}
+                      className={`min-h-[44px] rounded-lg px-2 py-2 text-xs font-semibold capitalize transition-all sm:text-sm ${
+                        active
+                          ? `bg-gradient-to-r ${cfg.gradient} text-white shadow-lg`
+                          : isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-1.5">
+                        {cfg.icon}
+                        {type.replace('-', ' ')}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className={`mt-1.5 text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                {typeConfig.description}
+              </p>
+            </div>
+
+            {/* PO Number */}
+            <div className="mb-4">
+              <label className={`mb-2 block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                PO Number <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={poNumber}
+                onChange={e => setPoNumber(e.target.value)}
+                placeholder="e.g. FDANN010726PBB"
+                className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                  isDark ? 'border-slate-700 bg-slate-900 text-slate-100 placeholder-slate-500' : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
+                }`}
+              />
+            </div>
+
+            {/* Advanced Options */}
+            <div className={`mb-5 space-y-4 rounded-xl border p-4 ${
+              isDark ? 'border-slate-700/40 bg-slate-800/30' : 'border-gray-100 bg-gray-50'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                  Advanced Options
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowConfig(!showConfig)}
+                  className={`rounded-lg p-1 transition-colors ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                >
+                  {showConfig ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+              </div>
+
+              {showConfig && (
+                <div className="space-y-4">
+                  {(analysisType === 'initial' || analysisType === 'final') && (
+                    <div>
+                      <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                        Shipping Plan
+                      </label>
+                      <select
+                        value={shippingPlanError}
+                        onChange={e => setShippingPlanError(e.target.value as 'no' | 'yes')}
+                        className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${
+                          isDark ? 'border-slate-700 bg-slate-900 text-slate-100' : 'border-gray-300 bg-white text-gray-900'
+                        }`}
+                      >
+                        <option value="no">✅ No error in shipping plan creation</option>
+                        <option value="yes">❌ Shipping Plan Error</option>
+                      </select>
+                    </div>
+                  )}
+                  {analysisType === 'final' && (
+                    <div>
+                      <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                        3PL Suggestion
+                      </label>
+                      <select
+                        value={suggest3PL}
+                        onChange={e => setSuggest3PL(e.target.value as 'yes' | 'no')}
+                        className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${
+                          isDark ? 'border-slate-700 bg-slate-900 text-slate-100' : 'border-gray-300 bg-white text-gray-900'
+                        }`}
+                      >
+                        <option value="no">🚫 Do not suggest items to 3PL</option>
+                        <option value="yes">📦 Suggest to 3PL</option>
+                      </select>
+                    </div>
+                  )}
+                  
+                  <div>
+                    <label className={`mb-2 block text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                      <ListChecks className="inline h-3.5 w-3.5 mr-1" />
+                      Checklist
+                    </label>
+                    <div className={`space-y-2 text-sm ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                      {(analysisType === 'initial' || analysisType === 'for-fixing') && (
+                        <CheckboxRow label="Done updating the tracker" checked={doneTracker} onChange={() => setDoneTracker(c => !c)} isDark={isDark} />
+                      )}
+                      {analysisType === 'final' && (
+                        <>
+                          <CheckboxRow label="Done updating the tracker" checked={doneTracker} onChange={() => setDoneTracker(c => !c)} isDark={isDark} />
+                          <CheckboxRow label="Done adding to FBA ASIN Errors Encountered tracker" checked={doneFbaErrorTracker} onChange={() => setDoneFbaErrorTracker(c => !c)} isDark={isDark} />
+                          <CheckboxRow label="Added to Thorogood - Amazon Deliverables Tracker & Form Submission" checked={doneTrackerSubmission} onChange={() => setDoneTrackerSubmission(c => !c)} isDark={isDark} />
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              {generatedMessage && lastGenerated && (
-                <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                  <Clock className="h-3 w-3 inline mr-1" />
-                  {lastGenerated}
-                </span>
+            {/* File Uploads */}
+            <div className="space-y-4">
+              {analysisType === 'pre-approval' && (
+                <FileUploadArea theme={theme} label="Pre-Approval PO File" description="Upload the pre-approval PO file for review" accept=".csv,.xlsx,.xls"
+                  onUpload={f => handleFileUpload('preApproval', f)} filename={uploadedFiles.preApproval?.filename} rowCount={uploadedFiles.preApproval?.rows?.length} />
               )}
-              {generatedMessage && (
-                <button
-                  type="button" onClick={copyToClipboard}
-                  className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    copied
-                      ? 'bg-emerald-500/20 text-emerald-400'
-                      : isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {copied ? <><Check className="h-4 w-4 text-emerald-400" />Copied!</> : <><Copy className="h-4 w-4" />Copy</>}
-                </button>
+              
+              {(analysisType === 'initial' || analysisType === 'final' || analysisType === 'for-fixing') && (
+                <>
+                  <FileUploadArea theme={theme} label="Listing Data PO File" description="Upload the main listing data PO file" accept=".csv,.xlsx,.xls" required
+                    onUpload={f => handleFileUpload('listingData', f)} filename={uploadedFiles.listingData?.filename} rowCount={uploadedFiles.listingData?.rows?.length} />
+                  
+                  {analysisType === 'final' && (
+                    <div className={`mt-3 rounded-lg border p-3 ${isDark ? 'border-slate-700 bg-slate-800/30' : 'border-gray-200 bg-gray-50'}`}>
+                      <CheckboxRow 
+                        label="Enable Excluded File" 
+                        checked={enableExcluded} 
+                        onChange={() => {
+                          setEnableExcluded(!enableExcluded);
+                          if (enableExcluded) {
+                            setUploadedFiles(prev => {
+                              const newFiles = { ...prev };
+                              delete newFiles.excluded;
+                              return newFiles;
+                            });
+                          }
+                        }} 
+                        isDark={isDark} 
+                      />
+                      <p className={`text-xs mt-1 ml-6 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                        {enableExcluded 
+                          ? "✓ Excluded file upload is enabled. Drop your file below." 
+                          : "Enable this to upload and include excluded items in the message"}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {analysisType === 'final' && enableExcluded && (
+                    <div className="mt-2">
+                      <FileUploadArea theme={theme} label="Excluded Items File" description="Upload the excluded items file" accept=".csv,.xlsx,.xls"
+                        onUpload={f => handleFileUpload('excluded', f)} filename={uploadedFiles.excluded?.filename} rowCount={uploadedFiles.excluded?.rows?.length} />
+                    </div>
+                  )}
+                </>
               )}
+            </div>
+
+            {error && (
+              <div className={`mt-4 flex items-start gap-2 rounded-lg border p-3 text-sm ${
+                isDark ? 'border-red-500/30 bg-red-600/10 text-red-400' : 'border-red-300 bg-red-100 text-red-700'
+              }`}>
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <span className="break-words">{error}</span>
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={generateMessage}
+                disabled={!hasRequiredFiles() || isGenerating}
+                className={`flex w-full flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 font-semibold transition-all ${
+                  hasRequiredFiles() && !isGenerating
+                    ? `bg-gradient-to-r ${typeConfig.gradient} text-white shadow-lg hover:shadow-xl hover:scale-[1.02]`
+                    : 'cursor-not-allowed opacity-50 bg-slate-600 text-white'
+                }`}
+              >
+                {isGenerating ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" />Generating...</>
+                ) : (
+                  <><Sparkles className="h-4 w-4" />Generate Message 🎄</>
+                )}
+              </button>
+              <button
+                type="button" onClick={clearAll}
+                className={`w-full rounded-xl px-4 py-3 font-semibold transition-colors sm:w-auto ${
+                  isDark ? 'border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <X className="h-4 w-4 inline mr-1" />
+                Clear
+              </button>
             </div>
           </div>
 
-          {generatedMessage && generatedStats && (
-            <div className={`mb-4 grid grid-cols-3 gap-2 rounded-lg border p-3 ${
-              isDark ? 'border-slate-700 bg-slate-800/30' : 'border-gray-200 bg-gray-50'
-            }`}>
-              <div className="text-center">
-                <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>SKUs</p>
-                <p className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{generatedStats.totalSkus}</p>
-              </div>
-              <div className="text-center">
-                <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>Total QTY</p>
-                <p className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{generatedStats.totalQty}</p>
-              </div>
-              <div className="text-center">
-                <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>Issues</p>
-                <p className={`text-lg font-bold ${generatedStats.issueCount > 0 ? 'text-yellow-400' : 'text-emerald-400'}`}>
-                  {generatedStats.issueCount}
-                </p>
-              </div>
-            </div>
-          )}
-
-          <div className={`min-h-[360px] rounded-xl border sm:min-h-[420px] ${isDark ? 'border-slate-700 bg-slate-950/50' : 'border-gray-200 bg-gray-50'}`}>
-            {generatedMessage ? (
-              <div ref={messageRef} className={`rounded-xl border p-4 h-full ${isDark ? typeConfig.darkBg : typeConfig.lightBg}`}>
-                <div className={`mb-3 flex items-center gap-2 border-b pb-3 ${isDark ? 'border-white/10' : 'border-black/10'}`}>
-                  <MessageSquare className={`h-4 w-4 ${isDark ? typeConfig.darkText : typeConfig.lightText}`} />
-                  <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? typeConfig.darkText : typeConfig.lightText}`}>
-                    {typeConfig.label}
+          {/* Generated Message Panel */}
+          <div className={`relative min-w-0 rounded-2xl border p-4 shadow-lg sm:p-6 ${
+            isDark ? 'border-slate-700/50 bg-slate-900/70' : 'border-gray-200 bg-white'
+          }`}>
+            <span className="pointer-events-none absolute right-3 top-2 select-none text-sm opacity-[0.18]" aria-hidden>❄️</span>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare className={`h-5 w-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
+                <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Generated Message</h2>
+                {generatedMessage && (
+                  <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                    isDark ? `${typeConfig.darkBg} ${typeConfig.darkText}` : `${typeConfig.lightBg} ${typeConfig.lightText}`
+                  }`}>
+                    {typeConfig.icon} {typeConfig.label}
                   </span>
-                  {poNumber && (
-                    <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                      isDark ? 'bg-white/10 text-white/70' : 'bg-black/10 text-black/60'
-                    }`}>
-                      PO: {poNumber}
-                    </span>
-                  )}
-                </div>
-                <pre className={`max-w-full whitespace-pre-wrap break-words font-sans text-sm leading-relaxed ${
-                  isDark ? typeConfig.darkText : typeConfig.lightText
-                }`}>
-                  {generatedMessage}
-                </pre>
-              </div>
-            ) : (
-              <div className="flex h-full min-h-[360px] flex-col items-center justify-center px-4 text-center sm:min-h-[400px]">
-                {isGenerating ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="relative">
-                      <Sparkles className={`h-10 w-10 animate-pulse ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
-                    </div>
-                    <p className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>Generating your message...</p>
-                    <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>Parsing file data and building output</p>
-                  </div>
-                ) : (
-                  <>
-                    <MessageSquare className={`mb-3 h-12 w-12 ${isDark ? 'text-slate-600' : 'text-gray-400'}`} />
-                    <p className={`max-w-sm text-sm ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
-                      {!hasRequiredFiles() ? 'Upload required files and click generate' : 'Click "Generate Message" to create your Basecamp response'}
-                    </p>
-                    {!hasRequiredFiles() && (
-                      <p className={`mt-2 text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
-                        {analysisType === 'pre-approval' ? 'Pre-approval file required' : 'Listing data file required'}
-                      </p>
-                    )}
-                  </>
                 )}
               </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {generatedMessage && lastGenerated && (
+                  <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                    <Clock className="h-3 w-3 inline mr-1" />
+                    {lastGenerated}
+                  </span>
+                )}
+                {generatedMessage && (
+                  <button
+                    type="button" onClick={copyToClipboard}
+                    className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      copied
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {copied ? <><Check className="h-4 w-4 text-emerald-400" />Copied!</> : <><Copy className="h-4 w-4" />Copy</>}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {generatedMessage && generatedStats && (
+              <div className={`mb-4 grid grid-cols-3 gap-2 rounded-lg border p-3 ${
+                isDark ? 'border-slate-700 bg-slate-800/30' : 'border-gray-200 bg-gray-50'
+              }`}>
+                <div className="text-center">
+                  <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>SKUs</p>
+                  <p className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{generatedStats.totalSkus}</p>
+                </div>
+                <div className="text-center">
+                  <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>Total QTY</p>
+                  <p className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{generatedStats.totalQty}</p>
+                </div>
+                <div className="text-center">
+                  <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>Issues</p>
+                  <p className={`text-lg font-bold ${generatedStats.issueCount > 0 ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                    {generatedStats.issueCount}
+                  </p>
+                </div>
+              </div>
             )}
+
+            <div className={`min-h-[360px] rounded-xl border sm:min-h-[420px] ${isDark ? 'border-slate-700 bg-slate-950/50' : 'border-gray-200 bg-gray-50'}`}>
+              {generatedMessage ? (
+                <div ref={messageRef} className={`rounded-xl border p-4 h-full ${isDark ? typeConfig.darkBg : typeConfig.lightBg}`}>
+                  <div className={`mb-3 flex items-center gap-2 border-b pb-3 ${isDark ? 'border-white/10' : 'border-black/10'}`}>
+                    <MessageSquare className={`h-4 w-4 ${isDark ? typeConfig.darkText : typeConfig.lightText}`} />
+                    <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? typeConfig.darkText : typeConfig.lightText}`}>
+                      {typeConfig.label}
+                    </span>
+                    {poNumber && (
+                      <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        isDark ? 'bg-white/10 text-white/70' : 'bg-black/10 text-black/60'
+                      }`}>
+                        PO: {poNumber}
+                      </span>
+                    )}
+                  </div>
+                  <pre className={`max-w-full whitespace-pre-wrap break-words font-sans text-sm leading-relaxed ${
+                    isDark ? typeConfig.darkText : typeConfig.lightText
+                  }`}>
+                    {generatedMessage}
+                  </pre>
+                </div>
+              ) : (
+                <div className="flex h-full min-h-[360px] flex-col items-center justify-center px-4 text-center sm:min-h-[400px]">
+                  {isGenerating ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="relative">
+                        <Sparkles className={`h-10 w-10 animate-pulse ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
+                      </div>
+                      <p className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>Generating your message...</p>
+                      <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>Parsing file data and building output</p>
+                    </div>
+                  ) : (
+                    <>
+                      <MessageSquare className={`mb-3 h-12 w-12 ${isDark ? 'text-slate-600' : 'text-gray-400'}`} />
+                      <p className={`max-w-sm text-sm ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+                        {!hasRequiredFiles() ? 'Upload required files and click generate' : 'Click "Generate Message" to create your Basecamp response'}
+                      </p>
+                      {!hasRequiredFiles() && (
+                        <p className={`mt-2 text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+                          {analysisType === 'pre-approval' ? 'Pre-approval file required' : 'Listing data file required'}
+                        </p>
+                      )}
+                      <div className={`mt-3 select-none text-lg ${isDark ? 'opacity-20' : 'opacity-25'}`} aria-hidden>🎄</div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

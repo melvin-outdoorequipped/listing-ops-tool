@@ -130,13 +130,16 @@ export function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNam
       onClick={handleBackdropClick}
     >
       <div className={`relative w-full max-w-2xl rounded-2xl border shadow-2xl ${modalClass} animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto`}>
+        {/* 🎄 Corner decoration */}
+        <span className="pointer-events-none absolute right-14 top-3 select-none text-sm opacity-[0.2]" aria-hidden>🎄</span>
+
         <div className={`flex items-center justify-between border-b p-4 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
           <div className="flex items-center gap-2">
             <div className="rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 p-1.5">
               <Sparkles className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h3 className={`font-semibold ${textClass}`}>TD Task Name Generator</h3>
+              <h3 className={`font-semibold ${textClass}`}>TD Task Name Generator 🎄</h3>
               <p className={`text-xs ${mutedText}`}>Generate task names for {task.brand} · {task.task}</p>
             </div>
           </div>
@@ -194,6 +197,7 @@ export function TaskNameGeneratorModal({ isOpen, onClose, task, theme }: TaskNam
               <Search className={`h-8 w-8 ${mutedText} opacity-30`} />
               <p className={`mt-2 text-sm ${textClass}`}>No templates found</p>
               <p className={`text-xs ${mutedText}`}>Try adjusting your search</p>
+              <div className={`mt-3 select-none text-lg ${isDark ? 'opacity-20' : 'opacity-25'}`} aria-hidden>🎄</div>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-2">
@@ -302,6 +306,8 @@ export function ReasonForPendingModal({ isOpen, onClose, onConfirm, task, theme,
       onClick={handleBackdropClick}
     >
       <div className={`relative w-full max-w-md rounded-2xl border shadow-2xl ${modalClass} animate-in zoom-in-95 duration-200`}>
+        <span className="pointer-events-none absolute right-14 top-3 select-none text-sm opacity-[0.2]" aria-hidden>❄️</span>
+
         <div className={`flex items-center justify-between border-b p-4 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
           <div className="flex items-center gap-2">
             <div className="rounded-lg bg-yellow-500/20 p-1.5">
@@ -365,8 +371,6 @@ interface MemberRouletteModalProps {
 const ROULETTE_STORAGE_KEY = 'roulette_members';
 const ROULETTE_SELECTED_KEY = 'roulette_selected';
 
-
-
 const loadMembersFromStorage = (): TeamMember[] => {
   if (typeof window === 'undefined') return defaultTeamMembers;
   const stored = localStorage.getItem(ROULETTE_STORAGE_KEY);
@@ -424,7 +428,6 @@ export function MemberRouletteModal({ isOpen, onClose, theme }: MemberRouletteMo
 
   const isDark = theme === 'dark';
 
-  // Handle ESC key to close modal
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && isOpen) {
@@ -438,14 +441,12 @@ export function MemberRouletteModal({ isOpen, onClose, theme }: MemberRouletteMo
     };
   }, [isOpen, onClose]);
 
-  // Handle click outside to close
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
       onClose();
     }
   };
 
-  // Load members from storage on mount
   useEffect(() => {
     const loadedMembers = loadMembersFromStorage();
     const loadedSelected = loadSelectedFromStorage();
@@ -461,14 +462,12 @@ export function MemberRouletteModal({ isOpen, onClose, theme }: MemberRouletteMo
     setCurrentWheelMembers(eligible.filter(m => !validSelected.includes(m.name)));
   }, []);
 
-  // Save members to storage when they change
   useEffect(() => {
     if (members.length > 0) {
       saveMembersToStorage(members);
     }
   }, [members]);
 
-  // Save selected members to storage when they change
   useEffect(() => {
     saveSelectedToStorage(selectedMembers);
   }, [selectedMembers]);
@@ -625,6 +624,9 @@ export function MemberRouletteModal({ isOpen, onClose, theme }: MemberRouletteMo
       )}
 
       <div className={`relative w-full max-w-4xl rounded-2xl border shadow-2xl ${modalClass} animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto`}>
+        {/* 🎄 Corner decoration */}
+        <span className="pointer-events-none absolute right-14 top-3 select-none text-sm opacity-[0.2]" aria-hidden>🎄</span>
+
         {/* Header */}
         <div className={`flex items-center justify-between border-b p-4 sm:p-5 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
           <div className="flex items-center gap-2 sm:gap-3">
@@ -632,7 +634,7 @@ export function MemberRouletteModal({ isOpen, onClose, theme }: MemberRouletteMo
               <Award className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
             <div>
-              <h3 className={`text-lg sm:text-xl font-semibold ${textClass}`}>Member Roulette</h3>
+              <h3 className={`text-lg sm:text-xl font-semibold ${textClass}`}>Member Roulette 🎄</h3>
               <p className={`text-xs sm:text-sm ${mutedText}`}>Spin to randomly select a team member</p>
             </div>
           </div>
@@ -863,7 +865,7 @@ export function MemberRouletteModal({ isOpen, onClose, theme }: MemberRouletteMo
                   </div>
                 </div>
                 <div className="text-left">
-                  <p className={`text-xs sm:text-sm font-bold uppercase tracking-wider ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>Winner Selected!</p>
+                  <p className={`text-xs sm:text-sm font-bold uppercase tracking-wider ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>Winner Selected! 🎄</p>
                   <p className={`text-2xl sm:text-3xl font-extrabold ${textClass} mt-1`}>{selectedMember.name}</p>
                   <p className={`text-xs sm:text-sm mt-1 ${mutedText}`}>{selectedMember.role}</p>
                 </div>
@@ -962,6 +964,9 @@ export function TaskFormModal({
       onClick={handleBackdropClick}
     >
       <div className={`relative w-full max-w-2xl rounded-2xl border shadow-2xl ${modalClass} animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto`}>
+        {/* 🎄 Corner decoration */}
+        <span className="pointer-events-none absolute right-14 top-3 select-none text-sm opacity-[0.2]" aria-hidden>🎄</span>
+
         {/* Header */}
         <div className={`flex items-center justify-between border-b p-4 sm:p-5 ${isDark ? 'border-slate-700' : 'border-gray-200'}`}>
           <div className="flex items-center gap-2 sm:gap-3">
@@ -974,7 +979,7 @@ export function TaskFormModal({
             </div>
             <div>
               <h3 className={`text-lg sm:text-xl font-semibold ${textClass}`}>
-                {mode === 'add' ? 'Add New Task' : 'Edit Task'}
+                {mode === 'add' ? 'Add New Task 🎄' : 'Edit Task 🎄'}
               </h3>
               <p className={`text-xs sm:text-sm ${mutedText}`}>
                 {mode === 'add'
@@ -1001,7 +1006,7 @@ export function TaskFormModal({
             Segment is auto-filled by the sheet's formula and can't be set here.
           </div>
 
-          {/* ─── Dates Row (Date Requested | Date Assigned | Due Date) ─── */}
+          {/* ─── Dates Row ─── */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div>
               <label className={labelClass}>Date Requested</label>
@@ -1153,7 +1158,7 @@ export function TaskFormModal({
               }`}
             >
               {isSubmitting ? <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" /> : <Check className="h-4 w-4 sm:h-5 sm:w-5" />}
-              {mode === 'add' ? 'Add Task' : 'Save Changes'}
+              {mode === 'add' ? 'Add Task 🎄' : 'Save Changes 🎄'}
             </button>
           </div>
         </form>

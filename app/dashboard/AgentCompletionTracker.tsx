@@ -55,7 +55,6 @@ interface AgentCompletionTrackerProps {
 
 // ─── UTILITY FUNCTIONS ─────────────────────────────────────────────────────
 
-// Build the date string from LOCAL date components
 function toDateInputValue(d: Date) {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -93,7 +92,6 @@ type SbsTag = 'sbs' | 'non-sbs' | null;
 function detectSbsTag(remarks: string | null | undefined): SbsTag {
   if (!remarks) return null;
   const text = String(remarks).toUpperCase();
-  // Match "NON-SBS" / "NON SBS" first so it doesn't get caught by the SBS check
   if (/\bNON[\s-]?SBS\b/.test(text)) return 'non-sbs';
   if (/\bSBS\b/.test(text)) return 'sbs';
   return null;
@@ -196,7 +194,7 @@ function KPICard({ title, value, icon, subtitle, trend, isDark, delay = 0, gradi
           : 'border-gray-200 bg-white/80 backdrop-blur-sm hover:shadow-xl hover:shadow-gray-200/50'
       )}
     >
-      {/* 🎃 Corner seasonal emoji */}
+      {/* 🎄 Corner seasonal emoji */}
       <span
         className={cn(
           'pointer-events-none absolute right-2 top-2 select-none text-sm',
@@ -204,7 +202,7 @@ function KPICard({ title, value, icon, subtitle, trend, isDark, delay = 0, gradi
         )}
         aria-hidden
       >
-        🎃
+        🎄
       </span>
 
       <div className="p-5">
@@ -263,7 +261,6 @@ function CompletionRing({ rate, size = 80, strokeWidth = 6, isDark, showLabel = 
   return (
     <div className={cn('relative flex-shrink-0', className)} style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="transform -rotate-90">
-        {/* Background ring */}
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -272,7 +269,6 @@ function CompletionRing({ rate, size = 80, strokeWidth = 6, isDark, showLabel = 
           fill="none"
           className={isDark ? 'stroke-slate-700' : 'stroke-gray-200'}
         />
-        {/* Progress ring */}
         <motion.circle
           cx={size / 2}
           cy={size / 2}
@@ -328,7 +324,6 @@ function AgentCard({ stats, isExpanded, onToggle, onTaskClick, isDark, delay = 0
 
   const totalTasks = stats.completed + stats.ongoingNotCompleted + stats.excludedPendingCount + stats.excludedCancelledCount;
 
-  // Count SBS / Non-SBS tasks for this agent
   const sbsCounts = useMemo(() => {
     const allTasks = [
       ...stats.tasks.completedOnTime,
@@ -360,7 +355,7 @@ function AgentCard({ stats, isExpanded, onToggle, onTaskClick, isDark, delay = 0
           : 'border-gray-200 bg-white/80 backdrop-blur-sm hover:shadow-xl hover:shadow-gray-200/50'
       )}
     >
-      {/* 👻 Corner seasonal emoji */}
+      {/* ❄️ Corner seasonal emoji */}
       <span
         className={cn(
           'pointer-events-none absolute right-2 top-2 select-none text-sm',
@@ -368,16 +363,14 @@ function AgentCard({ stats, isExpanded, onToggle, onTaskClick, isDark, delay = 0
         )}
         aria-hidden
       >
-        👻
+        ❄️
       </span>
 
-      {/* Glow effect on hover */}
       <div className="absolute inset-0 rounded-2xl pointer-events-none opacity-0 transition-opacity duration-300 hover:opacity-100">
         <div className="absolute -inset-px rounded-2xl bg-gradient-to-r from-emerald-500/10 to-purple-500/10 blur-sm" />
       </div>
 
       <div className="relative p-4 sm:p-5">
-        {/* Header */}
         <div className="flex items-start gap-4">
           <CompletionRing rate={rate} size={72} isDark={isDark} />
 
@@ -422,7 +415,6 @@ function AgentCard({ stats, isExpanded, onToggle, onTaskClick, isDark, delay = 0
           </div>
         </div>
 
-        {/* Status chips */}
         <div className="mt-3 flex flex-wrap gap-1.5">
           {sbsCounts.sbs > 0 && (
             <span className={cn(
@@ -480,7 +472,6 @@ function AgentCard({ stats, isExpanded, onToggle, onTaskClick, isDark, delay = 0
           )}
         </div>
 
-        {/* Expand button */}
         <button
           onClick={onToggle}
           aria-expanded={isExpanded}
@@ -505,7 +496,6 @@ function AgentCard({ stats, isExpanded, onToggle, onTaskClick, isDark, delay = 0
           )}
         </button>
 
-        {/* Expanded task list */}
         <AnimatePresence>
           {isExpanded && (
             <motion.div
@@ -626,7 +616,6 @@ function TaskDetailModal({ task, isOpen, onClose, isDark }: TaskDetailModalProps
   const completedDate = task.date_completed ? new Date(task.date_completed) : null;
   const isLate = assignedDate && completedDate && completedDate > assignedDate;
 
-  // Timeline events
   const timelineEvents = [
     {
       label: 'Assigned',
@@ -673,7 +662,7 @@ function TaskDetailModal({ task, isOpen, onClose, isDark }: TaskDetailModalProps
         title={task.task}
         subtitle={
           <span className="flex items-center gap-2">
-            <span className="select-none" aria-hidden>🎃</span>
+            <span className="select-none" aria-hidden>🎄</span>
             #{task.rowIndex} · {task.brand}
             {isLate && (
               <span className={cn(
@@ -692,7 +681,6 @@ function TaskDetailModal({ task, isOpen, onClose, isDark }: TaskDetailModalProps
       />
 
       <div className="p-4 sm:p-6 space-y-6">
-        {/* Overview Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
           <div>
             <label className={cn('text-xs font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Status</label>
@@ -732,7 +720,6 @@ function TaskDetailModal({ task, isOpen, onClose, isDark }: TaskDetailModalProps
           </div>
         </div>
 
-        {/* Timeline */}
         <div>
           <h4 className={cn('text-sm font-semibold mb-3', isDark ? 'text-white' : 'text-gray-900')}>
             Timeline
@@ -744,7 +731,6 @@ function TaskDetailModal({ task, isOpen, onClose, isDark }: TaskDetailModalProps
 
               return (
                 <div key={idx} className="relative">
-                  {/* Vertical line */}
                   {idx < timelineEvents.length - 1 && (
                     <div className={cn(
                       'absolute left-[-1px] top-6 w-0.5 h-10',
@@ -774,7 +760,6 @@ function TaskDetailModal({ task, isOpen, onClose, isDark }: TaskDetailModalProps
           </div>
         </div>
 
-        {/* Late warning */}
         {isLate && (
           <div className={cn(
             'rounded-xl border p-4',
@@ -799,7 +784,6 @@ function TaskDetailModal({ task, isOpen, onClose, isDark }: TaskDetailModalProps
           </div>
         )}
 
-        {/* Remarks */}
         {task.remarks && (
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -812,7 +796,6 @@ function TaskDetailModal({ task, isOpen, onClose, isDark }: TaskDetailModalProps
           </div>
         )}
 
-        {/* Reason for Pending */}
         {task.reason_for_pending && (
           <div>
             <label className={cn('text-xs font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>Reason for Pending</label>
@@ -830,7 +813,6 @@ function TaskDetailModal({ task, isOpen, onClose, isDark }: TaskDetailModalProps
           </div>
         )}
 
-        {/* BC Links */}
         {task.bc_links && (
           <div>
             <label className={cn('text-xs font-medium', isDark ? 'text-slate-400' : 'text-gray-500')}>BC Links</label>
@@ -886,7 +868,6 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Use US Eastern Time for the selected date
   const [selectedDate, setSelectedDate] = useState(() => {
     const now = new Date();
     const usDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
@@ -899,6 +880,13 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
   const [showTaskDetailModal, setShowTaskDetailModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+
+  // 🎄 Christmas decoration opacity (tuned per theme)
+  const deco = {
+    emoji: isDark ? 'opacity-[0.05]' : 'opacity-[0.04]',
+    emojiSoft: isDark ? 'opacity-[0.04]' : 'opacity-[0.03]',
+    corner: isDark ? 'opacity-[0.06]' : 'opacity-[0.04]',
+  };
 
   const loadTasks = async () => {
     setIsLoading(true);
@@ -946,7 +934,6 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
     return Array.from(names).sort();
   }, [tasks]);
 
-  // Compute stats
   const allStats = useMemo(() => {
     return computeAllAgentsDailyCompletion(tasks, targetDate);
   }, [tasks, targetDate]);
@@ -957,7 +944,6 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
     return single.totalConsidered > 0 || single.excludedPendingCount > 0 || single.excludedCancelledCount > 0 ? [single] : [];
   }, [tasks, targetDate, selectedAgent, allStats]);
 
-  // Filter stats by search
   const filteredStats = useMemo(() => {
     if (!searchTerm.trim()) return dayStats;
     const term = searchTerm.toLowerCase().trim();
@@ -966,19 +952,13 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
     );
   }, [dayStats, searchTerm]);
 
-  // Compute KPI values
   const kpis = useMemo(() => {
     const totalAgents = allStats.length;
     const totalCompleted = allStats.reduce((sum, s) => sum + s.completed, 0);
     const totalOngoing = allStats.reduce((sum, s) => sum + s.ongoingNotCompleted, 0);
     const totalLate = allStats.reduce((sum, s) => sum + s.tasks.completedLate.length, 0);
 
-    return {
-      totalAgents,
-      totalCompleted,
-      totalOngoing,
-      totalLate,
-    };
+    return { totalAgents, totalCompleted, totalOngoing, totalLate };
   }, [allStats]);
 
   const shiftDate = useCallback((days: number) => {
@@ -1012,38 +992,40 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
 
   return (
     <>
-      {/* ─── 🎃 Halloween decorations (purely visual, pointer-events-none) ─── */}
+      {/* ─── 🎄 Christmas decorations (purely visual, pointer-events-none) ─── */}
       <>
-        {/* Purple/orange haze — dark: stronger · light: subtle */}
+        {/* Red/green haze */}
         <div
           className={cn(
             'pointer-events-none fixed inset-0 z-0',
             isDark
-              ? 'bg-[radial-gradient(ellipse_at_top,_rgba(168,85,247,0.10),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(249,115,22,0.08),_transparent_50%)]'
-              : 'bg-[radial-gradient(ellipse_at_top,_rgba(249,115,22,0.05),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(168,85,247,0.04),_transparent_50%)]'
+              ? 'bg-[radial-gradient(ellipse_at_top,_rgba(220,38,38,0.10),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(22,163,74,0.08),_transparent_50%)]'
+              : 'bg-[radial-gradient(ellipse_at_top,_rgba(220,38,38,0.05),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(22,163,74,0.04),_transparent_50%)]'
           )}
           aria-hidden
         />
 
-        {/* Floating spooky emojis — very subtle, non-interactive */}
+        {/* Floating Christmas emojis */}
         <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden>
-          <span className={cn('absolute left-[6%] top-[18%] select-none text-4xl motion-safe:animate-pulse', isDark ? 'opacity-[0.06]' : 'opacity-[0.05]')}>🎃</span>
-          <span className={cn('absolute right-[10%] top-[10%] select-none text-3xl motion-safe:animate-pulse', isDark ? 'opacity-[0.06]' : 'opacity-[0.05]')}>🦇</span>
-          <span className={cn('absolute left-[18%] bottom-[20%] select-none text-3xl', isDark ? 'opacity-[0.05]' : 'opacity-[0.04]')}>👻</span>
-          <span className={cn('absolute right-[16%] bottom-[14%] select-none text-4xl motion-safe:animate-pulse', isDark ? 'opacity-[0.06]' : 'opacity-[0.05]')}>🕷️</span>
-          <span className={cn('absolute left-[45%] top-[6%] select-none text-3xl', isDark ? 'opacity-[0.05]' : 'opacity-[0.04]')}>🕸️</span>
-          <span className={cn('absolute right-[40%] bottom-[8%] select-none text-3xl', isDark ? 'opacity-[0.05]' : 'opacity-[0.04]')}>💀</span>
-          <span className={cn('absolute left-[72%] top-[32%] select-none text-2xl motion-safe:animate-pulse', isDark ? 'opacity-[0.05]' : 'opacity-[0.04]')}>🧙</span>
-          <span className={cn('absolute left-[30%] top-[52%] select-none text-2xl', isDark ? 'opacity-[0.05]' : 'opacity-[0.04]')}>🍬</span>
+          <span className={cn('absolute left-[4%] top-[20%] select-none text-4xl motion-safe:animate-pulse', deco.emoji)}>🎄</span>
+          <span className={cn('absolute right-[6%] top-[12%] select-none text-3xl motion-safe:animate-pulse', deco.emoji)}>❄️</span>
+          <span className={cn('absolute left-[10%] bottom-[18%] select-none text-3xl', deco.emojiSoft)}>⛄</span>
+          <span className={cn('absolute right-[8%] bottom-[12%] select-none text-4xl motion-safe:animate-pulse', deco.emoji)}>🎅</span>
+          <span className={cn('absolute left-[45%] top-[4%] select-none text-3xl', deco.emojiSoft)}>⭐</span>
+          <span className={cn('absolute right-[40%] bottom-[6%] select-none text-3xl', deco.emojiSoft)}>🎁</span>
+          <span className={cn('absolute left-[75%] top-[35%] select-none text-2xl motion-safe:animate-pulse', deco.emojiSoft)}>🦌</span>
+          <span className={cn('absolute left-[25%] top-[55%] select-none text-2xl', deco.emojiSoft)}>🍪</span>
+          <span className={cn('absolute right-[25%] top-[65%] select-none text-3xl', deco.emojiSoft)}>🔔</span>
+          <span className={cn('absolute left-[50%] bottom-[25%] select-none text-2xl motion-safe:animate-pulse', deco.emojiSoft)}>🌟</span>
         </div>
 
-        {/* Corner cobwebs — top-left / top-right (flipped) */}
-        <div className={cn('pointer-events-none fixed left-0 top-0 z-0 select-none text-7xl', isDark ? 'opacity-[0.07]' : 'opacity-[0.05]')} aria-hidden>🕸️</div>
-        <div className={cn('pointer-events-none fixed right-0 top-0 z-0 -scale-x-100 select-none text-7xl', isDark ? 'opacity-[0.07]' : 'opacity-[0.05]')} aria-hidden>🕸️</div>
+        {/* Corner snowflakes */}
+        <div className={cn('pointer-events-none fixed left-0 top-0 z-0 select-none text-7xl', deco.corner)} aria-hidden>❄️</div>
+        <div className={cn('pointer-events-none fixed right-0 top-0 z-0 -scale-x-100 select-none text-7xl', deco.corner)} aria-hidden>❄️</div>
 
-        {/* Bottom graveyard + bat */}
-        <div className={cn('pointer-events-none fixed bottom-0 right-0 z-0 select-none text-6xl', isDark ? 'opacity-[0.05]' : 'opacity-[0.04]')} aria-hidden>🪦</div>
-        <div className={cn('pointer-events-none fixed bottom-[10%] left-[8%] z-0 select-none text-4xl motion-safe:animate-pulse', isDark ? 'opacity-[0.05]' : 'opacity-[0.04]')} aria-hidden>🦇</div>
+        {/* Bottom-right gift + bottom-left snowman */}
+        <div className={cn('pointer-events-none fixed bottom-0 right-0 z-0 select-none text-6xl', deco.emojiSoft)} aria-hidden>🎁</div>
+        <div className={cn('pointer-events-none fixed bottom-[8%] left-[5%] z-0 select-none text-4xl motion-safe:animate-pulse', deco.emojiSoft)} aria-hidden>⛄</div>
       </>
 
       <div className="relative z-10 flex h-full flex-col bg-gradient-to-b from-transparent to-transparent">
@@ -1065,10 +1047,10 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
                 >
                   <span className="relative inline-flex">
                     <Zap className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
-                    <span className="pointer-events-none absolute -right-2 -top-2 select-none text-xs" aria-hidden>🎃</span>
+                    <span className="pointer-events-none absolute -right-2 -top-2 select-none text-xs" aria-hidden>🎄</span>
                   </span>
                   Daily Completion
-                  <span className="text-sm font-normal text-emerald-500 ml-2">Tracker 🦇</span>
+                  <span className="text-sm font-normal text-emerald-500 ml-2">Tracker ❄️</span>
                 </motion.h1>
                 <motion.p
                   initial={{ opacity: 0 }}
@@ -1076,10 +1058,10 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
                   transition={{ delay: 0.1 }}
                   className={cn('text-sm mt-1', isDark ? 'text-slate-400' : 'text-gray-500')}
                 >
-                  Monitor daily productivity, completion rate, and team performance · Spooky season edition 🎃
+                  Monitor daily productivity, completion rate, and team performance · Merry Christmas edition 🎄
                 </motion.p>
 
-                {/* 🎃 Happy Halloween ribbon */}
+                {/* 🎄 Merry Christmas ribbon */}
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -1087,16 +1069,16 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
                   className={cn(
                     'mt-2 inline-flex flex-wrap items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium',
                     isDark
-                      ? 'border-purple-500/20 bg-purple-500/5 text-purple-300/80'
-                      : 'border-purple-300/50 bg-purple-50 text-purple-700/80'
+                      ? 'border-red-500/20 bg-red-500/5 text-red-300/80'
+                      : 'border-red-300/50 bg-red-50 text-red-700/80'
                   )}
                 >
-                  <span aria-hidden>🎃</span>
-                  <span>Happy Halloween · Spooky Season</span>
-                  <span aria-hidden>🦇</span>
-                  <span className={isDark ? 'text-orange-400/70' : 'text-orange-500/80'}>·</span>
-                  <span className={isDark ? 'text-orange-400/70' : 'text-orange-500/80'}>stay spooky</span>
-                  <span aria-hidden>👻</span>
+                  <span aria-hidden>🎄</span>
+                  <span>Merry Christmas · Holiday Season</span>
+                  <span aria-hidden>🎅</span>
+                  <span className={isDark ? 'text-green-400/70' : 'text-green-600/80'}>·</span>
+                  <span className={isDark ? 'text-green-400/70' : 'text-green-600/80'}>stay jolly</span>
+                  <span aria-hidden>❄️</span>
                 </motion.div>
               </div>
 
@@ -1128,7 +1110,6 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
 
             {/* ─── FILTER TOOLBAR ───────────────────────────────────────────── */}
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-              {/* Date Navigation */}
               <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                 <button
                   onClick={(e) => {
@@ -1198,7 +1179,6 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
                 </Button>
               </div>
 
-              {/* Search and Filters */}
               <div className="flex-1 flex items-center gap-2 min-w-0">
                 <div className="relative flex-1 min-w-[120px]">
                   <Search className={cn(
@@ -1230,7 +1210,6 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
                   )}
                 </div>
 
-                {/* Agent Dropdown */}
                 <div className="relative flex-shrink-0 w-32 sm:w-40">
                   <User className={cn(
                     'absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none',
@@ -1285,11 +1264,10 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
               theme={theme}
               icon={Calendar}
               title="No tasks assigned on this date"
-              description={selectedAgent !== 'all' ? `for ${selectedAgent} · even ghosts took the day off 👻` : 'Try selecting a different day 🎃'}
+              description={selectedAgent !== 'all' ? `for ${selectedAgent} · even snowmen took the day off ⛄` : 'Try selecting a different day 🎄'}
             />
           ) : (
             <>
-              {/* ─── KPI CARDS ───────────────────────────────────────────────── */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 <KPICard
                   title="Total Agents"
@@ -1336,13 +1314,12 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
                 />
               </div>
 
-              {/* ─── AGENT CARDS ────────────────────────────────────────────── */}
               {filteredStats.length === 0 ? (
                 <EmptyState
                   theme={theme}
                   icon={Search}
                   title="No agents found"
-                  description="Try adjusting your search or filters 🕸️"
+                  description="Try adjusting your search or filters 🎄"
                 />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -1363,7 +1340,6 @@ export default function AgentCompletionTracker({ theme, currentUserEmail }: Agen
           )}
         </div>
 
-        {/* ─── TASK DETAIL MODAL ───────────────────────────────────────────── */}
         <TaskDetailModal
           task={selectedTask}
           isOpen={showTaskDetailModal}

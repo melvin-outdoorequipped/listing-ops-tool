@@ -182,6 +182,13 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
 
   const isDark = theme === 'dark';
 
+  // 🎄 Christmas decoration opacity (tuned per theme)
+  const deco = {
+    emoji: isDark ? 'opacity-[0.05]' : 'opacity-[0.04]',
+    emojiSoft: isDark ? 'opacity-[0.04]' : 'opacity-[0.03]',
+    corner: isDark ? 'opacity-[0.06]' : 'opacity-[0.04]',
+  };
+
   const parsed = useMemo(() => parseSkus(skus), [skus]);
   const hasValidSkus = parsed.uniqueSkus.length > 0;
 
@@ -780,390 +787,437 @@ export default function SkuProcessor({ theme = 'dark' }: SkuProcessorProps) {
     : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400';
 
   return (
-    <div className={`w-full max-w-full space-y-6 overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 p-4 bg-slate-950' : ''}`}>
-      {/* Feedback Toast */}
-      {feedback && (
-        <div
-          className={`fixed top-4 right-4 z-50 max-w-sm rounded-xl border p-4 shadow-2xl animate-slide-in ${
-            feedback.type === 'success'
-              ? isDark ? 'border-emerald-500/30 bg-emerald-900/90 text-emerald-100' : 'border-emerald-300 bg-emerald-100 text-emerald-800'
-              : feedback.type === 'error'
-                ? isDark ? 'border-red-500/30 bg-red-900/90 text-red-100' : 'border-red-300 bg-red-100 text-red-800'
-                : feedback.type === 'warning'
-                  ? isDark ? 'border-yellow-500/30 bg-yellow-900/90 text-yellow-100' : 'border-yellow-300 bg-yellow-100 text-yellow-800'
-                  : isDark ? 'border-blue-500/30 bg-blue-900/90 text-blue-100' : 'border-blue-300 bg-blue-100 text-blue-800'
-          }`}
-        >
-          <div className="flex items-start gap-3">
-            {feedback.type === 'success' && <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-400" />}
-            {feedback.type === 'error' && <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-400" />}
-            {feedback.type === 'warning' && <AlertTriangle className="h-5 w-5 flex-shrink-0 text-yellow-400" />}
-            {feedback.type === 'info' && <Info className="h-5 w-5 flex-shrink-0 text-blue-400" />}
-            <p className="text-sm font-medium">{feedback.message}</p>
+    <>
+      {/* ─── 🎄 Christmas decorations (purely visual, pointer-events-none) ─── */}
+      {!isFullscreen && (
+        <>
+          {/* Red/green haze */}
+          <div
+            className={`pointer-events-none fixed inset-0 z-0 ${
+              isDark
+                ? 'bg-[radial-gradient(ellipse_at_top,_rgba(220,38,38,0.10),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(22,163,74,0.08),_transparent_50%)]'
+                : 'bg-[radial-gradient(ellipse_at_top,_rgba(220,38,38,0.05),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(22,163,74,0.04),_transparent_50%)]'
+            }`}
+            aria-hidden
+          />
+
+          {/* Floating Christmas emojis */}
+          <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden>
+            <span className={`absolute left-[4%] top-[20%] select-none text-4xl motion-safe:animate-pulse ${deco.emoji}`}>🎄</span>
+            <span className={`absolute right-[6%] top-[12%] select-none text-3xl motion-safe:animate-pulse ${deco.emoji}`}>❄️</span>
+            <span className={`absolute left-[10%] bottom-[18%] select-none text-3xl ${deco.emojiSoft}`}>⛄</span>
+            <span className={`absolute right-[8%] bottom-[12%] select-none text-4xl motion-safe:animate-pulse ${deco.emoji}`}>🎅</span>
+            <span className={`absolute left-[45%] top-[4%] select-none text-3xl ${deco.emojiSoft}`}>⭐</span>
+            <span className={`absolute right-[40%] bottom-[6%] select-none text-3xl ${deco.emojiSoft}`}>🎁</span>
+            <span className={`absolute left-[75%] top-[35%] select-none text-2xl motion-safe:animate-pulse ${deco.emojiSoft}`}>🦌</span>
+            <span className={`absolute left-[25%] top-[55%] select-none text-2xl ${deco.emojiSoft}`}>🍪</span>
+            <span className={`absolute right-[25%] top-[65%] select-none text-3xl ${deco.emojiSoft}`}>🔔</span>
+            <span className={`absolute left-[50%] bottom-[25%] select-none text-2xl motion-safe:animate-pulse ${deco.emojiSoft}`}>🌟</span>
           </div>
-        </div>
+
+          {/* Corner snowflakes */}
+          <div className={`pointer-events-none fixed left-0 top-0 z-0 select-none text-7xl ${deco.corner}`} aria-hidden>❄️</div>
+          <div className={`pointer-events-none fixed right-0 top-0 z-0 -scale-x-100 select-none text-7xl ${deco.corner}`} aria-hidden>❄️</div>
+
+          {/* Bottom-right gift + bottom-left snowman */}
+          <div className={`pointer-events-none fixed bottom-0 right-0 z-0 select-none text-6xl ${deco.emojiSoft}`} aria-hidden>🎁</div>
+          <div className={`pointer-events-none fixed bottom-[8%] left-[5%] z-0 select-none text-4xl motion-safe:animate-pulse ${deco.emojiSoft}`} aria-hidden>⛄</div>
+        </>
       )}
 
-      {/* Stats Cards */}
-      {showStats && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <StatCard
-            label="Total Batches"
-            value={stats.total}
-            icon={<Package className="h-4 w-4" />}
-            color="text-blue-400"
-            bg="bg-blue-500/20"
-            theme={theme}
-          />
-          <StatCard
-            label="Completed"
-            value={stats.completed}
-            icon={<CheckCircle2 className="h-4 w-4" />}
-            color="text-emerald-400"
-            bg="bg-emerald-500/20"
-            theme={theme}
-          />
-          <StatCard
-            label="Processing"
-            value={stats.processing}
-            icon={<Loader2 className="h-4 w-4 animate-spin" />}
-            color="text-orange-400"
-            bg="bg-orange-500/20"
-            theme={theme}
-          />
-          <StatCard
-            label="Failed"
-            value={stats.failed}
-            icon={<XCircle className="h-4 w-4" />}
-            color="text-red-400"
-            bg="bg-red-500/20"
-            theme={theme}
-          />
-          <StatCard
-            label="Total SKUs"
-            value={stats.totalSkus}
-            icon={<Layers className="h-4 w-4" />}
-            color="text-purple-400"
-            bg="bg-purple-500/20"
-            theme={theme}
-          />
-          <StatCard
-            label="Match Rate"
-            value={`${stats.matchRate}%`}
-            icon={<TrendingUp className="h-4 w-4" />}
-            color="text-cyan-400"
-            bg="bg-cyan-500/20"
-            theme={theme}
-          />
-        </div>
-      )}
+      <div className={`relative z-10 w-full max-w-full space-y-6 overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 p-4 bg-slate-950' : ''}`}>
+        {/* Feedback Toast */}
+        {feedback && (
+          <div
+            className={`fixed top-4 right-4 z-50 max-w-sm rounded-xl border p-4 shadow-2xl animate-slide-in ${
+              feedback.type === 'success'
+                ? isDark ? 'border-emerald-500/30 bg-emerald-900/90 text-emerald-100' : 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                : feedback.type === 'error'
+                  ? isDark ? 'border-red-500/30 bg-red-900/90 text-red-100' : 'border-red-300 bg-red-100 text-red-800'
+                  : feedback.type === 'warning'
+                    ? isDark ? 'border-yellow-500/30 bg-yellow-900/90 text-yellow-100' : 'border-yellow-300 bg-yellow-100 text-yellow-800'
+                    : isDark ? 'border-blue-500/30 bg-blue-900/90 text-blue-100' : 'border-blue-300 bg-blue-100 text-blue-800'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              {feedback.type === 'success' && <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-400" />}
+              {feedback.type === 'error' && <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-400" />}
+              {feedback.type === 'warning' && <AlertTriangle className="h-5 w-5 flex-shrink-0 text-yellow-400" />}
+              {feedback.type === 'info' && <Info className="h-5 w-5 flex-shrink-0 text-blue-400" />}
+              <p className="text-sm font-medium">
+                {feedback.message}
+                <span className="ml-1.5 select-none" aria-hidden>
+                  {feedback.type === 'success' ? '🎄' : feedback.type === 'error' ? '⛄' : feedback.type === 'warning' ? '❄️' : '🎅'}
+                </span>
+              </p>
+            </div>
+          </div>
+        )}
 
-      {/* Input Panel */}
-      <div className={`rounded-xl border p-4 shadow-lg sm:p-5 ${pageBg}`}>
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="mb-3 flex items-start justify-between">
-              <div className="flex items-start gap-2">
-                <UploadCloud className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />
-                <div className="min-w-0">
-                  <h2 className={`break-words text-sm font-semibold uppercase tracking-wider ${
-                    isDark ? 'text-slate-200' : 'text-gray-900'
-                  }`}>
-                    Shopkeep Consolidated Tool
-                  </h2>
-                  <p className={`mt-1 text-xs leading-5 ${
-                    isDark ? 'text-slate-400' : 'text-gray-500'
-                  }`}>
-                    Paste SKUs below, process, download the export, and track the batch in the table.
-                  </p>
+        {/* Stats Cards */}
+        {showStats && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <StatCard
+              label="Total Batches"
+              value={stats.total}
+              icon={<Package className="h-4 w-4" />}
+              color="text-blue-400"
+              bg="bg-blue-500/20"
+              theme={theme}
+            />
+            <StatCard
+              label="Completed"
+              value={stats.completed}
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              color="text-emerald-400"
+              bg="bg-emerald-500/20"
+              theme={theme}
+            />
+            <StatCard
+              label="Processing"
+              value={stats.processing}
+              icon={<Loader2 className="h-4 w-4 animate-spin" />}
+              color="text-orange-400"
+              bg="bg-orange-500/20"
+              theme={theme}
+            />
+            <StatCard
+              label="Failed"
+              value={stats.failed}
+              icon={<XCircle className="h-4 w-4" />}
+              color="text-red-400"
+              bg="bg-red-500/20"
+              theme={theme}
+            />
+            <StatCard
+              label="Total SKUs"
+              value={stats.totalSkus}
+              icon={<Layers className="h-4 w-4" />}
+              color="text-purple-400"
+              bg="bg-purple-500/20"
+              theme={theme}
+            />
+            <StatCard
+              label="Match Rate"
+              value={`${stats.matchRate}%`}
+              icon={<TrendingUp className="h-4 w-4" />}
+              color="text-cyan-400"
+              bg="bg-cyan-500/20"
+              theme={theme}
+            />
+          </div>
+        )}
+
+        {/* Input Panel */}
+        <div className={`relative rounded-xl border p-4 shadow-lg sm:p-5 ${pageBg}`}>
+          <span className="pointer-events-none absolute right-3 top-2 select-none text-sm opacity-[0.18]" aria-hidden>🎄</span>
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="mb-3 flex items-start justify-between">
+                <div className="flex items-start gap-2">
+                  <UploadCloud className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-500" />
+                  <div className="min-w-0">
+                    <h2 className={`break-words text-sm font-semibold uppercase tracking-wider ${
+                      isDark ? 'text-slate-200' : 'text-gray-900'
+                    }`}>
+                      Shopkeep Consolidated Tool 🎄
+                    </h2>
+                    <p className={`mt-1 text-xs leading-5 ${
+                      isDark ? 'text-slate-400' : 'text-gray-500'
+                    }`}>
+                      Paste SKUs below, process, download the export, and track the batch in the table.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowStats(!showStats)}
+                    className={`rounded-lg p-1.5 transition-colors ${
+                      isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-gray-100 text-gray-500'
+                    }`}
+                    title="Toggle stats"
+                  >
+                    <BarChart2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleFullscreen}
+                    className={`rounded-lg p-1.5 transition-colors ${
+                      isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-gray-100 text-gray-500'
+                    }`}
+                    title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                  >
+                    {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => setShowStats(!showStats)}
-                  className={`rounded-lg p-1.5 transition-colors ${
-                    isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-gray-100 text-gray-500'
-                  }`}
-                  title="Toggle stats"
-                >
-                  <BarChart2 className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleFullscreen}
-                  className={`rounded-lg p-1.5 transition-colors ${
-                    isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-gray-100 text-gray-500'
-                  }`}
-                  title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-                >
-                  {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                </button>
+              <div className="relative">
+                <textarea
+                  ref={inputRef}
+                  className={`h-40 w-full resize-none rounded-lg border p-3 font-mono text-xs focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-60 sm:h-36 lg:h-32 ${inputClass}`}
+                  placeholder={`Enter SKUs one per line:\nSKU12345\nSKU67890\nSKU11111`}
+                  value={skus}
+                  onChange={(event) => setSkus(event.target.value)}
+                  disabled={isProcessing}
+                  spellCheck={false}
+                />
+                {skus && (
+                  <button
+                    type="button"
+                    onClick={handleCopySkus}
+                    className={`absolute right-2 top-2 rounded-lg p-1.5 transition-colors ${
+                      isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-gray-100 text-gray-500'
+                    }`}
+                    title="Copy SKUs"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             </div>
-            <div className="relative">
-              <textarea
-                ref={inputRef}
-                className={`h-40 w-full resize-none rounded-lg border p-3 font-mono text-xs focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-60 sm:h-36 lg:h-32 ${inputClass}`}
-                placeholder={`Enter SKUs one per line:\nSKU12345\nSKU67890\nSKU11111`}
-                value={skus}
-                onChange={(event) => setSkus(event.target.value)}
-                disabled={isProcessing}
-                spellCheck={false}
-              />
-              {skus && (
+
+            <div className="w-full xl:w-80">
+              <div className="mb-3 grid grid-cols-3 gap-2">
+                <MiniStat label="Rows" value={parsed.rawSkus.length} theme={theme} />
+                <MiniStat label="Unique" value={parsed.uniqueSkus.length} theme={theme} />
+                <MiniStat label="Dupes" value={parsed.duplicateCount} theme={theme} />
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto] xl:grid-cols-1 2xl:grid-cols-[1fr_auto_auto]">
                 <button
                   type="button"
-                  onClick={handleCopySkus}
-                  className={`absolute right-2 top-2 rounded-lg p-1.5 transition-colors ${
-                    isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-gray-100 text-gray-500'
-                  }`}
-                  title="Copy SKUs"
+                  onClick={handleProcess}
+                  disabled={!hasValidSkus || isProcessing}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.02] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
                 >
-                  <Copy className="h-3.5 w-3.5" />
+                  {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                  {isProcessing ? 'Processing...' : 'Process SKUs 🎄'}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={loadSample}
+                  disabled={isProcessing}
+                  className={`inline-flex w-full items-center justify-center rounded-lg px-3 py-2.5 text-sm transition-colors disabled:opacity-50 sm:w-auto xl:w-full 2xl:w-auto ${
+                    isDark
+                      ? 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  <span className="ml-2 hidden sm:inline">Sample</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={clearInput}
+                  disabled={isProcessing || !hasValidSkus}
+                  className={`inline-flex w-full items-center justify-center rounded-lg px-3 py-2.5 transition-colors disabled:opacity-50 sm:w-auto xl:w-full 2xl:w-auto ${
+                    isDark
+                      ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30'
+                      : 'bg-red-100 text-red-700 hover:bg-red-200'
+                  }`}
+                  title="Clear input"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span className="ml-2 hidden sm:inline">Clear</span>
+                </button>
+              </div>
+
+              {parsed.duplicateCount > 0 && (
+                <div className={`mt-3 rounded-lg border px-3 py-2 text-xs leading-5 ${
+                  isDark
+                    ? 'border-yellow-500/30 bg-yellow-600/10 text-yellow-400'
+                    : 'border-yellow-300 bg-yellow-100 text-yellow-800'
+                }`}>
+                  ⚠️ Duplicate SKUs detected. Only unique SKUs will be processed.
+                </div>
               )}
             </div>
           </div>
-
-          <div className="w-full xl:w-80">
-            <div className="mb-3 grid grid-cols-3 gap-2">
-              <MiniStat label="Rows" value={parsed.rawSkus.length} theme={theme} />
-              <MiniStat label="Unique" value={parsed.uniqueSkus.length} theme={theme} />
-              <MiniStat label="Dupes" value={parsed.duplicateCount} theme={theme} />
-            </div>
-
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto] xl:grid-cols-1 2xl:grid-cols-[1fr_auto_auto]">
-              <button
-                type="button"
-                onClick={handleProcess}
-                disabled={!hasValidSkus || isProcessing}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.02] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
-              >
-                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                {isProcessing ? 'Processing...' : 'Process SKUs'}
-              </button>
-
-              <button
-                type="button"
-                onClick={loadSample}
-                disabled={isProcessing}
-                className={`inline-flex w-full items-center justify-center rounded-lg px-3 py-2.5 text-sm transition-colors disabled:opacity-50 sm:w-auto xl:w-full 2xl:w-auto ${
-                  isDark
-                    ? 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                <FileSpreadsheet className="h-4 w-4" />
-                <span className="ml-2 hidden sm:inline">Sample</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={clearInput}
-                disabled={isProcessing || !hasValidSkus}
-                className={`inline-flex w-full items-center justify-center rounded-lg px-3 py-2.5 transition-colors disabled:opacity-50 sm:w-auto xl:w-full 2xl:w-auto ${
-                  isDark
-                    ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30'
-                    : 'bg-red-100 text-red-700 hover:bg-red-200'
-                }`}
-                title="Clear input"
-              >
-                <Trash2 className="h-4 w-4" />
-                <span className="ml-2 hidden sm:inline">Clear</span>
-              </button>
-            </div>
-
-            {parsed.duplicateCount > 0 && (
-              <div className={`mt-3 rounded-lg border px-3 py-2 text-xs leading-5 ${
-                isDark
-                  ? 'border-yellow-500/30 bg-yellow-600/10 text-yellow-400'
-                  : 'border-yellow-300 bg-yellow-100 text-yellow-800'
-              }`}>
-                ⚠️ Duplicate SKUs detected. Only unique SKUs will be processed.
-              </div>
-            )}
-          </div>
         </div>
-      </div>
 
-      {/* Batch History */}
-      <div className={`overflow-hidden rounded-xl border shadow-lg ${pageBg}`}>
-        <div className={`flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
-          isDark ? 'border-slate-700/50' : 'border-gray-200'
-        }`}>
-          <div className="min-w-0">
-            <h3 className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
-              Batch Import History
-            </h3>
-            <p className={`mt-1 text-xs leading-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-              {showAllBatches ? '👥 Showing all batches from all users' : '👤 Showing only your batches'}
-              <span className="ml-2">· {filteredBatches.length} batches</span>
-            </p>
-          </div>
+        {/* Batch History */}
+        <div className={`relative overflow-hidden rounded-xl border shadow-lg ${pageBg}`}>
+          <span className="pointer-events-none absolute right-3 top-2 select-none text-sm opacity-[0.18]" aria-hidden>❄️</span>
+          <div className={`flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
+            isDark ? 'border-slate-700/50' : 'border-gray-200'
+          }`}>
+            <div className="min-w-0">
+              <h3 className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
+                Batch Import History 🎄
+              </h3>
+              <p className={`mt-1 text-xs leading-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                {showAllBatches ? '👥 Showing all batches from all users' : '👤 Showing only your batches'}
+                <span className="ml-2">· {filteredBatches.length} batches</span>
+              </p>
+            </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={toggleFilter}
-              disabled={isLoadingBatches}
-              className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 ${
-                showAllBatches
-                  ? isDark
-                    ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400'
-                    : 'border-emerald-500 bg-emerald-50 text-emerald-600'
-                  : isDark
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={toggleFilter}
+                disabled={isLoadingBatches}
+                className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 ${
+                  showAllBatches
+                    ? isDark
+                      ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400'
+                      : 'border-emerald-500 bg-emerald-50 text-emerald-600'
+                    : isDark
+                      ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-800'
+                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {showAllBatches ? <Users className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
+                {showAllBatches ? 'All' : 'My'}
+              </button>
+
+              <button
+                type="button"
+                onClick={refreshBatches}
+                disabled={isLoadingBatches}
+                className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 sm:w-auto ${
+                  isDark
                     ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-800'
                     : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              {showAllBatches ? <Users className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
-              {showAllBatches ? 'All' : 'My'}
-            </button>
-
-            <button
-              type="button"
-              onClick={refreshBatches}
-              disabled={isLoadingBatches}
-              className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 sm:w-auto ${
-                isDark
-                  ? 'border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-800'
-                  : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              {isLoadingBatches ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className={`border-b px-4 py-3 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
-              <Search className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${isDark ? 'text-slate-400' : 'text-gray-400'}`} />
-              <input
-                type="text"
-                placeholder="Search by batch ID, filename, user, or brand..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className={`w-full rounded-lg border pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass}`}
-              />
-            </div>
-            <select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value as any)}
-              className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass}`}
-            >
-              <option value="all">All Statuses</option>
-              <option value="completed">✅ Completed</option>
-              <option value="processing">⏳ Processing</option>
-              <option value="pending">⏰ Pending</option>
-              <option value="failed">❌ Failed</option>
-            </select>
-          </div>
-        </div>
-
-        {isLoadingBatches ? (
-          <div className="px-6 py-16 text-center">
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-emerald-500" />
-            <p className={`mt-3 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-              Loading your batches...
-            </p>
-          </div>
-        ) : filteredBatches.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <UploadCloud className={`mx-auto h-12 w-12 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
-            <p className={`mt-3 text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
-              {searchTerm || statusFilter !== 'all' ? 'No matching batches found' : 'No batch records yet'}
-            </p>
-            <p className={`mt-1 text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
-              {searchTerm || statusFilter !== 'all' 
-                ? 'Try adjusting your search or filter criteria'
-                : 'Process SKUs above to create your first batch record.'}
-            </p>
-            {(searchTerm || statusFilter !== 'all') && (
-              <button
-                type="button"
-                onClick={() => { setSearchTerm(''); setStatusFilter('all'); }}
-                className={`mt-3 text-sm text-emerald-400 hover:underline`}
+                }`}
               >
-                Clear filters
+                {isLoadingBatches ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Refresh
               </button>
-            )}
+            </div>
           </div>
-        ) : (
-          <>
-            {/* Mobile Cards */}
-            <div className="grid grid-cols-1 gap-3 p-3 lg:hidden">
-              {filteredBatches.map((batch) => (
-                <MobileBatchCard
-                  key={batch.id}
-                  batch={batch}
-                  theme={theme}
-                  onView={() => setSelectedBatch(batch)}
-                  onDelete={() => handleDeleteBatch(batch)}
-                  onDownload={() => handleDownloadSummary(batch)}
-                  onExport={() => handleDownloadExport(batch)}
-                  onRefresh={refreshBatches}
-                  isAdmin={isAdmin}
-                  currentUserId={userId}
-                />
-              ))}
-            </div>
 
-            {/* Desktop Table */}
-            <div className="hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[1180px] border-collapse text-sm">
-                <thead>
-                  <tr className={isDark ? 'bg-cyan-950/70 text-slate-100' : 'bg-cyan-900 text-white'}>
-                    <th className="w-10 px-3 py-3 text-left">
-                      <input type="checkbox" className="h-4 w-4 rounded" />
-                    </th>
-                    <TableHead>Date</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Batch ID</TableHead>
-                    <TableHead>File</TableHead>
-                    <TableHead alignRight>Total</TableHead>
-                    <TableHead alignRight>Unique</TableHead>
-                    <TableHead alignRight>Matched</TableHead>
-                    <TableHead>Progress</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead alignRight>Actions</TableHead>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredBatches.map((batch, index) => (
-                    <BatchTableRow
-                      key={batch.id}
-                      batch={batch}
-                      index={index}
-                      theme={theme}
-                      onView={() => setSelectedBatch(batch)}
-                      onDelete={() => handleDeleteBatch(batch)}
-                      onDownload={() => handleDownloadSummary(batch)}
-                      onExport={() => handleDownloadExport(batch)}
-                      onRefresh={refreshBatches}
-                      isAdmin={isAdmin}
-                      currentUserId={userId}
-                    />
-                  ))}
-                </tbody>
-              </table>
+          {/* Filters */}
+          <div className={`border-b px-4 py-3 ${isDark ? 'border-slate-700/50' : 'border-gray-200'}`}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${isDark ? 'text-slate-400' : 'text-gray-400'}`} />
+                <input
+                  type="text"
+                  placeholder="Search by batch ID, filename, user, or brand..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className={`w-full rounded-lg border pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass}`}
+                />
+              </div>
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value as any)}
+                className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${inputClass}`}
+              >
+                <option value="all">All Statuses</option>
+                <option value="completed">✅ Completed</option>
+                <option value="processing">⏳ Processing</option>
+                <option value="pending">⏰ Pending</option>
+                <option value="failed">❌ Failed</option>
+              </select>
             </div>
-          </>
+          </div>
+
+          {isLoadingBatches ? (
+            <div className="px-6 py-16 text-center">
+              <Loader2 className="mx-auto h-8 w-8 animate-spin text-emerald-500" />
+              <p className={`mt-3 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                Loading your batches...
+              </p>
+            </div>
+          ) : filteredBatches.length === 0 ? (
+            <div className="px-6 py-16 text-center">
+              <UploadCloud className={`mx-auto h-12 w-12 ${isDark ? 'text-slate-500' : 'text-gray-400'}`} />
+              <p className={`mt-3 text-sm font-medium ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>
+                {searchTerm || statusFilter !== 'all' ? 'No matching batches found' : 'No batch records yet'}
+              </p>
+              <p className={`mt-1 text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+                {searchTerm || statusFilter !== 'all' 
+                  ? 'Try adjusting your search or filter criteria'
+                  : 'Process SKUs above to create your first batch record.'}
+              </p>
+              {(searchTerm || statusFilter !== 'all') && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchTerm(''); setStatusFilter('all'); }}
+                  className={`mt-3 text-sm text-emerald-400 hover:underline`}
+                >
+                  Clear filters
+                </button>
+              )}
+              <div className={`mt-3 select-none text-lg ${isDark ? 'opacity-20' : 'opacity-25'}`} aria-hidden>🎄</div>
+            </div>
+          ) : (
+            <>
+              {/* Mobile Cards */}
+              <div className="grid grid-cols-1 gap-3 p-3 lg:hidden">
+                {filteredBatches.map((batch) => (
+                  <MobileBatchCard
+                    key={batch.id}
+                    batch={batch}
+                    theme={theme}
+                    onView={() => setSelectedBatch(batch)}
+                    onDelete={() => handleDeleteBatch(batch)}
+                    onDownload={() => handleDownloadSummary(batch)}
+                    onExport={() => handleDownloadExport(batch)}
+                    onRefresh={refreshBatches}
+                    isAdmin={isAdmin}
+                    currentUserId={userId}
+                  />
+                ))}
+              </div>
+
+              {/* Desktop Table */}
+              <div className="hidden overflow-x-auto lg:block">
+                <table className="w-full min-w-[1180px] border-collapse text-sm">
+                  <thead>
+                    <tr className={isDark ? 'bg-cyan-950/70 text-slate-100' : 'bg-cyan-900 text-white'}>
+                      <th className="w-10 px-3 py-3 text-left">
+                        <input type="checkbox" className="h-4 w-4 rounded" />
+                      </th>
+                      <TableHead>Date</TableHead>
+                      <TableHead>User</TableHead>
+                      <TableHead>Batch ID</TableHead>
+                      <TableHead>File</TableHead>
+                      <TableHead alignRight>Total</TableHead>
+                      <TableHead alignRight>Unique</TableHead>
+                      <TableHead alignRight>Matched</TableHead>
+                      <TableHead>Progress</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead alignRight>Actions</TableHead>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredBatches.map((batch, index) => (
+                      <BatchTableRow
+                        key={batch.id}
+                        batch={batch}
+                        index={index}
+                        theme={theme}
+                        onView={() => setSelectedBatch(batch)}
+                        onDelete={() => handleDeleteBatch(batch)}
+                        onDownload={() => handleDownloadSummary(batch)}
+                        onExport={() => handleDownloadExport(batch)}
+                        onRefresh={refreshBatches}
+                        isAdmin={isAdmin}
+                        currentUserId={userId}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+
+        {selectedBatch && (
+          <BatchDetailsModal
+            batch={selectedBatch}
+            theme={theme}
+            onClose={() => setSelectedBatch(null)}
+            onExport={() => handleDownloadExport(selectedBatch)}
+          />
         )}
       </div>
-
-      {selectedBatch && (
-        <BatchDetailsModal
-          batch={selectedBatch}
-          theme={theme}
-          onClose={() => setSelectedBatch(null)}
-          onExport={() => handleDownloadExport(selectedBatch)}
-        />
-      )}
-    </div>
+    </>
   );
 }
 
@@ -1180,7 +1234,8 @@ function StatCard({ label, value, icon, color, bg, theme }: {
   const isDark = theme === 'dark';
   
   return (
-    <div className={`rounded-xl border p-3 ${isDark ? 'border-slate-700/50 bg-slate-900/60' : 'border-gray-200 bg-white/80'}`}>
+    <div className={`relative rounded-xl border p-3 ${isDark ? 'border-slate-700/50 bg-slate-900/60' : 'border-gray-200 bg-white/80'}`}>
+      <span className="pointer-events-none absolute right-1.5 top-1 select-none text-[10px] opacity-[0.18]" aria-hidden>🎄</span>
       <div className="flex items-center gap-2">
         <div className={`rounded-lg p-1.5 ${bg}`}>
           <span className={color}>{icon}</span>
@@ -1291,9 +1346,10 @@ function MobileBatchCard({
   const isOwnBatch = batch.user_id === currentUserId;
 
   return (
-    <div className={`rounded-xl border p-4 ${
+    <div className={`relative rounded-xl border p-4 ${
       isDark ? 'border-slate-700/60 bg-slate-950/60' : 'border-gray-200 bg-white'
     } ${!isOwnBatch && isAdmin ? 'ring-1 ring-emerald-500/30' : ''}`}>
+      <span className="pointer-events-none absolute right-2 top-1 select-none text-xs opacity-[0.15]" aria-hidden>🎄</span>
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex items-center gap-2">
@@ -1498,12 +1554,13 @@ function BatchDetailsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-4" onClick={onClose}>
-      <div className={`max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border p-4 shadow-2xl sm:p-6 ${
+      <div className={`relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border p-4 shadow-2xl sm:p-6 ${
         isDark ? 'border-slate-700 bg-slate-950 text-slate-100' : 'border-gray-200 bg-white text-gray-900'
       }`} onClick={e => e.stopPropagation()}>
+        <span className="pointer-events-none absolute right-14 top-3 select-none text-sm opacity-[0.2]" aria-hidden>🎄</span>
         <div className="mb-4 flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h3 className="text-lg font-bold">Batch Details</h3>
+            <h3 className="text-lg font-bold">Batch Details 🎄</h3>
             <p className="break-all font-mono text-xs text-emerald-500">{batch.batch_id}</p>
           </div>
           <div className="flex gap-2">

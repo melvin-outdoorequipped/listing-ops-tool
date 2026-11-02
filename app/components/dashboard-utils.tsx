@@ -193,12 +193,6 @@ export const relativeTime = (dateStr: string): string => {
 };
 
 // ─── DATE HELPERS (US FORMAT, LOCALE-SAFE) ─────────────────────────────────
-//
-// CRITICAL: We NEVER use `new Date(string)` on sheet date strings. The API
-// returns M/D/YYYY or YYYY-MM-DD. Both are ambiguous and `new Date()` will
-// reinterpret them in the browser's local timezone (PH, UTC+8), shifting the
-// day backward when the time component is near midnight. All date formatting
-// below extracts parts directly from the string with regex — no Date objects.
 
 /** Build a `YYYY-MM-DD` string (for <input type="date">) from LOCAL date parts. */
 export const toDateInputValue = (d: Date): string => {
@@ -220,7 +214,6 @@ export const todayDateInputValue = (): string => toDateInputValue(new Date());
 /**
  * Safely convert any stored date value into a `YYYY-MM-DD` string suitable
  * for <input type="date">, without letting a UTC round-trip shift the day.
- * Handles: M/D/YYYY, MM/DD/YYYY, YYYY-MM-DD, ISO with time, Date objects.
  */
 export const toDateInputValueFromAny = (value: string | Date | null | undefined): string => {
   if (!value) return '';
@@ -415,3 +408,45 @@ export function Sparkline({ data, color }: { data: number[]; color: string }): J
     </svg>
   );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🎄 CHRISTMAS DECORATION HELPERS
+// (added — purely additive, does not change any existing behavior)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Christmas emoji per task status — for use in badges, chips, or lists.
+ * Pure decoration; does not affect any logic. Safe to import anywhere.
+ */
+export const CHRISTMAS_STATUS_EMOJI: Record<string, string> = {
+  'completed': '🎄',
+  'cancelled': '⛄',
+  'ongoing': '❄️',
+  'assigned': '⭐',
+  'pending': '🎁',
+  'wip': '🔔',
+  'for audit': '🦌',
+  'for investigation': '🍪',
+  'hold': '🌟',
+  'for correx': '🎅',
+};
+
+/** Get the Christmas emoji for a given status string. Falls back to 🎄. */
+export const getChristmasStatusEmoji = (status: string): string => {
+  return CHRISTMAS_STATUS_EMOJI[status.toLowerCase()] ?? '🎄';
+};
+
+/**
+ * Christmas emoji per tool run status — for use in status dots, chips, or rows.
+ * Pure decoration; does not affect any logic.
+ */
+export const CHRISTMAS_TOOL_STATUS_EMOJI: Record<ToolRun['status'], string> = {
+  completed: '🎁',
+  warning: '❄️',
+  failed: '⛄',
+};
+
+/** Get the Christmas emoji for a given tool run status. */
+export const getChristmasToolStatusEmoji = (status: ToolRun['status']): string => {
+  return CHRISTMAS_TOOL_STATUS_EMOJI[status] ?? '🎄';
+};
